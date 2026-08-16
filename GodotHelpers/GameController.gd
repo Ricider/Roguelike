@@ -59,6 +59,8 @@ var selected_card_idx: int = -1
 @onready var close_btn: Button = $InspectPopup/VBox/CloseBtn
 @onready var hover_popup: PanelContainer = $HoverPopup
 @onready var hover_label: Label = $HoverPopup/HoverLabel
+var preview_popup: PanelContainer
+var preview_built: bool = false
 
 func _ready():
 	human = Player.new(100, 100, 20)
@@ -72,6 +74,7 @@ func _ready():
 	hover_popup.visible = false
 	# Hide hover when inspecting or ending turn
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ensure_preview_popup()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -96,8 +99,189 @@ func _show_hover(text: String):
 	hover_popup.global_position = pos
 	hover_popup.z_index = 100
 
+func _ensure_preview_popup():
+	if preview_built:
+		return
+	preview_popup = PanelContainer.new()
+	preview_popup.visible = false
+	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_popup.z_index = 101
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+	sb.border_color = Color(0.9, 0.9, 0.95, 1)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	preview_popup.add_theme_stylebox_override("panel", sb)
+	# Fixed consistent size — never varies, no empty bottom gap
+	preview_popup.custom_minimum_size = Vector2(280, 168)
+	preview_popup.size = Vector2(280, 168)
+	preview_popup.clip_contents = true
+	add_child(preview_popup)
+	preview_built = true
+
+func _show_card_preview(card: Card):
+	_ensure_preview_popup()
+	for c in preview_popup.get_children():
+		c.queue_free()
+	# Consistent fixed height — root fills popup, no variable empty bottom
+	var root := VBoxContainer.new()
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 5)
+	root.clip_contents = true
+	preview_popup.add_child(root)
+	var top := HBoxContainer.new()
+	top.alignment = BoxContainer.ALIGNMENT_BEGIN
+	top.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_theme_constant_override("separation", 8)
+	root.add_child(top)
+	var art := Card.create_sprite_for(card.card_name, Vector2(132, 132))
+	art.clip_contents = true
+	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	art.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	art.custom_minimum_size = Vector2(132, 132)
+	top.add_child(art)
+	var details := VBoxContainer.new()
+	details.alignment = BoxContainer.ALIGNMENT_BEGIN
+	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	details.add_theme_constant_override("separation", 3)
+	details.clip_contents = true
+	top.add_child(details)
+	var name_lbl := Label.new()
+	name_lbl.text = card.card_name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_lbl.add_theme_font_size_override("font_size", 17)
+	name_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.clip_contents = true
+	# Fixed 1-line height for consistency — Rocket Launcher still fits 15 chars in 124px at 17px, no wrap variation
+	name_lbl.custom_minimum_size = Vector2(124, 20)
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	details.add_child(name_lbl)
+	var hp: int = 0
+	var is_unit: bool = card is Unit
+	if is_unit:
+		hp = (card as Unit).HitPoints
+	elif card is Building:
+		hp = (card as Building).HitPoints
+	# single compact grid: HP | DMG/INC || Money | Bio — uses horizontal space fully
+	var grid := HBoxContainer.new()
+	grid.alignment = BoxContainer.ALIGNMENT_BEGIN
+	grid.clip_contents = true
+	grid.add_theme_constant_override("separation", 10)
+	details.add_child(grid)
+	var left_stats := HBoxContainer.new()
+	left_stats.alignment = BoxContainer.ALIGNMENT_BEGIN
+	left_stats.add_theme_constant_override("separation", 3)
+	grid.add_child(left_stats)
+	var hp_icon := TextureRect.new()
+	hp_icon.texture = load("res://Assets/UI/heart.png") as Texture2D
+	hp_icon.custom_minimum_size = Vector2(24, 24)
+	hp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hp_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	left_stats.add_child(hp_icon)
+	var hp_lbl := Label.new()
+	hp_lbl.text = "%d" % hp
+	hp_lbl.add_theme_font_size_override("font_size", 15)
+	hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	left_stats.add_child(hp_lbl)
+	if is_unit:
+		var sw := TextureRect.new()
+		sw.texture = load("res://Assets/UI/sword.png") as Texture2D
+		sw.custom_minimum_size = Vector2(24, 24)
+		sw.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sw.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		sw.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		left_stats.add_child(sw)
+		var dmg_lbl := Label.new()
+		dmg_lbl.text = "%d" % (card as Unit).Damage
+		dmg_lbl.add_theme_font_size_override("font_size", 15)
+		dmg_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		left_stats.add_child(dmg_lbl)
+	else:
+		var inc_lbl := Label.new()
+		inc_lbl.text = "INC %d" % (card as Building).Income
+		inc_lbl.add_theme_font_size_override("font_size", 13)
+		inc_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		left_stats.add_child(inc_lbl)
+	var sep := VSeparator.new()
+	sep.custom_minimum_size = Vector2(1, 14)
+	grid.add_child(sep)
+	var costs := HBoxContainer.new()
+	costs.alignment = BoxContainer.ALIGNMENT_BEGIN
+	costs.add_theme_constant_override("separation", 3)
+	grid.add_child(costs)
+	var m_icon := TextureRect.new()
+	m_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
+	m_icon.custom_minimum_size = Vector2(20, 20)
+	m_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	m_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	m_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	costs.add_child(m_icon)
+	var m_lbl := Label.new()
+	m_lbl.text = "%d" % card.MoneyCost
+	m_lbl.add_theme_font_size_override("font_size", 13)
+	m_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	costs.add_child(m_lbl)
+	var b_icon := TextureRect.new()
+	b_icon.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
+	b_icon.custom_minimum_size = Vector2(20, 20)
+	b_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	b_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	b_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	costs.add_child(b_icon)
+	var b_lbl := Label.new()
+	b_lbl.text = "%d" % card.BioCost
+	b_lbl.add_theme_font_size_override("font_size", 13)
+	b_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	costs.add_child(b_lbl)
+	# effect spans full width below — fixed 32px height for all cards, no variation, clipped if longer
+	var eff := Label.new()
+	if card.SpecialEffect != "":
+		eff.text = card.SpecialEffect
+	else:
+		eff.text = " "
+	eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	eff.clip_contents = true
+	eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	eff.custom_minimum_size = Vector2(264, 32)
+	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	eff.add_theme_font_size_override("font_size", 11)
+	eff.add_theme_color_override("font_color", Color(0.92,0.92,1) if card.SpecialEffect != "" else Color(1,1,1,0))
+	root.add_child(eff)
+	# filler to ensure root fills fixed popup height with no empty bottom variation — expands only if needed, keeps outer 168 constant
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	filler.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(filler)
+	preview_popup.visible = true
+	var vp: Vector2 = get_viewport_rect().size
+	var sz: Vector2 = Vector2(280, 168)
+	preview_popup.size = sz
+	preview_popup.custom_minimum_size = sz
+	var pos: Vector2 = get_global_mouse_position() + Vector2(16, 16)
+	pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
+	pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
+	preview_popup.global_position = pos
+	preview_popup.z_index = 101
+
+func _hide_card_preview():
+	if preview_popup != null:
+		preview_popup.visible = false
+
 func _hide_hover():
 	hover_popup.visible = false
+	_hide_card_preview()
 
 func _start_new_round():
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)
@@ -272,6 +456,10 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				vbox.add_child(stats)
 				hbox.add_child(vbox)
 				btn.add_child(hbox)
+				# Magnified preview on hover — art + symbols + text enlarged
+				var _card_prev: Card = card
+				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
+				btn.mouse_exited.connect(func(): _hide_card_preview())
 				# Hover for special effect — custom popup + native tooltip fallback, no inline spill
 				if card.SpecialEffect != "":
 					btn.tooltip_text = card.SpecialEffect
@@ -391,6 +579,10 @@ func _refresh_hand():
 		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		hand_costs.add_child(b_lbl)
 		details.add_child(hand_costs)
+		# Magnified preview on hover — hand card art + symbols + text enlarged
+		var _hand_prev: Card = card
+		btn.mouse_entered.connect(func(): _show_card_preview(_hand_prev))
+		btn.mouse_exited.connect(func(): _hide_card_preview())
 		# Hover — custom popup + tooltip fallback, no inline label
 		if card.SpecialEffect != "":
 			btn.tooltip_text = card.SpecialEffect
