@@ -60,7 +60,19 @@ func _pick_target(defender: Player, has_range: bool, rng: RandomNumberGenerator)
 			return null
 		return all[rng.randi_range(0, all.size() - 1)]
 	else:
-		for row_idx in [2, 1, 0]:
+		# Boards face each other (6x7 combined): AI board on top (row 2 closest to middle),
+		# human board below (row 0 closest to middle). Closest enemy is the defender's
+		# front row nearest the middle.
+		var order: Array = [2, 1, 0]
+		var idx: int = Players.find(defender)
+		if idx == 0:
+			# defender is Players[0] (human, bottom) — front is row 0
+			order = [0, 1, 2]
+		elif idx == 1:
+			# defender is Players[1] (AI, top) — front is row 2
+			order = [2, 1, 0]
+		# Fallback if defender not in Players (tests): assume AI-style 2,1,0
+		for row_idx in order:
 			var candidates: Array = []
 			var row: Row = defender.Board[row_idx]
 			for sq in row.Squares:
