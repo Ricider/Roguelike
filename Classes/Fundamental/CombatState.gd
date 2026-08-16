@@ -60,12 +60,16 @@ func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
 	return unit.Damage + Barracks.bonus_if_adjacent(player, square)
 
 func _pick_target(defender: Player, has_range: bool, rng: RandomNumberGenerator):
+	# Only living cards (HP >0) are targetable — prevents overkill on already-lethal targets
 	if has_range:
 		var all: Array = []
 		for row in defender.Board:
 			for sq in row.Squares:
 				if sq.Inhabitant != null:
-					all.append({"card": sq.Inhabitant, "square": sq})
+					var c: Card = sq.Inhabitant
+					var hp: int = (c as Unit).HitPoints if c is Unit else (c as Building).HitPoints if c is Building else 1
+					if hp > 0:
+						all.append({"card": c, "square": sq})
 		if all.is_empty():
 			return null
 		return all[rng.randi_range(0, all.size() - 1)]
@@ -93,7 +97,10 @@ func _pick_target(defender: Player, has_range: bool, rng: RandomNumberGenerator)
 			var row: Row = defender.Board[row_idx]
 			for sq in row.Squares:
 				if sq.Inhabitant != null:
-					candidates.append({"card": sq.Inhabitant, "square": sq})
+					var c2: Card = sq.Inhabitant
+					var hp2: int = (c2 as Unit).HitPoints if c2 is Unit else (c2 as Building).HitPoints if c2 is Building else 1
+					if hp2 > 0:
+						candidates.append({"card": c2, "square": sq})
 			if not candidates.is_empty():
 				return candidates[rng.randi_range(0, candidates.size() - 1)]
 		return null
