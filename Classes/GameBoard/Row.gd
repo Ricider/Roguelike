@@ -1,12 +1,12 @@
 extends GameObject
 class_name Row
 
-var Squares: Array = [] # Square[7]
+var Squares: Array = [] # Square[10]
 
 func _init():
 	super._init()
 	Squares = []
-	for i in range(7):
+	for i in range(10):
 		Squares.append(Square.new())
 
 func get_empty_squares() -> Array:

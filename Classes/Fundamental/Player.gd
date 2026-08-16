@@ -75,7 +75,7 @@ func discard_hand():
 	Hand.clear()
 
 func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
-	if not (0 <= row_idx and row_idx < Board.size() and 0 <= col_idx and col_idx < 7):
+	if not (0 <= row_idx and row_idx < Board.size() and 0 <= col_idx and col_idx < 10):
 		return false
 	if not Hand.has(card):
 		return false

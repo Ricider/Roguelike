@@ -151,10 +151,10 @@ func _refresh_ui():
 func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 	for child in container.get_children():
 		child.queue_free()
-	container.columns = 7
+	container.columns = 10
 	for r in range(player.Board.size()):
 		var row: Row = player.Board[r]
-		for c in range(7):
+		for c in range(row.Squares.size()):
 			var sq: Square = row.Squares[c]
 			var btn := Button.new()
 			btn.custom_minimum_size = Vector2(78, 78)
@@ -169,6 +169,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					btn.pressed.connect(func(): _on_board_click(r, c))
 				else:
 					btn.disabled = true
+				btn.tooltip_text = ""
 			else:
 				var card: Card = sq.Inhabitant
 				var hp: int = 0
@@ -193,7 +194,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 				hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-				var anim := Card.create_sprite_for(card.card_name, Vector2(68, 68))
+				var anim := Card.create_sprite_for(card.card_name, Vector2(90, 90))
 				anim.clip_contents = true
 				hbox.add_child(anim)
 				var vbox := VBoxContainer.new()
@@ -247,7 +248,7 @@ func _refresh_hand():
 		var card: Card = human.Hand[idx]
 		var btn := Button.new()
 		btn.clip_contents = true
-		btn.custom_minimum_size = Vector2(96, 62)
+		btn.custom_minimum_size = Vector2(108, 68)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var hp: int = 0
@@ -266,7 +267,7 @@ func _refresh_hand():
 		hand_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		hand_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hand_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(60, 60))
+		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(72, 72))
 		hand_anim.clip_contents = true
 		hand_hbox.add_child(hand_anim)
 		var details := VBoxContainer.new()
@@ -357,12 +358,12 @@ func _on_end_turn():
 
 func _get_button_for_square(player: Player, square: Square) -> Button:
 	var container: GridContainer = ai_board_container if player == ai_player else player_board_container
-	# Squares are stored row-major 3x7, buttons are added same order
+	# Squares are stored row-major 4x10, buttons are added same order
 	for r in range(player.Board.size()):
 		var row: Row = player.Board[r]
 		for c in range(row.Squares.size()):
 			if row.Squares[c] == square:
-				var idx: int = r * 7 + c
+				var idx: int = r * 10 + c
 				if idx < container.get_child_count():
 					return container.get_child(idx) as Button
 	return null
@@ -442,7 +443,7 @@ func _inspect_pile(title: String, pile: Array):
 			cell.clip_contents = true
 			cell.custom_minimum_size = Vector2(64, 72)
 			# Card art (8-bit, same as board/hand)
-			var art := Card.create_sprite_for(cname, Vector2(48, 48))
+			var art := Card.create_sprite_for(cname, Vector2(56, 56))
 			art.clip_contents = true
 			cell.add_child(art)
 			var lbl := Label.new()

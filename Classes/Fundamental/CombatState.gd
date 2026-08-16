@@ -60,18 +60,24 @@ func _pick_target(defender: Player, has_range: bool, rng: RandomNumberGenerator)
 			return null
 		return all[rng.randi_range(0, all.size() - 1)]
 	else:
-		# Boards face each other (6x7 combined): AI board on top (row 2 closest to middle),
+		# Boards face each other (8x10 combined): AI board on top (row size-1 closest to middle),
 		# human board below (row 0 closest to middle). Closest enemy is the defender's
-		# front row nearest the middle.
-		var order: Array = [2, 1, 0]
+		# front row nearest the middle. Dynamic for 4×10 spec.
+		var n: int = defender.Board.size()
+		var order: Array = []
 		var idx: int = Players.find(defender)
 		if idx == 0:
 			# defender is Players[0] (human, bottom) — front is row 0
-			order = [0, 1, 2]
+			for i in range(n):
+				order.append(i)
 		elif idx == 1:
-			# defender is Players[1] (AI, top) — front is row 2
-			order = [2, 1, 0]
-		# Fallback if defender not in Players (tests): assume AI-style 2,1,0
+			# defender is Players[1] (AI, top) — front is row n-1
+			for i in range(n):
+				order.append(n - 1 - i)
+		else:
+			# Fallback if defender not in Players (tests): assume AI-style
+			for i in range(n):
+				order.append(n - 1 - i)
 		for row_idx in order:
 			var candidates: Array = []
 			var row: Row = defender.Board[row_idx]

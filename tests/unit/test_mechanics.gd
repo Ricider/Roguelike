@@ -86,8 +86,8 @@ func test_player_play_card_success_and_failures():
 	p3.Board[0].Squares[0].place(a)
 	p3.Hand = [b]
 	assert_false(p3.play_card(b, 0, 0), "fails occupied")
-	assert_false(p3.play_card(b, 3, 0), "fails row OOB")
-	assert_false(p3.play_card(b, 0, 7), "fails col OOB")
+	assert_false(p3.play_card(b, 4, 0), "fails row OOB 4x10")
+	assert_false(p3.play_card(b, 0, 10), "fails col OOB 4x10")
 
 func test_barracks_housing_helpers():
 	var p := Player.new(100, 100, 20)
@@ -136,34 +136,34 @@ func test_combat_damage_and_barracks_bonus():
 func test_combat_pick_target():
 	var def := Player.new(100, 100, 20)
 	def.Board[0].Squares[0].place(Infantry.new())
-	def.Board[2].Squares[0].place(Infantry.new())
+	def.Board[3].Squares[0].place(Infantry.new())
 	var cs := CombatState.new(Player.new(), def)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 123
 	for i in range(5):
 		var t = cs._pick_target(def, false, rng)
-		assert_eq(t["square"], def.Board[2].Squares[0], "non-ranged picks front row (AI defender)")
+		assert_eq(t["square"], def.Board[3].Squares[0], "non-ranged picks front row 3 (AI defender 4x10)")
 	assert_not_null(cs._pick_target(def, true, rng), "ranged picks any")
 
 func test_combat_pick_target_human_vs_ai_front():
-	# Human defender front is row 0, AI defender front is row 2 — verifies the vertical direction fix
+	# Human defender front is row 0, AI defender front is row 3 (4x10) — verifies the vertical direction fix
 	var human := Player.new(100, 100, 20) # Players[0] = human (bottom)
 	var ai := Player.new(100, 100, 20)    # Players[1] = AI (top)
 	var cs := CombatState.new(human, ai)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
-	# Human defender: units on back (2) and front (0) — should pick front 0
+	# Human defender: units on back (3) and front (0) — should pick front 0
 	human.Board[0].Squares[3].place(Infantry.new())
-	human.Board[2].Squares[3].place(Tank.new())
+	human.Board[3].Squares[3].place(Tank.new())
 	for i in range(5):
 		var t = cs._pick_target(human, false, rng)
 		assert_eq(t["square"], human.Board[0].Squares[3], "human defender non-ranged picks row 0 front")
-	# AI defender: units on back (0) and front (2) — should pick front 2
+	# AI defender: units on back (0) and front (3) — should pick front 3
 	ai.Board[0].Squares[3].place(Tank.new())
-	ai.Board[2].Squares[3].place(Infantry.new())
+	ai.Board[3].Squares[3].place(Infantry.new())
 	for i in range(5):
 		var t = cs._pick_target(ai, false, rng)
-		assert_eq(t["square"], ai.Board[2].Squares[3], "AI defender non-ranged picks row 2 front")
+		assert_eq(t["square"], ai.Board[3].Squares[3], "AI defender non-ranged picks row 3 front")
 
 func test_combat_pick_target_middle_row_fallback():
 	var human := Player.new(100, 100, 20)
@@ -185,28 +185,28 @@ func test_combat_pick_target_empty_and_ranged_any():
 	rng.seed = 99
 	assert_null(cs._pick_target(human, false, rng), "empty board returns null (non-ranged)")
 	assert_null(cs._pick_target(human, true, rng), "empty board returns null (ranged)")
-	# Ranged picks any row — verify it can pick back row even when front occupied
+	# Ranged picks any row — verify it can pick back row even when front occupied (4x10)
 	human.Board[0].Squares[0].place(Infantry.new())
-	human.Board[2].Squares[6].place(Tank.new())
+	human.Board[3].Squares[6].place(Tank.new())
 	var seen_back := false
 	var seen_front := false
 	for i in range(20):
 		var t = cs._pick_target(human, true, rng)
 		if t["square"] == human.Board[0].Squares[0]:
 			seen_front = true
-		if t["square"] == human.Board[2].Squares[6]:
+		if t["square"] == human.Board[3].Squares[6]:
 			seen_back = true
-	assert_true(seen_front and seen_back, "ranged can hit any row including back")
+	assert_true(seen_front and seen_back, "ranged can hit any row including back 4x10")
 
 func test_combat_pick_target_fallback_not_in_players():
 	var outsider := Player.new(100, 100, 20)
 	outsider.Board[0].Squares[0].place(Tank.new())
-	outsider.Board[2].Squares[0].place(Infantry.new())
+	outsider.Board[3].Squares[0].place(Infantry.new())
 	var cs := CombatState.new(Player.new(), Player.new())
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
-	# outsider not in Players — fallback order [2,1,0] picks front 2
-	assert_eq(cs._pick_target(outsider, false, rng)["square"], outsider.Board[2].Squares[0], "fallback picks row 2")
+	# outsider not in Players — fallback order [3,2,1,0] picks front 3 (4x10)
+	assert_eq(cs._pick_target(outsider, false, rng)["square"], outsider.Board[3].Squares[0], "fallback picks row 3")
 
 func test_combat_pick_target_multiple_candidates_same_row():
 	var human := Player.new(100, 100, 20)
@@ -256,13 +256,13 @@ func test_ai_take_build_turn():
 	assert_lt(ai.get_empty_squares().size(), before_empty, "AI occupies square")
 
 	var full := AIPlayer.new(100, 100, 20)
-	for r in range(3):
-		for c in range(7):
+	for r in range(full.Board.size()):
+		for c in range(full.Board[r].Squares.size()):
 			full.Board[r].Squares[c].place(Infantry.new())
 	full.Hand = [Infantry.new()]
 	full.MoneySupply = 100; full.BioSupply = 100
 	full.take_build_turn()
-	assert_eq(full.Hand.size(), 1, "AI does not play when full")
+	assert_eq(full.Hand.size(), 1, "AI does not play when full 4x10")
 
 func test_card_view_helpers():
 	var card := Infantry.new()

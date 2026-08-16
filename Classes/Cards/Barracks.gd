@@ -19,7 +19,7 @@ static func bonus_if_adjacent(player: Player, square: Square) -> int:
 						var nc: int = c_idx + dc
 						if nr < 0 or nr >= player.Board.size():
 							continue
-						if nc < 0 or nc >= 7:
+						if nc < 0 or nc >= 10:
 							continue
 						var n_sq: Square = (player.Board[nr] as Row).Squares[nc]
 						if n_sq.Inhabitant != null and n_sq.Inhabitant is Barracks:
