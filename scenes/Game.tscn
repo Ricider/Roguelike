@@ -1,0 +1,104 @@
+[gd_scene load_steps=2 format=3 uid="uid://game_scene_001"]
+
+[ext_resource type="Script" path="res://GodotHelpers/GameController.gd" id="1_gc"]
+
+[node name="Game" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_gc")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.12, 1)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+size_flags_vertical = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 0
+
+[node name="Title" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Autochess Roguelike - 6x7 Board (AI top, You bottom)"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 18
+
+[node name="AIInfo" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+text = "AI HP:100"
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.8, 0.6, 0.6, 1)
+
+[node name="AIBoard" type="GridContainer" parent="VBox"]
+custom_minimum_size = Vector2(0, 180)
+size_flags_vertical = 3
+layout_mode = 2
+columns = 7
+
+[node name="Separator" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="PlayerBoard" type="GridContainer" parent="VBox"]
+custom_minimum_size = Vector2(0, 180)
+size_flags_vertical = 3
+layout_mode = 2
+columns = 7
+
+[node name="PlayerInfo" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+text = "YOU HP:100"
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.6, 0.8, 0.6, 1)
+
+[node name="HandLabel" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+text = "Hand (click card, then empty square):"
+theme_override_font_sizes/font_size = 11
+
+[node name="Hand" type="HBoxContainer" parent="VBox"]
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+alignment = 1
+
+[node name="Message" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+text = "Welcome"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.9, 0.9, 0.4, 1)
+
+[node name="Controls" type="HBoxContainer" parent="VBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+alignment = 1
+
+[node name="EndTurn" type="Button" parent="VBox/Controls"]
+custom_minimum_size = Vector2(200, 56)
+layout_mode = 2
+text = "End Turn"
+theme_override_font_sizes/font_size = 18
+
+[node name="MenuBtn" type="Button" parent="VBox/Controls"]
+custom_minimum_size = Vector2(150, 56)
+layout_mode = 2
+text = "Menu"
+theme_override_font_sizes/font_size = 14

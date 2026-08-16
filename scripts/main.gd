@@ -1,14 +1,11 @@
 extends Control
 
-# Main Menu only - cross-platform (keyboard, gamepad, touch)
-# No dungeon generation - just menu
+# Main Menu only - launches the 1v1 autochess game
 
 func _ready():
-	# Focus first button for gamepad/keyboard navigation
 	var play_btn = get_node_or_null("CenterContainer/VBox/PlayButton")
 	if play_btn:
 		play_btn.grab_focus()
-	# Wire buttons if not wired via signal in tscn
 	_wire_buttons()
 
 func _wire_buttons():
@@ -20,10 +17,7 @@ func _wire_buttons():
 		quit.pressed.connect(_on_quit_pressed)
 
 func _on_play_pressed():
-	var label = get_node_or_null("CenterContainer/VBox/MessageLabel")
-	if label:
-		label.text = "Play pressed! (Game would start here)"
-	print("Play pressed")
+	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _on_quit_pressed():
 	get_tree().quit()

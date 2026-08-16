@@ -22,6 +22,8 @@ color = Color(0.08, 0.08, 0.12, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
+size_flags_vertical = 3
+size_flags_horizontal = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -35,7 +37,7 @@ alignment = 1
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBox"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 64
 text = "ROGUE"
 horizontal_alignment = 1
 
@@ -52,16 +54,16 @@ custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
 [node name="PlayButton" type="Button" parent="CenterContainer/VBox"]
-custom_minimum_size = Vector2(260, 56)
+custom_minimum_size = Vector2(340, 72)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 24
 text = "Play"
 focus_mode = 2
 
 [node name="QuitButton" type="Button" parent="CenterContainer/VBox"]
-custom_minimum_size = Vector2(260, 56)
+custom_minimum_size = Vector2(340, 72)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 24
 text = "Quit"
 focus_mode = 2
 

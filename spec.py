@@ -82,9 +82,9 @@ Card: Infantry
 
 Card: Factory
     Hp: 50
-    Income: 2
+    MoneyIncome: 2
 
-    MoneyCost: int
+    MoneyCost: 10
     BioCost: int
 
 ### Players ###
@@ -110,7 +110,7 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 
 - Each player gets a deck of cards, draws 5 start of each turn, shuffles discard deck back into draw pile if there are no cards left in the draw pile and continue drawing until they have 5
 - Each players BioSupply grow by 10% each turn
-- Each Players MoneySupply grow by 2 each turn plus the additional money suply gained from building cards
+- Each Players MoneySupply grow by 2 each turn plus the additional money suply gained from building cards that have a MoneyIncome value
 - Discard cards in hand into discard pile all at the end of the turn
 
 # 2) Build Phase

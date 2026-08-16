@@ -21,9 +21,13 @@ name="Roguelike"
 
 [display]
 
-window/size/viewport_width=960
-window/size/viewport_height=640
-window/stretch/mode="canvas_items"
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/size/resizable=true
+window/stretch/mode="viewport"
+window/stretch/aspect="expand"
+window/stretch/scale=1.0
+window/stretch/scale_mode="bilinear"
 
 [input]
 
