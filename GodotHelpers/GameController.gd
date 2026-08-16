@@ -20,6 +20,12 @@ var selected_card_idx: int = -1
 @onready var hand_container: HBoxContainer = $VBox/Hand
 @onready var end_turn_btn: Button = $VBox/Controls/EndTurn
 @onready var menu_btn: Button = $VBox/Controls/MenuBtn
+@onready var ai_hp_bar: TextureProgressBar = $VBox/AIGauges/AIHP
+@onready var ai_bio_bar: TextureProgressBar = $VBox/AIGauges/AIBio
+@onready var ai_money_bar: TextureProgressBar = $VBox/AIGauges/AIMoney
+@onready var player_hp_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerHP
+@onready var player_bio_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerBio
+@onready var player_money_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerMoney
 
 func _ready():
 	human = Player.new(100, 100, 20)
@@ -45,9 +51,18 @@ func _start_new_round():
 	_check_game_over()
 
 func _refresh_ui():
-	# Info
-	ai_info.text = "AI  HP:%d  Bio:%d  Money:%d  Deck:%d Hand:%d Grave:%d | Income:%d" % [ai_player.HitPoints, ai_player.BioSupply, ai_player.MoneySupply, ai_player.DrawPile.size(), ai_player.Hand.size(), ai_player.Graveyard.size(), ai_player.total_money_income()]
-	player_info.text = "YOU HP:%d  Bio:%d  Money:%d  Deck:%d Discard:%d Grave:%d | Income:%d" % [human.HitPoints, human.BioSupply, human.MoneySupply, human.DrawPile.size(), human.DiscardPile.size(), human.Graveyard.size(), human.total_money_income()]
+	ai_info.text = "AI  HP:%d  Bio:%d  Money:%d  Deck:%d Hand:%d Grave:%d | Income:+%d" % [ai_player.HitPoints, ai_player.BioSupply, ai_player.MoneySupply, ai_player.DrawPile.size(), ai_player.Hand.size(), ai_player.Graveyard.size(), ai_player.total_money_income()]
+	player_info.text = "YOU HP:%d  Bio:%d  Money:%d  Deck:%d Discard:%d Grave:%d | Income:+%d" % [human.HitPoints, human.BioSupply, human.MoneySupply, human.DrawPile.size(), human.DiscardPile.size(), human.Graveyard.size(), human.total_money_income()]
+	# Pixel art gauges - HP 0-100, Bio 0-200, Money 0-100 (clamped)
+	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, 100)
+	ai_bio_bar.value = clamp(ai_player.BioSupply, 0, 200)
+	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 100)
+	player_hp_bar.value = clamp(human.HitPoints, 0, 100)
+	player_bio_bar.value = clamp(human.BioSupply, 0, 200)
+	player_money_bar.value = clamp(human.MoneySupply, 0, 100)
+	# tint based on low values for contrast
+	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player.HitPoints < 30 else Color(1,1,1)
+	player_hp_bar.tint_progress = Color(1, 0.35, 0.35) if human.HitPoints < 30 else Color(1,1,1)
 	# Boards
 	_refresh_board(ai_board_container, ai_player, false)
 	_refresh_board(player_board_container, human, true)

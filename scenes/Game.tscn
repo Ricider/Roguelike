@@ -1,6 +1,14 @@
 [gd_scene load_steps=2 format=3 uid="uid://game_scene_001"]
 
 [ext_resource type="Script" path="res://GodotHelpers/GameController.gd" id="1_gc"]
+[ext_resource type="Texture2D" path="res://Assets/UI/bg_tile.png" id="2_bg"]
+[ext_resource type="Texture2D" path="res://Assets/UI/hp_bg.png" id="3_hpbg"]
+[ext_resource type="Texture2D" path="res://Assets/UI/hp_fill.png" id="4_hpfill"]
+[ext_resource type="Texture2D" path="res://Assets/UI/bio_fill.png" id="5_biofill"]
+[ext_resource type="Texture2D" path="res://Assets/UI/money_fill.png" id="6_moneyfill"]
+[ext_resource type="Texture2D" path="res://Assets/UI/heart.png" id="7_heart"]
+[ext_resource type="Texture2D" path="res://Assets/UI/bio_icon.png" id="8_bioicon"]
+[ext_resource type="Texture2D" path="res://Assets/UI/money_icon.png" id="9_moneyicon"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -11,14 +19,25 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_gc")
 
-[node name="BG" type="ColorRect" parent="."]
+[node name="BG" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.04, 0.04, 0.08, 1)
+texture = ExtResource("2_bg")
+expand_mode = 2
+stretch_mode = 1
+
+[node name="BGOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.04, 0.08, 0.55)
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -40,9 +59,75 @@ theme_override_font_sizes/font_size = 26
 [node name="AIInfo" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
-text = "AI HP:100"
+text = "AI"
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
+
+[node name="AIGauges" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="AIHPIcon" type="TextureRect" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("7_heart")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="AIHP" type="TextureProgressBar" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("4_hpfill")
+texture_progress_offset = Vector2(2, 2)
+tint_under = Color(1, 1, 1, 1)
+tint_progress = Color(1, 1, 1, 1)
+show_percentage = false
+
+[node name="AIBioIcon" type="TextureRect" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("8_bioicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="AIBio" type="TextureProgressBar" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 200.0
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("5_biofill")
+texture_progress_offset = Vector2(2, 2)
+show_percentage = false
+
+[node name="AIMoneyIcon" type="TextureRect" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("9_moneyicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="AIMoney" type="TextureProgressBar" parent="VBox/AIGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 20.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("6_moneyfill")
+texture_progress_offset = Vector2(2, 2)
+show_percentage = false
 
 [node name="AIBoard" type="GridContainer" parent="VBox"]
 custom_minimum_size = Vector2(0, 180)
@@ -62,9 +147,73 @@ columns = 7
 [node name="PlayerInfo" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
-text = "YOU HP:100"
+text = "YOU"
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.35, 1, 0.45, 1)
+
+[node name="PlayerGauges" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerHPIcon" type="TextureRect" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("7_heart")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="PlayerHP" type="TextureProgressBar" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("4_hpfill")
+texture_progress_offset = Vector2(2, 2)
+show_percentage = false
+
+[node name="PlayerBioIcon" type="TextureRect" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("8_bioicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="PlayerBio" type="TextureProgressBar" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 200.0
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("5_biofill")
+texture_progress_offset = Vector2(2, 2)
+show_percentage = false
+
+[node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+texture = ExtResource("9_moneyicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="PlayerMoney" type="TextureProgressBar" parent="VBox/PlayerGauges"]
+custom_minimum_size = Vector2(140, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 20.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("6_moneyfill")
+texture_progress_offset = Vector2(2, 2)
+show_percentage = false
 
 [node name="HandLabel" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 14)
