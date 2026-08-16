@@ -66,7 +66,7 @@ func economy_phase():
 	BioSupply = int(BioSupply * rate)
 	if BioSupply == 0:
 		BioSupply = 1
-	MoneySupply += 2 + total_money_income()
+	MoneySupply += 10 + total_money_income()
 	draw_cards()
 
 func discard_hand():
