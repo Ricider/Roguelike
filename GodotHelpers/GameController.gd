@@ -12,19 +12,27 @@ var selected_card: Card = null
 var selected_card_idx: int = -1
 
 @onready var ai_info: Label = $VBox/AIInfo
-@onready var player_info: Label = $VBox/PlayerInfo
-@onready var message_label: Label = $VBox/Message
-@onready var ai_board_container: GridContainer = $VBox/AIBoard
-@onready var player_board_container: GridContainer = $VBox/PlayerBoard
-@onready var hand_container: HBoxContainer = $VBox/Hand
-@onready var end_turn_btn: Button = $VBox/Controls/EndTurn
-@onready var menu_btn: Button = $VBox/Controls/MenuBtn
-@onready var ai_hp_bar: TextureProgressBar = $VBox/AIGauges/AIHP
-@onready var ai_bio_bar: TextureProgressBar = $VBox/AIGauges/AIBio
-@onready var ai_money_bar: TextureProgressBar = $VBox/AIGauges/AIMoney
-@onready var player_hp_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerHP
-@onready var player_bio_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerBio
-@onready var player_money_bar: TextureProgressBar = $VBox/PlayerGauges/PlayerMoney
+@onready var player_info: Label = $VBox/MainHBox/RightContent/PlayerInfo
+@onready var message_label: Label = $VBox/MainHBox/RightContent/Message
+@onready var ai_board_container: GridContainer = $VBox/MainHBox/RightContent/AIBoard
+@onready var player_board_container: GridContainer = $VBox/MainHBox/RightContent/PlayerBoard
+@onready var hand_container: HBoxContainer = $VBox/MainHBox/RightContent/Hand
+@onready var end_turn_btn: Button = $VBox/MainHBox/RightContent/Controls/EndTurn
+@onready var menu_btn: Button = $VBox/MainHBox/RightContent/Controls/MenuBtn
+@onready var ai_hp_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHP
+@onready var ai_bio_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBio
+@onready var ai_money_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoney
+@onready var ai_hp_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHPValue
+@onready var ai_bio_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBioValue
+@onready var ai_money_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyValue
+@onready var ai_money_income: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyIncome
+@onready var player_hp_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHP
+@onready var player_bio_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBio
+@onready var player_money_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoney
+@onready var player_hp_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPValue
+@onready var player_bio_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioValue
+@onready var player_money_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyValue
+@onready var player_money_income: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyIncome
 
 func _ready():
 	human = Player.new(100, 100, 20)
@@ -49,16 +57,36 @@ func _start_new_round():
 	_check_game_over()
 
 func _refresh_ui():
-	ai_info.text = "AI  HP:%d  Bio:%d  Money:%d  Deck:%d Hand:%d Grave:%d | Income:+%d" % [ai_player.HitPoints, ai_player.BioSupply, ai_player.MoneySupply, ai_player.DrawPile.size(), ai_player.Hand.size(), ai_player.Graveyard.size(), ai_player.total_money_income()]
-	player_info.text = "YOU HP:%d  Bio:%d  Money:%d  Deck:%d Discard:%d Grave:%d | Income:+%d" % [human.HitPoints, human.BioSupply, human.MoneySupply, human.DrawPile.size(), human.DiscardPile.size(), human.Graveyard.size(), human.total_money_income()]
-	# Pixel art gauges - HP 0-100, Bio 0-200, Money 0-100 (clamped)
+	ai_info.text = ""
+	player_info.text = ""
+	ai_info.visible = false
+	player_info.visible = false
+	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money
+	var ai_income: int = ai_player.total_money_income()
+	var p_income: int = human.total_money_income()
+	# AI gauges
+	ai_hp_bar.max_value = 100
+	ai_bio_bar.max_value = 200
+	ai_money_bar.max_value = 200
+	player_hp_bar.max_value = 100
+	player_bio_bar.max_value = 200
+	player_money_bar.max_value = 200
 	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, 100)
 	ai_bio_bar.value = clamp(ai_player.BioSupply, 0, 200)
-	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 100)
+	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 200)
 	player_hp_bar.value = clamp(human.HitPoints, 0, 100)
 	player_bio_bar.value = clamp(human.BioSupply, 0, 200)
-	player_money_bar.value = clamp(human.MoneySupply, 0, 100)
-	# tint based on low values for contrast
+	player_money_bar.value = clamp(human.MoneySupply, 0, 200)
+	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0), 100]
+	ai_bio_value.text = "%d/%d" % [max(ai_player.BioSupply, 0), 200]
+	ai_money_value.text = "%d/%d" % [max(ai_player.MoneySupply, 0), 200]
+	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), 100]
+	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0), 200]
+	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0), 200]
+	# Income shown right on top of Money symbol (white)
+	ai_money_income.text = "+%d" % (10 + ai_income)
+	player_money_income.text = "+%d" % (10 + p_income)
+	# tint based on low values for contrast (bar color)
 	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player.HitPoints < 30 else Color(1,1,1)
 	player_hp_bar.tint_progress = Color(1, 0.35, 0.35) if human.HitPoints < 30 else Color(1,1,1)
 	# Boards
@@ -83,7 +111,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				btn.text = ""
 				btn.modulate = Color(0.12, 0.12, 0.18)
 				btn.add_theme_font_size_override("font_size", 14)
-				btn.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+				btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				if is_human:
 					btn.pressed.connect(func(): _on_board_click(r, c))
 				else:
@@ -119,7 +147,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				name_lbl.text = card.card_name
 				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 				name_lbl.add_theme_font_size_override("font_size", 9)
-				name_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				vbox.add_child(name_lbl)
 				var stats := HBoxContainer.new()
 				stats.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -133,12 +161,12 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var hp_lbl := Label.new()
 				hp_lbl.text = "%d" % hp
 				hp_lbl.add_theme_font_size_override("font_size", 9)
-				hp_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				stats.add_child(hp_lbl)
 				var dmg_lbl := Label.new()
 				dmg_lbl.text = " " + dmg
 				dmg_lbl.add_theme_font_size_override("font_size", 8)
-				dmg_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				stats.add_child(dmg_lbl)
 				vbox.add_child(stats)
 				hbox.add_child(vbox)
@@ -152,7 +180,7 @@ func _refresh_hand():
 	for idx in range(human.Hand.size()):
 		var card: Card = human.Hand[idx]
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(80, 60)
+		btn.custom_minimum_size = Vector2(68, 54)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var hp: int = 0
@@ -176,21 +204,22 @@ func _refresh_hand():
 		hand_lbl.text = "%s\nHP %d %s\n$%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
 		hand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hand_lbl.add_theme_font_size_override("font_size", 10)
+		hand_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		hand_vbox.add_child(hand_lbl)
 		btn.add_child(hand_vbox)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 0.88, 0.15)
 			btn.add_theme_font_size_override("font_size", 14)
-			btn.add_theme_color_override("font_color", Color(0.15, 0.12, 0.0))
+			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		elif human.MoneySupply < card.MoneyCost or human.BioSupply < card.BioCost:
 			btn.modulate = Color(0.25, 0.25, 0.3)
 			btn.add_theme_font_size_override("font_size", 14)
-			btn.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 			btn.disabled = true
 		else:
 			btn.modulate = Color(0.2, 0.85, 0.45)
 			btn.add_theme_font_size_override("font_size", 14)
-			btn.add_theme_color_override("font_color", Color(0.05, 0.2, 0.1))
+			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		var captured_idx: int = idx
 		btn.pressed.connect(func(): _on_hand_click(captured_idx))
 		hand_container.add_child(btn)
