@@ -65,7 +65,7 @@ size_flags_vertical = 3
 alignment = 0
 
 [node name="LeftGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(90, 0)
+custom_minimum_size = Vector2(124, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
@@ -76,7 +76,7 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 text = "Insurgents"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 30
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGauges" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]
@@ -92,11 +92,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
@@ -104,7 +104,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 100.0
@@ -120,7 +120,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "100/100"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGaugeBio" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/AIGauges"]
@@ -132,11 +132,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
@@ -144,7 +144,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 200.0
@@ -160,7 +160,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "100/200"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGaugeMoney" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/AIGauges"]
@@ -172,11 +172,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "+0"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
@@ -184,7 +184,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 200.0
@@ -200,7 +200,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "20/200"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIDeck" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges"]
@@ -231,7 +231,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "9/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Spacer" type="Control" parent="VBox/MainHBox/LeftGauges"]
@@ -244,7 +244,7 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 text = "JohnDoe"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 30
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGauges" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]
@@ -260,11 +260,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
@@ -272,7 +272,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 100.0
@@ -288,7 +288,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "100/100"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGaugeBio" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/PlayerGauges"]
@@ -300,11 +300,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
@@ -312,7 +312,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 200.0
@@ -328,7 +328,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "100/200"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGaugeMoney" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/PlayerGauges"]
@@ -340,11 +340,11 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "+0"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
@@ -352,7 +352,7 @@ stretch_mode = 5
 texture_filter = 0
 
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(24, 64)
+custom_minimum_size = Vector2(26, 62)
 layout_mode = 2
 fill_mode = 3
 max_value = 200.0
@@ -368,7 +368,7 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 text = "20/200"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 
@@ -400,7 +400,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "9/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 
@@ -474,7 +474,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="RightGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(90, 0)
+custom_minimum_size = Vector2(124, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
@@ -485,7 +485,7 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 text = "Discard"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 9
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIDiscard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
@@ -515,7 +515,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
@@ -546,7 +546,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Spacer2" type="Control" parent="VBox/MainHBox/RightGauges"]
@@ -581,7 +581,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
@@ -612,7 +612,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 8
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 [node name="InspectPopup" type="PanelContainer" parent="."]
 visible = false
