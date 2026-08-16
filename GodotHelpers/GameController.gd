@@ -116,12 +116,20 @@ func _ensure_preview_popup():
 	sb.content_margin_top = 6
 	sb.content_margin_bottom = 6
 	preview_popup.add_theme_stylebox_override("panel", sb)
-	# Fixed consistent size — never varies, no empty bottom gap
+	# Fixed consistent size — never varies, no empty bottom gap, click-through
 	preview_popup.custom_minimum_size = Vector2(280, 168)
 	preview_popup.size = Vector2(280, 168)
 	preview_popup.clip_contents = true
+	# Ensure magnifier never blocks clicks to card buttons behind it
+	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(preview_popup)
 	preview_built = true
+
+func _set_preview_click_through(node: Control):
+	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in node.get_children():
+		if child is Control:
+			_set_preview_click_through(child as Control)
 
 func _show_card_preview(card: Card):
 	_ensure_preview_popup()
@@ -129,6 +137,7 @@ func _show_card_preview(card: Card):
 		c.queue_free()
 	# Consistent fixed height — root fills popup, no variable empty bottom
 	var root := VBoxContainer.new()
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 5)
@@ -264,16 +273,25 @@ func _show_card_preview(card: Card):
 	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	filler.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(filler)
+	_set_preview_click_through(root)
+	_set_preview_click_through(preview_popup)
 	preview_popup.visible = true
 	var vp: Vector2 = get_viewport_rect().size
 	var sz: Vector2 = Vector2(280, 168)
 	preview_popup.size = sz
 	preview_popup.custom_minimum_size = sz
-	var pos: Vector2 = get_global_mouse_position() + Vector2(16, 16)
+	# flip above/beside cursor when near bottom/right edge — prevents hand hover spill at viewport bottom
+	var mouse: Vector2 = get_global_mouse_position()
+	var pos: Vector2 = mouse + Vector2(16, 16)
+	if pos.x + sz.x > vp.x - 8:
+		pos.x = mouse.x - sz.x - 16
+	if pos.y + sz.y > vp.y - 8:
+		pos.y = mouse.y - sz.y - 16
 	pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
 	pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
 	preview_popup.global_position = pos
 	preview_popup.z_index = 101
+	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _hide_card_preview():
 	if preview_popup != null:
