@@ -26,7 +26,7 @@ func test_player_economy_basic():
 	p.economy_phase()
 	assert_eq(p.BioSupply, 115, "Bio 10%+5 100->115 per updated spec (100*1.10+5)")
 	assert_eq(p.MoneySupply, 30, "Money +10 +0 income 20->30 per updated spec")
-	assert_eq(p.Hand.size(), 7, "draws 7 per updated spec")
+	assert_eq(p.Hand.size(), 10, "draws 10 per updated spec")
 
 func test_player_economy_with_factory_income():
 	var p := Player.new(100, 100, 20)

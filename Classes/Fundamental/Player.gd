@@ -48,7 +48,7 @@ func get_empty_squares() -> Array:
 	return out
 
 func draw_cards():
-	while Hand.size() < 7:
+	while Hand.size() < 10:
 		if DrawPile.is_empty():
 			if DiscardPile.is_empty():
 				break

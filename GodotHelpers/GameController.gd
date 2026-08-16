@@ -237,9 +237,10 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				vbox.add_child(name_lbl)
 				var stats := HBoxContainer.new()
 				stats.alignment = BoxContainer.ALIGNMENT_BEGIN
+				stats.clip_contents = true
 				var hp_icon := TextureRect.new()
 				hp_icon.texture = load("res://Assets/UI/heart.png") as Texture2D
-				hp_icon.custom_minimum_size = Vector2(12, 12)
+				hp_icon.custom_minimum_size = Vector2(16, 16)
 				hp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				hp_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -249,11 +250,25 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				hp_lbl.add_theme_font_size_override("font_size", 11)
 				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				stats.add_child(hp_lbl)
-				var dmg_lbl := Label.new()
-				dmg_lbl.text = " " + dmg
-				dmg_lbl.add_theme_font_size_override("font_size", 10)
-				dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-				stats.add_child(dmg_lbl)
+				if is_unit:
+					var sword_icon := TextureRect.new()
+					sword_icon.texture = load("res://Assets/UI/sword.png") as Texture2D
+					sword_icon.custom_minimum_size = Vector2(16, 16)
+					sword_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+					sword_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+					sword_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+					stats.add_child(sword_icon)
+					var dmg_lbl := Label.new()
+					dmg_lbl.text = "%d" % (card as Unit).Damage
+					dmg_lbl.add_theme_font_size_override("font_size", 10)
+					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+					stats.add_child(dmg_lbl)
+				else:
+					var dmg_lbl := Label.new()
+					dmg_lbl.text = " " + dmg
+					dmg_lbl.add_theme_font_size_override("font_size", 10)
+					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+					stats.add_child(dmg_lbl)
 				vbox.add_child(stats)
 				hbox.add_child(vbox)
 				btn.add_child(hbox)
@@ -307,12 +322,75 @@ func _refresh_hand():
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		hand_hbox.add_child(details)
-		var hand_lbl := Label.new()
-		hand_lbl.text = "%s\nHP %d %s\n$%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
-		hand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		hand_lbl.add_theme_font_size_override("font_size", 11)
-		hand_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		details.add_child(hand_lbl)
+		var hand_name := Label.new()
+		hand_name.text = card.card_name
+		hand_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		hand_name.add_theme_font_size_override("font_size", 11)
+		hand_name.add_theme_color_override("font_color", Color(1, 1, 1))
+		details.add_child(hand_name)
+		var hand_stats := HBoxContainer.new()
+		hand_stats.alignment = BoxContainer.ALIGNMENT_BEGIN
+		hand_stats.clip_contents = true
+		var h_heart := TextureRect.new()
+		h_heart.texture = load("res://Assets/UI/heart.png") as Texture2D
+		h_heart.custom_minimum_size = Vector2(16, 16)
+		h_heart.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		h_heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		h_heart.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		hand_stats.add_child(h_heart)
+		var h_hp := Label.new()
+		h_hp.text = "%d" % hp
+		h_hp.add_theme_font_size_override("font_size", 10)
+		h_hp.add_theme_color_override("font_color", Color(1, 1, 1))
+		hand_stats.add_child(h_hp)
+		if card is Unit:
+			var h_sword := TextureRect.new()
+			h_sword.texture = load("res://Assets/UI/sword.png") as Texture2D
+			h_sword.custom_minimum_size = Vector2(16, 16)
+			h_sword.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			h_sword.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			h_sword.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			hand_stats.add_child(h_sword)
+			var h_dmg := Label.new()
+			h_dmg.text = "%d" % (card as Unit).Damage
+			h_dmg.add_theme_font_size_override("font_size", 10)
+			h_dmg.add_theme_color_override("font_color", Color(1, 1, 1))
+			hand_stats.add_child(h_dmg)
+		else:
+			var h_inc := Label.new()
+			h_inc.text = " " + extra
+			h_inc.add_theme_font_size_override("font_size", 9)
+			h_inc.add_theme_color_override("font_color", Color(1, 1, 1))
+			hand_stats.add_child(h_inc)
+		details.add_child(hand_stats)
+		var hand_costs := HBoxContainer.new()
+		hand_costs.alignment = BoxContainer.ALIGNMENT_BEGIN
+		hand_costs.clip_contents = true
+		var m_icon := TextureRect.new()
+		m_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
+		m_icon.custom_minimum_size = Vector2(14, 14)
+		m_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		m_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		m_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		hand_costs.add_child(m_icon)
+		var m_lbl := Label.new()
+		m_lbl.text = "%d" % card.MoneyCost
+		m_lbl.add_theme_font_size_override("font_size", 9)
+		m_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		hand_costs.add_child(m_lbl)
+		var b_icon := TextureRect.new()
+		b_icon.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
+		b_icon.custom_minimum_size = Vector2(14, 14)
+		b_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		b_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		b_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		hand_costs.add_child(b_icon)
+		var b_lbl := Label.new()
+		b_lbl.text = "%d" % card.BioCost
+		b_lbl.add_theme_font_size_override("font_size", 9)
+		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		hand_costs.add_child(b_lbl)
+		details.add_child(hand_costs)
 		# Hover — custom popup + tooltip fallback, no inline label
 		if card.SpecialEffect != "":
 			btn.tooltip_text = card.SpecialEffect

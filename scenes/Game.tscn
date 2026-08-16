@@ -96,7 +96,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
@@ -136,7 +136,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
@@ -176,7 +176,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
@@ -264,7 +264,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
@@ -304,7 +304,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
@@ -344,7 +344,7 @@ theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
