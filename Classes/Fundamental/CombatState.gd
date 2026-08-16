@@ -30,19 +30,29 @@ func combat_phase() -> Array:
 			if unit.HitPoints <= 0:
 				continue
 			var dmg: int = _effective_damage(attacker, unit, sq)
-			var target = _pick_target(defender, unit.HasRange, rng)
-			if target == null:
-				defender.HitPoints -= dmg
-				log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true})
-				continue
-			var target_card: Card = target["card"]
-			var target_sq: Square = target["square"]
-			if target_card is Unit:
-				(target_card as Unit).HitPoints -= dmg
-			elif target_card is Building:
-				(target_card as Building).HitPoints -= dmg
-			_apply_special_effect(unit, target_card)
-			log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": dmg, "is_direct": false})
+			# Rocket Launcher (was Howitzer) special: attacks 4 times
+			var attacks: int = 4 if unit is RocketLauncher or unit is Howitzer else 1
+			for a_idx in range(attacks):
+				if unit.HitPoints <= 0:
+					break
+				var target = _pick_target(defender, unit.HasRange, rng)
+				if target == null:
+					defender.HitPoints -= dmg
+					log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true})
+					continue
+				var target_card: Card = target["card"]
+				var target_sq: Square = target["square"]
+				if target_card is Unit:
+					(target_card as Unit).HitPoints -= dmg
+				elif target_card is Building:
+					(target_card as Building).HitPoints -= dmg
+				_apply_special_effect(unit, target_card)
+				log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": dmg, "is_direct": false})
+				# if target died, allow next hit to pick new target (if remaining attacks)
+				if target_card is Unit and (target_card as Unit).HitPoints <= 0:
+					_resolve_deaths(defender)
+				elif target_card is Building and (target_card as Building).HitPoints <= 0:
+					_resolve_deaths(defender)
 		_resolve_deaths(defender)
 	return log
 

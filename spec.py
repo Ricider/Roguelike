@@ -95,17 +95,27 @@ Card: Artilery
     MoneyCost: 20
     BioCost: 6
 
+Card: Rocket Launcher
+    Hp: 8
+    Damage: 2
+    HasRange: true
+    
+    MoneyCost: 25
+    BioCost: 4
+
+    SpecialEffect: attacks 4 times every Combat Phase
+
 ### Building Cards ###
 
 Card: Factory
-    Hp: 40
+    Hp: 20
     MoneyIncome: 15
 
     MoneyCost: 30
     BioCost 20
 
 Card: Barracks
-    Hp: 70
+    Hp: 30
     MoneyIncome: 2
 
     MoneyCost: 20
@@ -114,13 +124,20 @@ Card: Barracks
     SpecialEffect: Friendly units in adjacent squares have +2 damage
 
 Card: Housing
-    Hp: 120
+    Hp: 50
     MoneyIncome: 2
 
     MoneyCost: 20
     BioCost: 30
 
     SpecialEffect: In your economy phase gain 4% more BioSupply
+
+Card: Wall
+    Hp: 20
+    MoneyIncome: 0
+
+    MoneyCost: 10
+    BioCost: 0
 
 ### Players ###
 
@@ -131,7 +148,18 @@ Player: JohnDoe
     BioSupply=100
     MoneySupply=20
 
-    DrawPile: [5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack]
+    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Rocket Launcher, 2 Factory, 2 Housing, 1 Barrack]
+    DiscardPile: []
+    Hand: []
+
+Player: Insurgents
+    HitPoints=100
+    Board=Empty
+
+    BioSupply=100
+    MoneySupply=20
+
+    DrawPile: [8 wall, 5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack]
     DiscardPile: []
     Hand: []
 

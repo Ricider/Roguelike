@@ -5,16 +5,18 @@ extends GutTest
 
 func test_cardfactory_deck_composition():
 	var deck: Array = CardFactory.make_starting_deck()
-	assert_eq(deck.size(), 16, "deck size 16 per spec [5I,2T,2A,2F,4H,1B]")
+	assert_eq(deck.size(), 33, "deck size 33 per spec [10 Wall,10I,3T,3A,2 Rocket Launcher,2F,2H,1B]")
 	var c := {}
 	for card in deck:
 		c[card.card_name] = c.get(card.card_name, 0) + 1
-	assert_eq(c.get("Infantry", 0), 5, "Infantry x5")
-	assert_eq(c.get("Tank", 0), 2, "Tank x2")
-	assert_eq(c.get("Artilery", 0), 2, "Artilery x2")
+	assert_eq(c.get("Wall", 0), 10, "Wall x10")
+	assert_eq(c.get("Infantry", 0), 10, "Infantry x10")
+	assert_eq(c.get("Tank", 0), 3, "Tank x3")
+	assert_eq(c.get("Artilery", 0), 3, "Artilery x3")
+	assert_eq(c.get("Rocket Launcher", 0), 2, "Rocket Launcher x2")
 	assert_eq(c.get("Factory", 0), 2, "Factory x2")
 	assert_eq(c.get("Barracks", 0), 1, "Barracks x1")
-	assert_eq(c.get("Housing", 0), 4, "Housing x4")
+	assert_eq(c.get("Housing", 0), 2, "Housing x2")
 
 func test_player_economy_basic():
 	var p := Player.new(100, 100, 20)
