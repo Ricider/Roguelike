@@ -68,7 +68,9 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 			btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 			if sq.Inhabitant == null:
 				btn.text = "[%d,%d]\n(empty)" % [r, c]
-				btn.modulate = Color(0.9, 0.9, 0.9)
+				btn.modulate = Color(0.18, 0.18, 0.24)
+				btn.add_theme_font_size_override("font_size", 14)
+				btn.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 				if is_human:
 					btn.pressed.connect(func(): _on_board_click(r, c))
 				else:
@@ -85,9 +87,19 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					dmg = " INC:%d" % (card as Building).Income
 				btn.text = "%s\nHP:%d%s\n$%d B%d" % [card.card_name, hp, dmg, card.MoneyCost, card.BioCost]
 				if card is Unit:
-					btn.modulate = Color(0.7, 0.85, 1.0)
+					btn.modulate = Color(0.15, 0.55, 1.0)
+					btn.add_theme_font_size_override("font_size", 13)
+					btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				else:
-					btn.modulate = Color(1.0, 0.85, 0.6)
+					btn.modulate = Color(1.0, 0.72, 0.0)
+					btn.add_theme_font_size_override("font_size", 13)
+					btn.add_theme_color_override("font_color", Color(0.1, 0.08, 0.0))
+				var tex: Texture2D = _sprite_for(card)
+				if tex != null:
+					btn.icon = tex
+					btn.expand_icon = true
+					btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+					btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				btn.disabled = true
 			container.add_child(btn)
 
@@ -109,13 +121,24 @@ func _refresh_hand():
 			hp = (card as Building).HitPoints
 			extra = "INC %d" % (card as Building).Income
 		btn.text = "%s\nHP %d %s\nCost $%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
+		var htex: Texture2D = _sprite_for(card)
+		if htex != null:
+			btn.icon = htex
+			btn.expand_icon = true
+			btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		if idx == selected_card_idx:
-			btn.modulate = Color(1, 0.9, 0.4)
+			btn.modulate = Color(1, 0.88, 0.15)
+			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_color_override("font_color", Color(0.15, 0.12, 0.0))
 		elif human.MoneySupply < card.MoneyCost or human.BioSupply < card.BioCost:
-			btn.modulate = Color(0.6, 0.6, 0.6)
+			btn.modulate = Color(0.25, 0.25, 0.3)
+			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
 			btn.disabled = true
 		else:
-			btn.modulate = Color(0.9, 1, 0.9)
+			btn.modulate = Color(0.2, 0.85, 0.45)
+			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_color_override("font_color", Color(0.05, 0.2, 0.1))
 		var captured_idx: int = idx
 		btn.pressed.connect(func(): _on_hand_click(captured_idx))
 		hand_container.add_child(btn)
@@ -161,6 +184,16 @@ func _on_end_turn():
 		return
 	# Next round
 	_start_new_round()
+
+func _sprite_for(card: Card) -> Texture2D:
+	var name: String = card.card_name
+	var path_png: String = "res://Assets/Cards/%s/sprite.png" % name
+	if ResourceLoader.exists(path_png):
+		return load(path_png) as Texture2D
+	var path: String = "res://Assets/Cards/%s/sprite.svg" % name
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
 
 func _check_game_over() -> bool:
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:

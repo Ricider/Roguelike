@@ -19,9 +19,14 @@ static func draw_cards(player: Player):
 			break
 
 static func economy_phase(player: Player):
-	# Bio +10%, Money +2 + building income
-	player.BioSupply = int(player.BioSupply * 1.1)
-	# ensure at least +1 if rounding down and >0?
+	# Bio +10% base +4% per Housing
+	var housing_bonus: int = 0
+	for row in player.Board:
+		for sq in row.Squares:
+			if sq.Inhabitant != null and sq.Inhabitant is Housing:
+				housing_bonus += 1
+	var bio_rate: float = 1.1 + housing_bonus * 0.04
+	player.BioSupply = int(player.BioSupply * bio_rate)
 	if player.BioSupply == 0:
 		player.BioSupply = 1
 	player.MoneySupply += 2 + player.total_money_income()
@@ -48,15 +53,37 @@ static func play_card(player: Player, card: Card, row_idx: int, col_idx: int) ->
 	player.Hand.erase(card)
 	return true
 
+static func _is_adjacent_to_barracks(player: Player, square: Square) -> bool:
+	for r_idx in range(player.Board.size()):
+		var row: Row = player.Board[r_idx]
+		for c_idx in range(row.Squares.size()):
+			if row.Squares[c_idx] == square:
+				# check 8 neighbors (including diagonals? spec says adjacent squares, assume orthogonal+diagonal)
+				for dr in [-1, 0, 1]:
+					for dc in [-1, 0, 1]:
+						if dr == 0 and dc == 0: continue
+						var nr: int = r_idx + dr
+						var nc: int = c_idx + dc
+						if nr < 0 or nr >= player.Board.size(): continue
+						if nc < 0 or nc >= 7: continue
+						var n_sq: Square = (player.Board[nr] as Row).Squares[nc]
+						if n_sq.Inhabitant != null and n_sq.Inhabitant is Barracks:
+							return true
+				return false
+	return false
+
+static func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
+	var dmg: int = unit.Damage
+	if _is_adjacent_to_barracks(player, square):
+		dmg += 2
+	return dmg
+
 static func combat_phase(state: CombatState):
-	# Each player's cards deal damage to random enemy prioritizing closest row
-	# We collect all attackers first, then resolve
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	for i in range(state.Players.size()):
 		var attacker: Player = state.Players[i]
 		var defender: Player = state.Players[1 - i]
-		# gather attackers
 		var attackers: Array = []
 		for row in attacker.Board:
 			for sq in row.Squares:
@@ -64,22 +91,19 @@ static func combat_phase(state: CombatState):
 					attackers.append({"card": sq.Inhabitant, "square": sq})
 		for info in attackers:
 			var unit: Unit = info["card"]
+			var sq: Square = info["square"]
 			if unit.HitPoints <= 0: continue
+			var dmg: int = _effective_damage(attacker, unit, sq)
 			var target = _pick_target(defender, unit.HasRange, rng)
 			if target == null:
-				# no enemy units, hit player directly? spec says random enemy - if no board enemies, we skip
-				# alternative: damage to player HP directly
-				defender.HitPoints -= unit.Damage
+				defender.HitPoints -= dmg
 				continue
 			var target_card: Card = target["card"]
-			# deal damage
 			if target_card is Unit:
-				(target_card as Unit).HitPoints -= unit.Damage
+				(target_card as Unit).HitPoints -= dmg
 			elif target_card is Building:
-				(target_card as Building).HitPoints -= unit.Damage
-			# special effect after damage (none defined yet, placeholder)
+				(target_card as Building).HitPoints -= dmg
 			_apply_special_effect(unit, target_card)
-		# after all damage, check deaths for defender
 		_resolve_deaths(defender)
 		# also check attacker deaths from previous opponent's attacks? handled next iteration
 
@@ -133,11 +157,19 @@ static func _resolve_deaths(player: Player):
 				sq.clear()
 
 static func make_starting_deck() -> Array:
-	# Per player spec: create a deck - spec doesn't define exact deck, we make 10 infantry + 5 factories shuffled
+	# Deck with all spec cards - balanced for new economy
 	var deck: Array = []
-	for i in range(10):
+	for i in range(6):
 		deck.append(Infantry.new())
-	for i in range(5):
+	for i in range(3):
+		deck.append(Tank.new())
+	for i in range(3):
+		deck.append(Artilery.new())
+	for i in range(4):
 		deck.append(Factory.new())
+	for i in range(3):
+		deck.append(Barracks.new())
+	for i in range(2):
+		deck.append(Housing.new())
 	deck.shuffle()
 	return deck

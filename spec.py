@@ -25,7 +25,7 @@ class CombatState(GameObject):
 # Class Group: Cards
 
 class Card(GameObject):
-    pass
+    SpecialEffect: AIIntrepretedString (I put text, you write the ability)
 
 class Building (Cards):
     HitPoints: int
@@ -74,18 +74,53 @@ Assets
 Card: Infantry
     Hp: 10
     Damage: 2
+    HasRange: false
     
     MoneyCost: 5
+    BioCost: 15
+
+Card: Tank
+    Hp: 20
+    Damage: 6
+    HasRange: false
+    
+    MoneyCost: 25
     BioCost: 10
+
+Card: Artilery
+    Hp: 8
+    Damage: 6
+    HasRange: true
+    
+    MoneyCost: 20
+    BioCost: 6
 
 ### Building Cards ###
 
 Card: Factory
-    Hp: 50
+    Hp: 40
+    MoneyIncome: 5
+
+    MoneyCost: 30
+    BioCost 20
+
+Card: Barracks
+    Hp: 70
     MoneyIncome: 2
 
-    MoneyCost: 10
-    BioCost: int
+    MoneyCost: 20
+    BioCost: 25
+
+    SpecialEffect: Friendly units in adjacent squares have +2 damage
+
+Card: Housing
+    Hp: 120
+    MoneyIncome: 4
+
+    MoneyCost: 80
+    BioCost: 40
+
+    SpecialEffect: In your economy phase gain 4% more BioSupply
 
 ### Players ###
 

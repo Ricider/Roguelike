@@ -18,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.08, 0.08, 0.12, 1)
+color = Color(0.04, 0.04, 0.08, 1)
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -35,14 +35,14 @@ custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 text = "Autochess Roguelike - 6x7 Board (AI top, You bottom)"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 26
 
 [node name="AIInfo" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 text = "AI HP:100"
-theme_override_font_sizes/font_size = 11
-theme_override_colors/font_color = Color(0.8, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
 
 [node name="AIBoard" type="GridContainer" parent="VBox"]
 custom_minimum_size = Vector2(0, 180)
@@ -63,14 +63,14 @@ columns = 7
 custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 text = "YOU HP:100"
-theme_override_font_sizes/font_size = 11
-theme_override_colors/font_color = Color(0.6, 0.8, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.35, 1, 0.45, 1)
 
 [node name="HandLabel" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 text = "Hand (click card, then empty square):"
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 16
 
 [node name="Hand" type="HBoxContainer" parent="VBox"]
 size_flags_horizontal = 3
@@ -83,8 +83,8 @@ custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 text = "Welcome"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.9, 0.9, 0.4, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(1, 0.92, 0.25, 1)
 
 [node name="Controls" type="HBoxContainer" parent="VBox"]
 custom_minimum_size = Vector2(0, 64)
@@ -95,10 +95,10 @@ alignment = 1
 custom_minimum_size = Vector2(200, 56)
 layout_mode = 2
 text = "End Turn"
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 26
 
 [node name="MenuBtn" type="Button" parent="VBox/Controls"]
 custom_minimum_size = Vector2(150, 56)
 layout_mode = 2
 text = "Menu"
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
