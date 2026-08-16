@@ -5,7 +5,7 @@ extends GutTest
 
 func test_cardfactory_deck_composition():
 	var deck: Array = CardFactory.make_starting_deck()
-	assert_eq(deck.size(), 14, "deck size 14 per spec [5I,2T,2A,2F,2H,1B]")
+	assert_eq(deck.size(), 16, "deck size 16 per spec [5I,2T,2A,2F,4H,1B]")
 	var c := {}
 	for card in deck:
 		c[card.card_name] = c.get(card.card_name, 0) + 1
@@ -14,7 +14,7 @@ func test_cardfactory_deck_composition():
 	assert_eq(c.get("Artilery", 0), 2, "Artilery x2")
 	assert_eq(c.get("Factory", 0), 2, "Factory x2")
 	assert_eq(c.get("Barracks", 0), 1, "Barracks x1")
-	assert_eq(c.get("Housing", 0), 2, "Housing x2")
+	assert_eq(c.get("Housing", 0), 4, "Housing x4")
 
 func test_player_economy_basic():
 	var p := Player.new(100, 100, 20)
@@ -22,7 +22,7 @@ func test_player_economy_basic():
 	p.DiscardPile.clear()
 	p.Hand.clear()
 	p.economy_phase()
-	assert_eq(p.BioSupply, 110, "Bio +10% 100->110")
+	assert_eq(p.BioSupply, 120, "Bio 15%+5 100->120 per updated spec (100*1.15+5)")
 	assert_eq(p.MoneySupply, 30, "Money +10 +0 income 20->30 per updated spec")
 	assert_eq(p.Hand.size(), 5, "draws 5")
 
@@ -40,7 +40,7 @@ func test_player_economy_housing_bonus():
 	p1.DrawPile = CardFactory.make_starting_deck()
 	p1.Hand.clear()
 	p1.economy_phase()
-	assert_eq(p1.BioSupply, 114, "Bio +14% with 1 Housing 100->114")
+	assert_eq(p1.BioSupply, 128, "Bio 15%+5+8% with 1 Housing 100->128 per updated spec (100*1.23+5)")
 
 	var p2 := Player.new(100, 100, 20)
 	p2.Board[0].Squares[0].place(Housing.new())
@@ -48,7 +48,7 @@ func test_player_economy_housing_bonus():
 	p2.DrawPile = CardFactory.make_starting_deck()
 	p2.Hand.clear()
 	p2.economy_phase()
-	assert_eq(p2.BioSupply, 118, "Bio +18% with 2 Housing 100->118")
+	assert_eq(p2.BioSupply, 136, "Bio 15%+5+16% with 2 Housing 100->136 per updated spec (100*1.31+5)")
 
 func test_player_draw_shuffle_and_discard():
 	var p := Player.new(100, 100, 20)
@@ -110,8 +110,8 @@ func test_barracks_housing_helpers():
 	var p4 := Player.new(100, 100, 20)
 	assert_almost_eq(Housing.extra_bio_rate(p4), 0.0, 0.0001, "0% none")
 	p4.Board[0].Squares[0].place(Housing.new())
-	assert_almost_eq(Housing.extra_bio_rate(p4), 0.04, 0.0001, "+4% with 1")
-	assert_almost_eq(Housing.bio_rate(p4), 1.14, 0.0001, "1.14 with 1")
+	assert_almost_eq(Housing.extra_bio_rate(p4), 0.08, 0.0001, "+8% with 1 per updated spec")
+	assert_almost_eq(Housing.bio_rate(p4), 1.23, 0.0001, "1.23 (1.15+0.08) with 1")
 
 func test_combat_damage_and_barracks_bonus():
 	var atk := Player.new(100, 100, 20)

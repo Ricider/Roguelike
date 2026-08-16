@@ -24,6 +24,7 @@ var selected_card_idx: int = -1
 @onready var ai_money_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoney
 @onready var ai_hp_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHPValue
 @onready var ai_bio_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBioValue
+@onready var ai_bio_income: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBioIncome
 @onready var ai_money_value: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyValue
 @onready var ai_money_income: Label = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyIncome
 @onready var player_hp_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHP
@@ -32,6 +33,7 @@ var selected_card_idx: int = -1
 @onready var player_hp_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPValue
 @onready var player_bio_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioValue
 @onready var player_money_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyValue
+@onready var player_bio_income: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioIncome
 @onready var player_money_income: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyIncome
 
 func _ready():
@@ -61,9 +63,11 @@ func _refresh_ui():
 	player_info.text = ""
 	ai_info.visible = false
 	player_info.visible = false
-	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money
+	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income()
 	var p_income: int = human.total_money_income()
+	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply
+	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply
 	# AI gauges
 	ai_hp_bar.max_value = 100
 	ai_bio_bar.max_value = 200
@@ -83,7 +87,9 @@ func _refresh_ui():
 	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), 100]
 	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0), 200]
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0), 200]
-	# Income shown right on top of Money symbol (white)
+	# Income shown right on top of symbol (white) — Money +10+buildings, Bio 15%+5+8% per Housing
+	ai_bio_income.text = "+%d" % ai_bio_inc
+	player_bio_income.text = "+%d" % p_bio_inc
 	ai_money_income.text = "+%d" % (10 + ai_income)
 	player_money_income.text = "+%d" % (10 + p_income)
 	# tint based on low values for contrast (bar color)

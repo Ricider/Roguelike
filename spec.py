@@ -99,7 +99,7 @@ Card: Artilery
 
 Card: Factory
     Hp: 40
-    MoneyIncome: 5
+    MoneyIncome: 15
 
     MoneyCost: 30
     BioCost 20
@@ -115,12 +115,12 @@ Card: Barracks
 
 Card: Housing
     Hp: 120
-    MoneyIncome: 4
+    MoneyIncome: 2
 
-    MoneyCost: 80
-    BioCost: 40
+    MoneyCost: 20
+    BioCost: 30
 
-    SpecialEffect: In your economy phase gain 4% more BioSupply
+    SpecialEffect: In your economy phase gain 8% more BioSupply
 
 ### Players ###
 
@@ -131,7 +131,7 @@ Player: JohnDoe
     BioSupply=100
     MoneySupply=20
 
-    DrawPile: [5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack]
+    DrawPile: [5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 4 Housing, 1 Barrack]
     DiscardPile: []
     Hand: []
 
@@ -144,7 +144,7 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 # 1) Economy Phase
 
 - Each player gets a deck of cards, draws 5 start of each turn, shuffles discard deck back into draw pile if there are no cards left in the draw pile and continue drawing until they have 5
-- Each players BioSupply grow by 10% each turn
+- Each players BioSupply grow by 15% each turn + 5 extra on top of what they have
 - Each Players MoneySupply grow by 10 each turn plus the additional money suply gained from building cards that have a MoneyIncome value
 - Discard cards in hand into discard pile all at the end of the turn
 

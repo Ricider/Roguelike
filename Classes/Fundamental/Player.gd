@@ -63,7 +63,7 @@ func draw_cards():
 
 func economy_phase():
 	var rate: float = Housing.bio_rate(self)
-	BioSupply = int(BioSupply * rate)
+	BioSupply = int(BioSupply * rate + 5 + 0.0001)
 	if BioSupply == 0:
 		BioSupply = 1
 	MoneySupply += 10 + total_money_income()
