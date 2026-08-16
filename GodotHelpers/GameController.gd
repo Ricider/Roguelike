@@ -57,6 +57,8 @@ var selected_card_idx: int = -1
 @onready var inspect_title: Label = $InspectPopup/VBox/InspectTitle
 @onready var inspect_grid: GridContainer = $InspectPopup/VBox/InspectScroll/InspectGrid
 @onready var close_btn: Button = $InspectPopup/VBox/CloseBtn
+@onready var hover_popup: PanelContainer = $HoverPopup
+@onready var hover_label: Label = $HoverPopup/HoverLabel
 
 func _ready():
 	human = Player.new(100, 100, 20)
@@ -67,6 +69,9 @@ func _ready():
 	end_turn_btn.pressed.connect(_on_end_turn)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
 	close_btn.pressed.connect(func(): inspect_popup.visible = false)
+	hover_popup.visible = false
+	# Hide hover when inspecting or ending turn
+	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -74,6 +79,25 @@ func _ready():
 	player_graveyard_icon.pressed.connect(func(): _inspect_pile("Your Graveyard", human.Graveyard))
 	ai_graveyard_icon.pressed.connect(func(): _inspect_pile("AI Graveyard", ai_player.Graveyard))
 	_start_new_round()
+
+func _show_hover(text: String):
+	if text == "":
+		return
+	hover_label.text = text
+	hover_popup.visible = true
+	# position near mouse, clamped to viewport so it never spills
+	var vp: Vector2 = get_viewport_rect().size
+	var pos: Vector2 = get_global_mouse_position() + Vector2(14, -36)
+	var sz: Vector2 = hover_popup.size
+	if sz.x < 40:
+		sz = Vector2(240, 70)
+	pos.x = clamp(pos.x, 4.0, max(4.0, vp.x - sz.x - 4.0))
+	pos.y = clamp(pos.y, 4.0, max(4.0, vp.y - sz.y - 4.0))
+	hover_popup.global_position = pos
+	hover_popup.z_index = 100
+
+func _hide_hover():
+	hover_popup.visible = false
 
 func _start_new_round():
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)
@@ -88,6 +112,7 @@ func _start_new_round():
 	_check_game_over()
 
 func _refresh_ui():
+	_hide_hover()
 	ai_info.text = ""
 	player_info.text = ""
 	ai_info.visible = false
@@ -149,6 +174,7 @@ func _refresh_ui():
 	_refresh_hand()
 
 func _refresh_board(container: GridContainer, player: Player, is_human: bool):
+	_hide_hover()
 	for child in container.get_children():
 		child.queue_free()
 	container.columns = 10
@@ -231,17 +257,21 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				vbox.add_child(stats)
 				hbox.add_child(vbox)
 				btn.add_child(hbox)
-				# Hover tooltip for special effect — uses empty right-side space efficiently, no inline text spill
+				# Hover for special effect — custom popup + native tooltip fallback, no inline spill
 				if card.SpecialEffect != "":
 					btn.tooltip_text = card.SpecialEffect
+					var _eff_txt: String = card.SpecialEffect
+					btn.mouse_entered.connect(func(): _show_hover(_eff_txt))
+					btn.mouse_exited.connect(func(): _hide_hover())
 				else:
 					btn.tooltip_text = ""
-				# Keep enabled so tooltip shows on hover (occupied squares are not clickable anyway)
+				# Keep enabled so hover shows (occupied squares are not clickable anyway)
 				btn.disabled = false
 				btn.mouse_filter = Control.MOUSE_FILTER_STOP
 			container.add_child(btn)
 
 func _refresh_hand():
+	_hide_hover()
 	for child in hand_container.get_children():
 		child.queue_free()
 	for idx in range(human.Hand.size()):
@@ -283,9 +313,12 @@ func _refresh_hand():
 		hand_lbl.add_theme_font_size_override("font_size", 11)
 		hand_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		details.add_child(hand_lbl)
-		# Hover tooltip — no inline eff label, frees right-side space efficiently, no overflow
+		# Hover — custom popup + tooltip fallback, no inline label
 		if card.SpecialEffect != "":
 			btn.tooltip_text = card.SpecialEffect
+			var _eff2_txt: String = card.SpecialEffect
+			btn.mouse_entered.connect(func(): _show_hover(_eff2_txt))
+			btn.mouse_exited.connect(func(): _hide_hover())
 		else:
 			btn.tooltip_text = ""
 		btn.add_child(hand_hbox)
