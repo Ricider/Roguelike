@@ -11,7 +11,9 @@ func _init(p1: Player = null, p2: Player = null):
 	if p2 != null:
 		Players.append(p2)
 
-func combat_phase():
+func combat_phase() -> Array:
+	# Returns log of attacks for UI animation: [{attacker, attacker_sq, attacker_player, defender, target, target_sq, damage, is_direct}]
+	var log: Array = []
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	for i in range(Players.size()):
@@ -31,14 +33,18 @@ func combat_phase():
 			var target = _pick_target(defender, unit.HasRange, rng)
 			if target == null:
 				defender.HitPoints -= dmg
+				log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true})
 				continue
 			var target_card: Card = target["card"]
+			var target_sq: Square = target["square"]
 			if target_card is Unit:
 				(target_card as Unit).HitPoints -= dmg
 			elif target_card is Building:
 				(target_card as Building).HitPoints -= dmg
 			_apply_special_effect(unit, target_card)
+			log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": dmg, "is_direct": false})
 		_resolve_deaths(defender)
+	return log
 
 func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
 	return unit.Damage + Barracks.bonus_if_adjacent(player, square)

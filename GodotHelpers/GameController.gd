@@ -255,8 +255,14 @@ func _on_board_click(r: int, c: int):
 	_refresh_ui()
 
 func _on_end_turn():
-	# Combat phase (both players attack) — now owned by CombatState
-	state.combat_phase()
+	end_turn_btn.disabled = true
+	# Combat phase with simple per-attack animation: highlight attacker → target
+	var log: Array = state.combat_phase()
+	if log.is_empty():
+		message_label.text = "No attacks this turn"
+	else:
+		message_label.text = "Combat: %d attacks..." % log.size()
+		await _animate_combat(log)
 	# Discard remaining hand — now owned by Player
 	human.discard_hand()
 	ai_player.discard_hand()
@@ -265,6 +271,75 @@ func _on_end_turn():
 		return
 	# Next round
 	_start_new_round()
+	end_turn_btn.disabled = false
+
+func _get_button_for_square(player: Player, square: Square) -> Button:
+	var container: GridContainer = ai_board_container if player == ai_player else player_board_container
+	# Squares are stored row-major 3x7, buttons are added same order
+	for r in range(player.Board.size()):
+		var row: Row = player.Board[r]
+		for c in range(row.Squares.size()):
+			if row.Squares[c] == square:
+				var idx: int = r * 7 + c
+				if idx < container.get_child_count():
+					return container.get_child(idx) as Button
+	return null
+
+func _animate_combat(log: Array):
+	for entry in log:
+		var attacker_sq: Square = entry["attacker_sq"]
+		var attacker_player: Player = entry["attacker_player"]
+		var defender: Player = entry["defender"]
+		var target_sq: Square = entry["target_sq"]
+		var dmg: int = entry["damage"]
+		var is_direct: bool = entry["is_direct"]
+		var attacker_card: Card = entry["attacker"]
+		var target_card: Card = entry["target"]
+		# Resolve buttons (may be null if board refreshed — use current containers)
+		var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
+		var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
+		var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
+		# Highlight attacker: scale pulse + yellow tint
+		if atk_btn != null:
+			var tw := create_tween()
+			tw.tween_property(atk_btn, "scale", Vector2(1.08, 1.08), 0.12)
+			tw.tween_property(atk_btn, "modulate", Color(1, 0.95, 0.4), 0.12)
+			tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.12)
+			tw.tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.12)
+			message_label.text = "%s attacks %s for %d" % [attacker_card.card_name, "HP" if is_direct else target_card.card_name, dmg]
+		await get_tree().create_timer(0.22).timeout
+		# Highlight target
+		if is_direct:
+			var tw2 := create_tween()
+			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.4, 0.4), 0.12)
+			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
+			# Spawn floating damage number over HP bar
+			_spawn_damage_number(tgt_hp_bar, dmg)
+		elif tgt_btn != null:
+			var tw2 := create_tween()
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.35, 0.35), 0.10)
+			tw2.tween_property(tgt_btn, "position", tgt_btn.position + Vector2(4, 0), 0.05)
+			tw2.tween_property(tgt_btn, "position", tgt_btn.position, 0.05)
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
+			_spawn_damage_number(tgt_btn, dmg)
+		await get_tree().create_timer(0.32).timeout
+	# Brief pause then refresh to show updated HP / deaths
+	await get_tree().create_timer(0.15).timeout
+	_refresh_ui()
+
+func _spawn_damage_number(anchor: Control, dmg: int):
+	var lbl := Label.new()
+	lbl.text = "-%d" % dmg
+	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.add_theme_color_override("font_color", Color(1, 0.25, 0.25))
+	lbl.z_index = 100
+	# Place over anchor
+	anchor.add_child(lbl)
+	lbl.position = Vector2(anchor.size.x * 0.5 - 10, -8)
+	var tw := create_tween()
+	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -18), 0.45)
+	tw.parallel().tween_property(lbl, "modulate", Color(1, 0.25, 0.25, 0), 0.45)
+	tw.tween_callback(func(): lbl.queue_free())
 
 func _check_game_over() -> bool:
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:
