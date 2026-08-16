@@ -78,12 +78,12 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 		for c in range(7):
 			var sq: Square = row.Squares[c]
 			var btn := Button.new()
-			btn.custom_minimum_size = Vector2(84, 64)
+			btn.custom_minimum_size = Vector2(78, 78)
 			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 			if sq.Inhabitant == null:
-				btn.text = "[%d,%d]\n(empty)" % [r, c]
-				btn.modulate = Color(0.18, 0.18, 0.24)
+				btn.text = ""
+				btn.modulate = Color(0.12, 0.12, 0.18)
 				btn.add_theme_font_size_override("font_size", 14)
 				btn.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 				if is_human:
@@ -100,7 +100,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				elif card is Building:
 					hp = (card as Building).HitPoints
 					dmg = " INC:%d" % (card as Building).Income
-				btn.text = "%s\nHP:%d%s\n$%d B%d" % [card.card_name, hp, dmg, card.MoneyCost, card.BioCost]
+				btn.text = "%s\nHP:%d%s" % [card.card_name, hp, dmg]
 				if card is Unit:
 					btn.modulate = Color(0.15, 0.55, 1.0)
 					btn.add_theme_font_size_override("font_size", 13)
@@ -202,6 +202,19 @@ func _on_end_turn():
 
 func _sprite_for(card: Card) -> Texture2D:
 	var name: String = card.card_name
+	# Try animated 4-frame sprite first
+	var anim := AnimatedTexture.new()
+	anim.frames = 4
+	var has_anim: bool = false
+	for i in range(4):
+		var fpath: String = "res://Assets/Cards/%s/sprite_%d.png" % [name, i]
+		if ResourceLoader.exists(fpath):
+			anim.set_frame_texture(i, load(fpath) as Texture2D)
+			anim.set_frame_duration(i, 0.2)
+			has_anim = true
+	if has_anim:
+		anim.pause = false
+		return anim
 	var path_png: String = "res://Assets/Cards/%s/sprite.png" % name
 	if ResourceLoader.exists(path_png):
 		return load(path_png) as Texture2D
