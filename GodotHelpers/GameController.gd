@@ -152,7 +152,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 	for child in container.get_children():
 		child.queue_free()
 	container.columns = 7
-	for r in range(3):
+	for r in range(player.Board.size()):
 		var row: Row = player.Board[r]
 		for c in range(7):
 			var sq: Square = row.Squares[c]
@@ -186,45 +186,58 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					btn.modulate = Color(0.15, 0.55, 1.0)
 				else:
 					btn.modulate = Color(1.0, 0.72, 0.0)
+				btn.clip_contents = true
 				var hbox := HBoxContainer.new()
 				hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				hbox.clip_contents = true
 				hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 				hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-				var anim := Card.create_sprite_for(card.card_name, Vector2(48, 48))
+				var anim := Card.create_sprite_for(card.card_name, Vector2(68, 68))
+				anim.clip_contents = true
 				hbox.add_child(anim)
 				var vbox := VBoxContainer.new()
 				vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				vbox.clip_contents = true
+				vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				vbox.custom_minimum_size = Vector2(0, 0)
 				var name_lbl := Label.new()
 				name_lbl.text = card.card_name
 				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-				name_lbl.add_theme_font_size_override("font_size", 9)
+				name_lbl.add_theme_font_size_override("font_size", 11)
 				name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				vbox.add_child(name_lbl)
 				var stats := HBoxContainer.new()
 				stats.alignment = BoxContainer.ALIGNMENT_BEGIN
 				var hp_icon := TextureRect.new()
 				hp_icon.texture = load("res://Assets/UI/heart.png") as Texture2D
-				hp_icon.custom_minimum_size = Vector2(10, 10)
+				hp_icon.custom_minimum_size = Vector2(12, 12)
 				hp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				hp_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 				stats.add_child(hp_icon)
 				var hp_lbl := Label.new()
 				hp_lbl.text = "%d" % hp
-				hp_lbl.add_theme_font_size_override("font_size", 9)
+				hp_lbl.add_theme_font_size_override("font_size", 11)
 				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				stats.add_child(hp_lbl)
 				var dmg_lbl := Label.new()
 				dmg_lbl.text = " " + dmg
-				dmg_lbl.add_theme_font_size_override("font_size", 8)
+				dmg_lbl.add_theme_font_size_override("font_size", 10)
 				dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				stats.add_child(dmg_lbl)
 				vbox.add_child(stats)
 				hbox.add_child(vbox)
 				btn.add_child(hbox)
-				btn.disabled = true
+				# Hover tooltip for special effect — uses empty right-side space efficiently, no inline text spill
+				if card.SpecialEffect != "":
+					btn.tooltip_text = card.SpecialEffect
+				else:
+					btn.tooltip_text = ""
+				# Keep enabled so tooltip shows on hover (occupied squares are not clickable anyway)
+				btn.disabled = false
+				btn.mouse_filter = Control.MOUSE_FILTER_STOP
 			container.add_child(btn)
 
 func _refresh_hand():
@@ -233,7 +246,8 @@ func _refresh_hand():
 	for idx in range(human.Hand.size()):
 		var card: Card = human.Hand[idx]
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(68, 54)
+		btn.clip_contents = true
+		btn.custom_minimum_size = Vector2(96, 62)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var hp: int = 0
@@ -244,22 +258,36 @@ func _refresh_hand():
 		elif card is Building:
 			hp = (card as Building).HitPoints
 			extra = "INC %d" % (card as Building).Income
-		# Layout: sprite on top, stats below — avoids text overlapping sprite
 		btn.text = ""
-		var hand_vbox := VBoxContainer.new()
-		hand_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hand_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		hand_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hand_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(48, 48))
-		hand_vbox.add_child(hand_anim)
+		# Right-side layout: sprite left | details right (uses empty right space efficiently, no overflow)
+		var hand_hbox := HBoxContainer.new()
+		hand_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hand_hbox.clip_contents = true
+		hand_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hand_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hand_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(60, 60))
+		hand_anim.clip_contents = true
+		hand_hbox.add_child(hand_anim)
+		var details := VBoxContainer.new()
+		details.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		details.clip_contents = true
+		details.alignment = BoxContainer.ALIGNMENT_CENTER
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		hand_hbox.add_child(details)
 		var hand_lbl := Label.new()
 		hand_lbl.text = "%s\nHP %d %s\n$%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
-		hand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hand_lbl.add_theme_font_size_override("font_size", 10)
+		hand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		hand_lbl.add_theme_font_size_override("font_size", 11)
 		hand_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		hand_vbox.add_child(hand_lbl)
-		btn.add_child(hand_vbox)
+		details.add_child(hand_lbl)
+		# Hover tooltip — no inline eff label, frees right-side space efficiently, no overflow
+		if card.SpecialEffect != "":
+			btn.tooltip_text = card.SpecialEffect
+		else:
+			btn.tooltip_text = ""
+		btn.add_child(hand_hbox)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 0.88, 0.15)
 			btn.add_theme_font_size_override("font_size", 14)
@@ -268,7 +296,7 @@ func _refresh_hand():
 			btn.modulate = Color(0.25, 0.25, 0.3)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
-			btn.disabled = true
+			# keep enabled so tooltip still shows on hover (was disabled, blocked hover)
 		else:
 			btn.modulate = Color(0.2, 0.85, 0.45)
 			btn.add_theme_font_size_override("font_size", 14)
@@ -411,16 +439,29 @@ func _inspect_pile(title: String, pile: Array):
 			var cname: String = card.card_name if card is Card else str(card)
 			var cell := VBoxContainer.new()
 			cell.alignment = BoxContainer.ALIGNMENT_CENTER
+			cell.clip_contents = true
 			cell.custom_minimum_size = Vector2(64, 72)
 			# Card art (8-bit, same as board/hand)
-			var art := Card.create_sprite_for(cname, Vector2(40, 40))
+			var art := Card.create_sprite_for(cname, Vector2(48, 48))
+			art.clip_contents = true
 			cell.add_child(art)
 			var lbl := Label.new()
 			lbl.text = cname
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.add_theme_font_size_override("font_size", 8)
+			lbl.add_theme_font_size_override("font_size", 10)
 			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 			cell.add_child(lbl)
+			if card is Card and (card as Card).SpecialEffect != "":
+				var eff3 := Label.new()
+				eff3.text = (card as Card).SpecialEffect
+				eff3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				eff3.clip_contents = true
+				eff3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				eff3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				eff3.custom_minimum_size = Vector2(0, 0)
+				eff3.add_theme_font_size_override("font_size", 8)
+				eff3.add_theme_color_override("font_color", Color(1, 1, 1))
+				cell.add_child(eff3)
 			inspect_grid.add_child(cell)
 	inspect_popup.visible = true
 

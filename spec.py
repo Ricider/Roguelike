@@ -9,7 +9,7 @@ class GameObject(GameObject):
 
 class Player(GameObject):
     HitPoints: int
-    Board: Row[3]
+    Board: Row[4]
 
     BioSupply: int
     MoneySupply: int
@@ -151,7 +151,7 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 # 2) Build Phase
 
 - Players get to chose which cards they play every turn into any of the squares in any of their rows. They can play any of the cards they drew by paying their BioCost and MoneyCost from theirBioSupply and MoneySupply
-- Each Player has a 3x7 grid board where they can play both units and buildings on their own turn into 3 rows of 7 squares. Two players boards face each other combining to a 6x7 board, similarly to a smaller chess board
+- Each Player has a 4x7 grid board where they can play both units and buildings on their own turn into 3 rows of 7 squares. Two players boards face each other combining to a 6x7 board, similarly to a smaller chess board
 
 # 3) Combat Phase
 - Game Plays in Autochess format in a one versus one format. 

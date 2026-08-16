@@ -2,7 +2,7 @@ extends GameObject
 class_name Player
 
 var HitPoints: int = 100
-var Board: Array = [] # Row[3]
+var Board: Array = [] # Row[4]
 var BioSupply: int = 100
 var MoneySupply: int = 20
 var DrawPile: Array = [] # Card[]
@@ -16,7 +16,7 @@ func _init(hp: int = 100, bio: int = 100, money: int = 20):
 	BioSupply = bio
 	MoneySupply = money
 	Board = []
-	for i in range(3):
+	for i in range(4):
 		Board.append(Row.new())
 	DrawPile = []
 	DiscardPile = []
@@ -75,7 +75,7 @@ func discard_hand():
 	Hand.clear()
 
 func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
-	if not (0 <= row_idx and row_idx < 3 and 0 <= col_idx and col_idx < 7):
+	if not (0 <= row_idx and row_idx < Board.size() and 0 <= col_idx and col_idx < 7):
 		return false
 	if not Hand.has(card):
 		return false
