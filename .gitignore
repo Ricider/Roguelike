@@ -1,0 +1,22 @@
+# Godot 4+ specific ignores
+.godot/
+build/
+export/
+*.translation
+*.tmp
+
+# Mono
+.mono/
+data_*/
+
+# Imported assets cache
+*.import
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Editor backups
+*.bak

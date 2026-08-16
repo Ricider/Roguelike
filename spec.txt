@@ -1,0 +1,6 @@
+Roguelike Cardgame Autochess
+
+Cards:
+Hit Points: int
+Damage: int
+
