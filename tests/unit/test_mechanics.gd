@@ -142,8 +142,90 @@ func test_combat_pick_target():
 	rng.seed = 123
 	for i in range(5):
 		var t = cs._pick_target(def, false, rng)
-		assert_eq(t["square"], def.Board[2].Squares[0], "non-ranged picks front row")
+		assert_eq(t["square"], def.Board[2].Squares[0], "non-ranged picks front row (AI defender)")
 	assert_not_null(cs._pick_target(def, true, rng), "ranged picks any")
+
+func test_combat_pick_target_human_vs_ai_front():
+	# Human defender front is row 0, AI defender front is row 2 — verifies the vertical direction fix
+	var human := Player.new(100, 100, 20) # Players[0] = human (bottom)
+	var ai := Player.new(100, 100, 20)    # Players[1] = AI (top)
+	var cs := CombatState.new(human, ai)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	# Human defender: units on back (2) and front (0) — should pick front 0
+	human.Board[0].Squares[3].place(Infantry.new())
+	human.Board[2].Squares[3].place(Tank.new())
+	for i in range(5):
+		var t = cs._pick_target(human, false, rng)
+		assert_eq(t["square"], human.Board[0].Squares[3], "human defender non-ranged picks row 0 front")
+	# AI defender: units on back (0) and front (2) — should pick front 2
+	ai.Board[0].Squares[3].place(Tank.new())
+	ai.Board[2].Squares[3].place(Infantry.new())
+	for i in range(5):
+		var t = cs._pick_target(ai, false, rng)
+		assert_eq(t["square"], ai.Board[2].Squares[3], "AI defender non-ranged picks row 2 front")
+
+func test_combat_pick_target_middle_row_fallback():
+	var human := Player.new(100, 100, 20)
+	var ai := Player.new(100, 100, 20)
+	var cs := CombatState.new(human, ai)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	# Only middle row occupied — both defenders should pick row 1
+	human.Board[1].Squares[1].place(Infantry.new())
+	ai.Board[1].Squares[1].place(Infantry.new())
+	assert_eq(cs._pick_target(human, false, rng)["square"], human.Board[1].Squares[1], "human picks middle when front empty")
+	assert_eq(cs._pick_target(ai, false, rng)["square"], ai.Board[1].Squares[1], "AI picks middle when front empty")
+
+func test_combat_pick_target_empty_and_ranged_any():
+	var human := Player.new(100, 100, 20)
+	var ai := Player.new(100, 100, 20)
+	var cs := CombatState.new(human, ai)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	assert_null(cs._pick_target(human, false, rng), "empty board returns null (non-ranged)")
+	assert_null(cs._pick_target(human, true, rng), "empty board returns null (ranged)")
+	# Ranged picks any row — verify it can pick back row even when front occupied
+	human.Board[0].Squares[0].place(Infantry.new())
+	human.Board[2].Squares[6].place(Tank.new())
+	var seen_back := false
+	var seen_front := false
+	for i in range(20):
+		var t = cs._pick_target(human, true, rng)
+		if t["square"] == human.Board[0].Squares[0]:
+			seen_front = true
+		if t["square"] == human.Board[2].Squares[6]:
+			seen_back = true
+	assert_true(seen_front and seen_back, "ranged can hit any row including back")
+
+func test_combat_pick_target_fallback_not_in_players():
+	var outsider := Player.new(100, 100, 20)
+	outsider.Board[0].Squares[0].place(Tank.new())
+	outsider.Board[2].Squares[0].place(Infantry.new())
+	var cs := CombatState.new(Player.new(), Player.new())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	# outsider not in Players — fallback order [2,1,0] picks front 2
+	assert_eq(cs._pick_target(outsider, false, rng)["square"], outsider.Board[2].Squares[0], "fallback picks row 2")
+
+func test_combat_pick_target_multiple_candidates_same_row():
+	var human := Player.new(100, 100, 20)
+	var ai := Player.new(100, 100, 20)
+	var cs := CombatState.new(human, ai)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	human.Board[0].Squares[0].place(Infantry.new())
+	human.Board[0].Squares[6].place(Tank.new())
+	var seen_left := false
+	var seen_right := false
+	for i in range(30):
+		var t = cs._pick_target(human, false, rng)
+		assert_true(t["square"] == human.Board[0].Squares[0] or t["square"] == human.Board[0].Squares[6], "still front row")
+		if t["square"] == human.Board[0].Squares[0]:
+			seen_left = true
+		if t["square"] == human.Board[0].Squares[6]:
+			seen_right = true
+	assert_true(seen_left and seen_right, "random among same front row candidates")
 
 func test_combat_death_and_direct_hit():
 	var atk := Player.new(100, 100, 20)
