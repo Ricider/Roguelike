@@ -11,6 +11,7 @@ var ai: BasicAI
 
 var selected_card: Card = null
 var selected_card_idx: int = -1
+var _frames_cache: Dictionary = {}
 
 @onready var ai_info: Label = $VBox/AIInfo
 @onready var player_info: Label = $VBox/PlayerInfo
@@ -94,27 +95,57 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var card: Card = sq.Inhabitant
 				var hp: int = 0
 				var dmg: String = ""
-				if card is Unit:
+				var is_unit: bool = card is Unit
+				if is_unit:
 					hp = (card as Unit).HitPoints
-					dmg = " DMG:%d" % (card as Unit).Damage
+					dmg = "DMG:%d" % (card as Unit).Damage
 				elif card is Building:
 					hp = (card as Building).HitPoints
-					dmg = " INC:%d" % (card as Building).Income
-				btn.text = "%s\nHP:%d%s" % [card.card_name, hp, dmg]
-				if card is Unit:
+					dmg = "INC:%d" % (card as Building).Income
+				btn.text = ""
+				btn.icon = null
+				if is_unit:
 					btn.modulate = Color(0.15, 0.55, 1.0)
-					btn.add_theme_font_size_override("font_size", 13)
-					btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				else:
 					btn.modulate = Color(1.0, 0.72, 0.0)
-					btn.add_theme_font_size_override("font_size", 13)
-					btn.add_theme_color_override("font_color", Color(0.1, 0.08, 0.0))
-				var tex: Texture2D = _sprite_for(card)
-				if tex != null:
-					btn.icon = tex
-					btn.expand_icon = true
-					btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-					btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				var hbox := HBoxContainer.new()
+				hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				var anim := _create_animated_sprite(card.card_name, Vector2(48, 48))
+				hbox.add_child(anim)
+				var vbox := VBoxContainer.new()
+				vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				var name_lbl := Label.new()
+				name_lbl.text = card.card_name
+				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+				name_lbl.add_theme_font_size_override("font_size", 9)
+				name_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				vbox.add_child(name_lbl)
+				var stats := HBoxContainer.new()
+				stats.alignment = BoxContainer.ALIGNMENT_BEGIN
+				var hp_icon := TextureRect.new()
+				hp_icon.texture = load("res://Assets/UI/heart.png") as Texture2D
+				hp_icon.custom_minimum_size = Vector2(10, 10)
+				hp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				hp_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				stats.add_child(hp_icon)
+				var hp_lbl := Label.new()
+				hp_lbl.text = "%d" % hp
+				hp_lbl.add_theme_font_size_override("font_size", 9)
+				hp_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				stats.add_child(hp_lbl)
+				var dmg_lbl := Label.new()
+				dmg_lbl.text = " " + dmg
+				dmg_lbl.add_theme_font_size_override("font_size", 8)
+				dmg_lbl.add_theme_color_override("font_color", Color(1,1,1) if is_unit else Color(0.1,0.08,0.0))
+				stats.add_child(dmg_lbl)
+				vbox.add_child(stats)
+				hbox.add_child(vbox)
+				btn.add_child(hbox)
 				btn.disabled = true
 			container.add_child(btn)
 
@@ -135,12 +166,21 @@ func _refresh_hand():
 		elif card is Building:
 			hp = (card as Building).HitPoints
 			extra = "INC %d" % (card as Building).Income
-		btn.text = "%s\nHP %d %s\nCost $%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
-		var htex: Texture2D = _sprite_for(card)
-		if htex != null:
-			btn.icon = htex
-			btn.expand_icon = true
-			btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# Layout: sprite on top, stats below — avoids text overlapping sprite
+		btn.text = ""
+		var hand_vbox := VBoxContainer.new()
+		hand_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hand_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hand_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hand_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var hand_anim := _create_animated_sprite(card.card_name, Vector2(48, 48))
+		hand_vbox.add_child(hand_anim)
+		var hand_lbl := Label.new()
+		hand_lbl.text = "%s\nHP %d %s\n$%d B%d" % [card.card_name, hp, extra, card.MoneyCost, card.BioCost]
+		hand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hand_lbl.add_theme_font_size_override("font_size", 10)
+		hand_vbox.add_child(hand_lbl)
+		btn.add_child(hand_vbox)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 0.88, 0.15)
 			btn.add_theme_font_size_override("font_size", 14)
@@ -202,19 +242,6 @@ func _on_end_turn():
 
 func _sprite_for(card: Card) -> Texture2D:
 	var name: String = card.card_name
-	# Try animated 4-frame sprite first
-	var anim := AnimatedTexture.new()
-	anim.frames = 20
-	var has_anim: bool = false
-	for i in range(20):
-		var fpath: String = "res://Assets/Cards/%s/sprite_%d.png" % [name, i]
-		if ResourceLoader.exists(fpath):
-			anim.set_frame_texture(i, load(fpath) as Texture2D)
-			anim.set_frame_duration(i, 0.1)
-			has_anim = true
-	if has_anim:
-		anim.pause = false
-		return anim
 	var path_png: String = "res://Assets/Cards/%s/sprite.png" % name
 	if ResourceLoader.exists(path_png):
 		return load(path_png) as Texture2D
@@ -222,6 +249,41 @@ func _sprite_for(card: Card) -> Texture2D:
 	if ResourceLoader.exists(path):
 		return load(path) as Texture2D
 	return null
+
+func _get_frames(card_name: String) -> SpriteFrames:
+	if _frames_cache.has(card_name):
+		return _frames_cache[card_name] as SpriteFrames
+	var sf := SpriteFrames.new()
+	sf.add_animation("idle")
+	sf.set_animation_loop("idle", true)
+	sf.set_animation_speed("idle", 10.0)
+	for i in range(20):
+		var fpath: String = "res://Assets/Cards/%s/sprite_%d.png" % [card_name, i]
+		if ResourceLoader.exists(fpath):
+			var tex := load(fpath) as Texture2D
+			if tex != null:
+				sf.add_frame("idle", tex)
+	_frames_cache[card_name] = sf
+	return sf
+
+func _create_animated_sprite(card_name: String, size: Vector2) -> Control:
+	var container := Control.new()
+	container.custom_minimum_size = size
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var asp := AnimatedSprite2D.new()
+	asp.sprite_frames = _get_frames(card_name)
+	asp.animation = "idle"
+	asp.autoplay = "idle"
+	asp.centered = true
+	asp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var scale_f: float = size.x / 128.0
+	asp.scale = Vector2(scale_f, scale_f)
+	asp.position = size * 0.5
+	container.add_child(asp)
+	asp.play("idle")
+	return container
 
 func _check_game_over() -> bool:
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:
