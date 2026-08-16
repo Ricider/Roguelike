@@ -204,13 +204,13 @@ func _sprite_for(card: Card) -> Texture2D:
 	var name: String = card.card_name
 	# Try animated 4-frame sprite first
 	var anim := AnimatedTexture.new()
-	anim.frames = 4
+	anim.frames = 20
 	var has_anim: bool = false
-	for i in range(4):
+	for i in range(20):
 		var fpath: String = "res://Assets/Cards/%s/sprite_%d.png" % [name, i]
 		if ResourceLoader.exists(fpath):
 			anim.set_frame_texture(i, load(fpath) as Texture2D)
-			anim.set_frame_duration(i, 0.2)
+			anim.set_frame_duration(i, 0.1)
 			has_anim = true
 	if has_anim:
 		anim.pause = false
