@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" path="res://Assets/UI/heart.png" id="7_heart"]
 [ext_resource type="Texture2D" path="res://Assets/UI/bio_icon.png" id="8_bioicon"]
 [ext_resource type="Texture2D" path="res://Assets/UI/money_icon.png" id="9_moneyicon"]
+[ext_resource type="Texture2D" path="res://Assets/UI/card_back.png" id="10_cardback"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -202,6 +203,37 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+[node name="AIDeck" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="AIDeckIcon" type="Button" parent="VBox/MainHBox/LeftGauges/AIDeck"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+texture_filter = 0
+
+[node name="AIDeckBar" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIDeck"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 9.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("4_hpfill")
+show_percentage = false
+
+[node name="AIDeckValue" type="Label" parent="VBox/MainHBox/LeftGauges/AIDeck"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "9/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
 [node name="Spacer" type="Control" parent="VBox/MainHBox/LeftGauges"]
 custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
@@ -339,6 +371,39 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 9
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+
+[node name="PlayerDeck" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerDeckIcon" type="Button" parent="VBox/MainHBox/LeftGauges/PlayerDeck"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+texture_filter = 0
+
+[node name="PlayerDeckBar" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerDeck"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 9.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("6_moneyfill")
+show_percentage = false
+
+[node name="PlayerDeckValue" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerDeck"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "9/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+
 [node name="RightContent" type="VBoxContainer" parent="VBox/MainHBox"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -407,3 +472,190 @@ layout_mode = 2
 text = "Menu"
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="RightGauges" type="VBoxContainer" parent="VBox/MainHBox"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
+alignment = 0
+
+[node name="DiscardLabel" type="Label" parent="VBox/MainHBox/RightGauges"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+text = "Discard"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 9
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="AIDiscard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="AIDiscardIcon" type="Button" parent="VBox/MainHBox/RightGauges/AIDiscard"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+
+[node name="AIDiscardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/AIDiscard"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 0.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("5_biofill")
+show_percentage = false
+
+[node name="AIDiscardValue" type="Label" parent="VBox/MainHBox/RightGauges/AIDiscard"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "0/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="AIGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="AIGraveyardIcon" type="Button" parent="VBox/MainHBox/RightGauges/AIGraveyard"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+
+[node name="AIGraveyardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/AIGraveyard"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 0.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("4_hpfill")
+tint_progress = Color(0.3, 0.3, 0.3, 1)
+show_percentage = false
+
+[node name="AIGraveyardValue" type="Label" parent="VBox/MainHBox/RightGauges/AIGraveyard"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "0/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="Spacer2" type="Control" parent="VBox/MainHBox/RightGauges"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerDiscard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerDiscardIcon" type="Button" parent="VBox/MainHBox/RightGauges/PlayerDiscard"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+
+[node name="PlayerDiscardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/PlayerDiscard"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 0.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("5_biofill")
+show_percentage = false
+
+[node name="PlayerDiscardValue" type="Label" parent="VBox/MainHBox/RightGauges/PlayerDiscard"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "0/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="PlayerGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerGraveyardIcon" type="Button" parent="VBox/MainHBox/RightGauges/PlayerGraveyard"]
+custom_minimum_size = Vector2(32, 44)
+layout_mode = 2
+icon = ExtResource("10_cardback")
+expand_icon = true
+texture_filter = 0
+
+[node name="PlayerGraveyardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/PlayerGraveyard"]
+custom_minimum_size = Vector2(32, 6)
+layout_mode = 2
+fill_mode = 0
+max_value = 16.0
+value = 0.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_hpbg")
+texture_progress = ExtResource("4_hpfill")
+tint_progress = Color(0.3, 0.3, 0.3, 1)
+show_percentage = false
+
+[node name="PlayerGraveyardValue" type="Label" parent="VBox/MainHBox/RightGauges/PlayerGraveyard"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+text = "0/16"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 8
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+[node name="InspectPopup" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -160.0
+offset_right = 200.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="InspectPopup"]
+layout_mode = 2
+alignment = 0
+
+[node name="InspectTitle" type="Label" parent="InspectPopup/VBox"]
+layout_mode = 2
+text = "Pile"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="InspectScroll" type="ScrollContainer" parent="InspectPopup/VBox"]
+custom_minimum_size = Vector2(300, 200)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+
+[node name="InspectGrid" type="GridContainer" parent="InspectPopup/VBox/InspectScroll"]
+layout_mode = 2
+columns = 4
+alignment = 1
+
+[node name="CloseBtn" type="Button" parent="InspectPopup/VBox"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+text = "Close"
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+

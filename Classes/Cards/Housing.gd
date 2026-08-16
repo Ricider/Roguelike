@@ -3,7 +3,7 @@ class_name Housing
 
 func _init():
 	super._init(120, 2, 20, 30, "Housing")
-	SpecialEffect = "In your economy phase gain 8% more BioSupply"
+	SpecialEffect = "In your economy phase gain 4% more BioSupply"
 
 static func extra_bio_rate(player: Player) -> float:
 	var n: int = 0
@@ -11,7 +11,7 @@ static func extra_bio_rate(player: Player) -> float:
 		for sq in row.Squares:
 			if sq.Inhabitant != null and sq.Inhabitant is Housing:
 				n += 1
-	return n * 0.08
+	return n * 0.04
 
 static func bio_rate(player: Player) -> float:
-	return 1.15 + extra_bio_rate(player)
+	return 1.10 + extra_bio_rate(player)

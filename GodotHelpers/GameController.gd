@@ -35,6 +35,28 @@ var selected_card_idx: int = -1
 @onready var player_money_value: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyValue
 @onready var player_bio_income: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioIncome
 @onready var player_money_income: Label = $VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyIncome
+@onready var player_deck_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/PlayerDeck/PlayerDeckBar
+@onready var player_deck_value: Label = $VBox/MainHBox/LeftGauges/PlayerDeck/PlayerDeckValue
+@onready var player_deck_icon: Button = $VBox/MainHBox/LeftGauges/PlayerDeck/PlayerDeckIcon
+@onready var ai_deck_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIDeck/AIDeckBar
+@onready var ai_deck_value: Label = $VBox/MainHBox/LeftGauges/AIDeck/AIDeckValue
+@onready var ai_deck_icon: Button = $VBox/MainHBox/LeftGauges/AIDeck/AIDeckIcon
+@onready var player_discard_bar: TextureProgressBar = $VBox/MainHBox/RightGauges/PlayerDiscard/PlayerDiscardBar
+@onready var player_discard_value: Label = $VBox/MainHBox/RightGauges/PlayerDiscard/PlayerDiscardValue
+@onready var player_graveyard_bar: TextureProgressBar = $VBox/MainHBox/RightGauges/PlayerGraveyard/PlayerGraveyardBar
+@onready var player_graveyard_value: Label = $VBox/MainHBox/RightGauges/PlayerGraveyard/PlayerGraveyardValue
+@onready var ai_discard_bar: TextureProgressBar = $VBox/MainHBox/RightGauges/AIDiscard/AIDiscardBar
+@onready var ai_discard_value: Label = $VBox/MainHBox/RightGauges/AIDiscard/AIDiscardValue
+@onready var ai_graveyard_bar: TextureProgressBar = $VBox/MainHBox/RightGauges/AIGraveyard/AIGraveyardBar
+@onready var ai_graveyard_value: Label = $VBox/MainHBox/RightGauges/AIGraveyard/AIGraveyardValue
+@onready var player_discard_icon: Button = $VBox/MainHBox/RightGauges/PlayerDiscard/PlayerDiscardIcon
+@onready var player_graveyard_icon: Button = $VBox/MainHBox/RightGauges/PlayerGraveyard/PlayerGraveyardIcon
+@onready var ai_discard_icon: Button = $VBox/MainHBox/RightGauges/AIDiscard/AIDiscardIcon
+@onready var ai_graveyard_icon: Button = $VBox/MainHBox/RightGauges/AIGraveyard/AIGraveyardIcon
+@onready var inspect_popup: PanelContainer = $InspectPopup
+@onready var inspect_title: Label = $InspectPopup/VBox/InspectTitle
+@onready var inspect_grid: GridContainer = $InspectPopup/VBox/InspectScroll/InspectGrid
+@onready var close_btn: Button = $InspectPopup/VBox/CloseBtn
 
 func _ready():
 	human = Player.new(100, 100, 20)
@@ -44,6 +66,13 @@ func _ready():
 	state = CombatState.new(human, ai_player)
 	end_turn_btn.pressed.connect(_on_end_turn)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
+	close_btn.pressed.connect(func(): inspect_popup.visible = false)
+	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
+	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
+	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
+	ai_discard_icon.pressed.connect(func(): _inspect_pile("AI Discard Pile", ai_player.DiscardPile))
+	player_graveyard_icon.pressed.connect(func(): _inspect_pile("Your Graveyard", human.Graveyard))
+	ai_graveyard_icon.pressed.connect(func(): _inspect_pile("AI Graveyard", ai_player.Graveyard))
 	_start_new_round()
 
 func _start_new_round():
@@ -87,11 +116,29 @@ func _refresh_ui():
 	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), 100]
 	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0), 200]
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0), 200]
-	# Income shown right on top of symbol (white) — Money +10+buildings, Bio 15%+5+8% per Housing
+	# Income shown right on top of symbol (white) — Money +10+buildings, Bio 10%+5+4% per Housing
 	ai_bio_income.text = "+%d" % ai_bio_inc
 	player_bio_income.text = "+%d" % p_bio_inc
 	ai_money_income.text = "+%d" % (10 + ai_income)
 	player_money_income.text = "+%d" % (10 + p_income)
+	# Deck / Discard / Graveyard gauges (16 max per spec, sprites under gauges / other side)
+	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
+		bar.max_value = 16
+	ai_deck_bar.value = clamp(ai_player.DrawPile.size(), 0, 16)
+	player_deck_bar.value = clamp(human.DrawPile.size(), 0, 16)
+	ai_discard_bar.value = clamp(ai_player.DiscardPile.size(), 0, 16)
+	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 16)
+	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 16)
+	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 16)
+	ai_deck_value.text = "%d/16" % ai_player.DrawPile.size()
+	player_deck_value.text = "%d/16" % human.DrawPile.size()
+	ai_discard_value.text = "%d/16" % ai_player.DiscardPile.size()
+	player_discard_value.text = "%d/16" % human.DiscardPile.size()
+	ai_graveyard_value.text = "%d/16" % ai_player.Graveyard.size()
+	player_graveyard_value.text = "%d/16" % human.Graveyard.size()
+	# Pulse deck when low
+	for pair in [[ai_deck_icon, ai_player.DrawPile.size()], [player_deck_icon, human.DrawPile.size()]]:
+		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
 	# tint based on low values for contrast (bar color)
 	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player.HitPoints < 30 else Color(1,1,1)
 	player_hp_bar.tint_progress = Color(1, 0.35, 0.35) if human.HitPoints < 30 else Color(1,1,1)
@@ -272,6 +319,7 @@ func _on_end_turn():
 	# Discard remaining hand — now owned by Player
 	human.discard_hand()
 	ai_player.discard_hand()
+	_refresh_ui()
 	# Check win
 	if _check_game_over():
 		return
@@ -346,6 +394,35 @@ func _spawn_damage_number(anchor: Control, dmg: int):
 	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -18), 0.45)
 	tw.parallel().tween_property(lbl, "modulate", Color(1, 0.25, 0.25, 0), 0.45)
 	tw.tween_callback(func(): lbl.queue_free())
+
+func _inspect_pile(title: String, pile: Array):
+	inspect_title.text = "%s (%d)" % [title, pile.size()]
+	# Clear previous grid
+	for child in inspect_grid.get_children():
+		child.queue_free()
+	if pile.is_empty():
+		var empty_lbl := Label.new()
+		empty_lbl.text = "(empty)"
+		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		inspect_grid.add_child(empty_lbl)
+	else:
+		for card in pile:
+			var cname: String = card.card_name if card is Card else str(card)
+			var cell := VBoxContainer.new()
+			cell.alignment = BoxContainer.ALIGNMENT_CENTER
+			cell.custom_minimum_size = Vector2(64, 72)
+			# Card art (8-bit, same as board/hand)
+			var art := Card.create_sprite_for(cname, Vector2(40, 40))
+			cell.add_child(art)
+			var lbl := Label.new()
+			lbl.text = cname
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.add_theme_font_size_override("font_size", 8)
+			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+			cell.add_child(lbl)
+			inspect_grid.add_child(cell)
+	inspect_popup.visible = true
 
 func _check_game_over() -> bool:
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:
