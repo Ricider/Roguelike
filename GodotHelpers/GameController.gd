@@ -903,7 +903,11 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 			btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 			if sq.Inhabitant == null:
 				btn.text = ""
-				btn.modulate = Color(0.12, 0.12, 0.18)
+				# Switched grey shades: player tiles (bottom) lighter, AI tiles (top) darker
+				if is_human:
+					btn.modulate = Color(0.32, 0.32, 0.38) # noticeably lighter - player can place
+				else:
+					btn.modulate = Color(0.05, 0.05, 0.08) # noticeably darker - AI side
 				btn.add_theme_font_size_override("font_size", 14)
 				btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				if is_human:
