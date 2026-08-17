@@ -247,7 +247,7 @@ Player: Horde
     DiscardPile: []
     Hand: []
 
-Player: Euro Army
+Player: Coalition Army
     HitPoints=60
     Board=2 Housing and 1 Factory randomly placed at back row
     Difficulty=5
@@ -258,7 +258,22 @@ Player: Euro Army
 
     Influence=50
 
-    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
+    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 1 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation]
+    DiscardPile: []
+    Hand: []
+
+Player: Corporate Troops
+    HitPoints=30
+    Board=2 Corporation randomly placed at back row
+    Difficulty=6
+    BackgroundImage=Cyberpunk Skyrises
+
+    BioSupply=10
+    MoneySupply=100
+
+    Influence=50
+
+    DrawPile: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher]
     DiscardPile: []
     Hand: []
 

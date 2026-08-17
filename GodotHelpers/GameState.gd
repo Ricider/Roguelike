@@ -12,11 +12,11 @@ var shop_offer: Array = [] # Card[] 5 cards
 var shop_remove_used: bool = false
 
 func set_player(name: String):
-	if name in ["Insurgents", "State Troops", "Horde", "Euro Army"]:
+	if name in ["Insurgents", "State Troops", "Horde", "Euro Army", "Coalition Army", "Corporate Troops"]:
 		selected_player_name = name
 
 func set_enemy(name: String):
-	if name in ["Euro Army", "Insurgents", "Horde", "State Troops"]:
+	if name in ["Euro Army", "Coalition Army", "Corporate Troops", "Insurgents", "Horde", "State Troops"]:
 		selected_enemy = name
 
 func make_player_by_name(name: String, for_human: bool = false) -> Player:
@@ -27,6 +27,10 @@ func make_player_by_name(name: String, for_human: bool = false) -> Player:
 			return CardFactory.make_state_troops_player(for_human)
 		"Horde":
 			return CardFactory.make_horde_player(for_human)
+		"Coalition Army":
+			return CardFactory.make_coalition_army_player(for_human)
+		"Corporate Troops":
+			return CardFactory.make_corporate_troops_player(for_human)
 		"Euro Army":
 			return CardFactory.make_euro_army_player(for_human)
 		_:
@@ -39,6 +43,10 @@ func make_selected_enemy() -> AIPlayer:
 		return CardFactory.make_horde_player()
 	if selected_enemy == "State Troops":
 		return CardFactory.make_state_troops_player() as AIPlayer
+	if selected_enemy == "Coalition Army":
+		return CardFactory.make_coalition_army_player()
+	if selected_enemy == "Corporate Troops":
+		return CardFactory.make_corporate_troops_player()
 	return CardFactory.make_euro_army_player()
 
 func background_path_for(player_name: String) -> String:
@@ -48,6 +56,10 @@ func background_path_for(player_name: String) -> String:
 		return "res://Assets/Players/State Troops/background.png"
 	if player_name == "Horde":
 		return "res://Assets/Players/Horde/background.png"
+	if player_name == "Coalition Army":
+		return "res://Assets/Players/Coalition Army/background.png"
+	if player_name == "Corporate Troops":
+		return "res://Assets/Players/Corporate Troops/background.png"
 	if player_name == "Euro Army":
 		return "res://Assets/Players/Euro Army/background.png"
 	return ""

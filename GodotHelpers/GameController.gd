@@ -366,6 +366,14 @@ func _update_background():
 			path = "res://Assets/Players/Insurgents/background.png"
 		elif ai_player.display_name == "Euro Army":
 			path = "res://Assets/Players/Euro Army/background.png"
+		elif ai_player.display_name == "Coalition Army":
+			path = "res://Assets/Players/Coalition Army/background.png"
+		elif ai_player.display_name == "Corporate Troops":
+			path = "res://Assets/Players/Corporate Troops/background.png"
+		elif ai_player.display_name == "State Troops":
+			path = "res://Assets/Players/State Troops/background.png"
+		elif ai_player.display_name == "Horde":
+			path = "res://Assets/Players/Horde/background.png"
 	if path != "" and ResourceLoader.exists(path):
 		var tex := load(path) as Texture2D
 		if tex != null:
@@ -377,7 +385,12 @@ func _update_background():
 
 func _update_flag_textures():
 	if ai_flag != null:
-		var p: String = "res://Assets/Players/Euro Army/flag.png"
+		var flag_path := "res://Assets/Players/%s/flag.png" % ai_player.display_name
+		var p: String = flag_path
+		if not ResourceLoader.exists(p):
+			p = "res://Assets/Players/Coalition Army/flag.png"
+		if not ResourceLoader.exists(p) and ai_player.display_name == "Euro Army":
+			p = "res://Assets/Players/Euro Army/flag.png"
 		if ai_player.display_name == "Insurgents":
 			p = "res://Assets/Players/Insurgents/flag.png"
 		if ResourceLoader.exists(p):
@@ -423,13 +436,22 @@ func _ensure_debug_popup():
 	row.add_child(lbl)
 	debug_enemy_option = OptionButton.new()
 	debug_enemy_option.custom_minimum_size = Vector2(180, 32)
-	debug_enemy_option.add_item("Euro Army", 0)
-	debug_enemy_option.add_item("Insurgents", 1)
+	debug_enemy_option.add_item("Coalition Army", 0)
+	debug_enemy_option.add_item("Corporate Troops", 1)
+	debug_enemy_option.add_item("Euro Army", 2)
+	debug_enemy_option.add_item("Insurgents", 3)
+	debug_enemy_option.add_item("State Troops", 4)
+	debug_enemy_option.add_item("Horde", 5)
 	var gs2 = get_node_or_null("/root/GameState")
-	var cur: String = "Euro Army"
+	var cur: String = "Coalition Army"
 	if gs2 != null:
 		cur = gs2.selected_enemy
-	debug_enemy_option.selected = 1 if cur == "Insurgents" else 0
+	var cur_idx: int = 0
+	for i in range(debug_enemy_option.get_item_count()):
+		if debug_enemy_option.get_item_text(i) == cur:
+			cur_idx = i
+			break
+	debug_enemy_option.selected = cur_idx
 	debug_enemy_option.item_selected.connect(func(idx: int):
 		var g = get_node_or_null("/root/GameState")
 		if g != null:
@@ -827,7 +849,7 @@ func _refresh_ui():
 		player_info.text = ""
 	# Update flag art and labels for players (custom flags)
 	if ai_label != null:
-		ai_label.text = ai_player.display_name if ai_player.display_name != "" else "Euro Army"
+		ai_label.text = ai_player.display_name if ai_player.display_name != "" else "Coalition Army"
 	if player_label != null:
 		player_label.text = human.display_name if human.display_name != "" else "State Troops"
 	if ai_flag != null:
@@ -836,6 +858,8 @@ func _refresh_ui():
 			var t := load(flag_path) as Texture2D
 			if t != null:
 				ai_flag.texture = t
+		elif ResourceLoader.exists("res://Assets/Players/Coalition Army/flag.png"):
+			ai_flag.texture = load("res://Assets/Players/Coalition Army/flag.png") as Texture2D
 		elif ResourceLoader.exists("res://Assets/Players/Euro Army/flag.png"):
 			ai_flag.texture = load("res://Assets/Players/Euro Army/flag.png") as Texture2D
 	if player_flag != null:
@@ -905,6 +929,7 @@ func _refresh_ui():
 func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 	_hide_hover()
 	for child in container.get_children():
+		container.remove_child(child)
 		child.queue_free()
 	container.columns = 10
 	for r in range(player.Board.size()):
@@ -1096,6 +1121,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 func _refresh_hand():
 	_hide_hover()
 	for child in hand_container.get_children():
+		hand_container.remove_child(child)
 		child.queue_free()
 	for idx in range(human.Hand.size()):
 		var card: Card = human.Hand[idx]
@@ -1413,6 +1439,7 @@ func _execute_combat_live() -> Array:
 					await _animate_live_entry(entry)
 					# show player HP drop immediately
 					_refresh_gauges_only()
+					await get_tree().process_frame
 					continue
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
@@ -1435,13 +1462,16 @@ func _execute_combat_live() -> Array:
 				# reflect HP bars, card HP/INC labels, and deaths immediately
 				_refresh_gauges_only()
 				_refresh_boards_only()
+				await get_tree().process_frame
 				# if target died already handled, next iteration picks new alive target
 			state._resolve_deaths(defender)
 			_refresh_gauges_only()
 			_refresh_boards_only()
+			await get_tree().process_frame
 	return log
 
 func _animate_live_entry(entry: Dictionary):
+	# --- REDONE: layout-safe, pivot-centered, parallel tweens ---
 	var attacker_sq: Square = entry["attacker_sq"]
 	var attacker_player: Player = entry["attacker_player"]
 	var defender: Player = entry["defender"]
@@ -1453,52 +1483,91 @@ func _animate_live_entry(entry: Dictionary):
 	var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
+	# Barracks aura before attack
 	if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
-		if atk_btn != null:
+		if atk_btn != null and is_instance_valid(atk_btn):
 			_spawn_special_effect(atk_btn, "barracks_aura")
-	if atk_btn != null:
+	# Attacker punch: scale+modulate in parallel, pivot-centered
+	if atk_btn != null and is_instance_valid(atk_btn):
+		atk_btn.pivot_offset = atk_btn.size * 0.5
 		var tw := create_tween()
-		tw.tween_property(atk_btn, "scale", Vector2(1.08, 1.08), 0.12)
-		tw.tween_property(atk_btn, "modulate", Color(1, 0.95, 0.4), 0.12)
-		tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.12)
-		tw.tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.12)
+		tw.set_parallel(true)
+		tw.tween_property(atk_btn, "scale", Vector2(1.14, 1.14), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(atk_btn, "modulate", Color(1, 0.92, 0.35), 0.10)
+		tw.set_parallel(false)
+		tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.14)
 		message_label.text = "%s attacks %s for %d" % [attacker_card.card_name, "HP" if is_direct else target_card.card_name, dmg]
-	await get_tree().create_timer(0.22).timeout
+	await get_tree().create_timer(0.24).timeout
 	if is_direct:
-		if tgt_hp_bar != null:
+		if tgt_hp_bar != null and is_instance_valid(tgt_hp_bar):
+			# HP bar flash + shake via modulate, and value already updated live by _execute_combat_live
 			var tw2 := create_tween()
-			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.4, 0.4), 0.12)
-			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
+			tw2.set_parallel(true)
+			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.28, 0.28), 0.08)
+			# subtle scale punch on the bar fill
+			tgt_hp_bar.pivot_offset = tgt_hp_bar.size * 0.5
+			tw2.tween_property(tgt_hp_bar, "scale", Vector2(1.04, 1.04), 0.08)
+			tw2.set_parallel(false)
+			tw2.tween_property(tgt_hp_bar, "scale", Vector2(1.0, 1.0), 0.10)
+			tw2.parallel().tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
 			_spawn_damage_number(tgt_hp_bar, dmg)
 	else:
-		if tgt_btn != null:
+		if tgt_btn != null and is_instance_valid(tgt_btn):
+			tgt_btn.pivot_offset = tgt_btn.size * 0.5
+			# Red flash + layout-safe shake via rotation/scale (GridContainer overrides position)
 			var tw2 := create_tween()
-			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.35, 0.35), 0.10)
-			tw2.tween_property(tgt_btn, "position", tgt_btn.position + Vector2(4, 0), 0.05)
-			tw2.tween_property(tgt_btn, "position", tgt_btn.position, 0.05)
-			tw2.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.30, 0.30), 0.06)
+			var shake := create_tween()
+			shake.tween_property(tgt_btn, "rotation", 0.09, 0.05).set_trans(Tween.TRANS_SINE)
+			shake.tween_property(tgt_btn, "rotation", -0.09, 0.05)
+			shake.tween_property(tgt_btn, "rotation", 0.05, 0.04)
+			shake.tween_property(tgt_btn, "rotation", 0.0, 0.04)
+			# parallel scale punch for impact
+			var punch := create_tween()
+			punch.set_parallel(true)
+			punch.tween_property(tgt_btn, "scale", Vector2(0.92, 0.92), 0.06)
+			punch.set_parallel(false)
+			punch.tween_property(tgt_btn, "scale", Vector2(1.0, 1.0), 0.10).set_trans(Tween.TRANS_BACK)
 			_spawn_damage_number(tgt_btn, dmg)
 			if attacker_card is FighterJet:
 				var adj_sqs: Array = _get_adjacent_squares(defender, target_sq)
 				for adj_sq in adj_sqs:
 					var adj_btn: Button = _get_button_for_square(defender, adj_sq)
-					if adj_btn != null and adj_sq.Inhabitant != null:
+					if adj_btn != null and is_instance_valid(adj_btn) and adj_sq.Inhabitant != null:
 						_spawn_special_effect(adj_btn, "fighter_jet_splash")
-						# splash damage number on adjacent (same dmg)
 						_spawn_damage_number(adj_btn, dmg)
 				_spawn_special_effect(tgt_btn, "fighter_jet_splash")
-	await get_tree().create_timer(0.32).timeout
+			# restore modulate after shake
+			await shake.finished
+			if is_instance_valid(tgt_btn):
+				var fade := create_tween()
+				fade.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
+	await get_tree().create_timer(0.18).timeout
 
 func _get_button_for_square(player: Player, square: Square) -> Button:
 	var container: GridContainer = ai_board_container if player == ai_player else player_board_container
+	if container == null or square == null:
+		return null
 	# Squares are stored row-major 4x10, buttons are added same order
 	for r in range(player.Board.size()):
 		var row: Row = player.Board[r]
 		for c in range(row.Squares.size()):
 			if row.Squares[c] == square:
 				var idx: int = r * 10 + c
+				# After _refresh_board with remove_child, count is exact; still guard against queued deletions
 				if idx < container.get_child_count():
-					return container.get_child(idx) as Button
+					var btn = container.get_child(idx) as Button
+					if btn != null and is_instance_valid(btn) and not btn.is_queued_for_deletion():
+						return btn
+				# fallback scan for valid button at logical idx ignoring queued (handles timing)
+				var valid_idx := 0
+				for child in container.get_children():
+					if child.is_queued_for_deletion() or not is_instance_valid(child):
+						continue
+					if valid_idx == idx:
+						return child as Button
+					valid_idx += 1
 	return null
 
 func _animate_combat(log: Array):
@@ -1519,38 +1588,58 @@ func _animate_combat(log: Array):
 		if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
 			if atk_btn != null:
 				_spawn_special_effect(atk_btn, "barracks_aura")
-		# Highlight attacker: scale pulse + yellow tint
-		if atk_btn != null:
+		# Highlight attacker: scale pulse + yellow tint (pivot-centered, parallel)
+		if atk_btn != null and is_instance_valid(atk_btn):
+			atk_btn.pivot_offset = atk_btn.size * 0.5
 			var tw := create_tween()
-			tw.tween_property(atk_btn, "scale", Vector2(1.08, 1.08), 0.12)
-			tw.tween_property(atk_btn, "modulate", Color(1, 0.95, 0.4), 0.12)
-			tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.12)
-			tw.tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.12)
+			tw.set_parallel(true)
+			tw.tween_property(atk_btn, "scale", Vector2(1.14, 1.14), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(atk_btn, "modulate", Color(1, 0.92, 0.35), 0.10)
+			tw.set_parallel(false)
+			tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.14)
 			message_label.text = "%s attacks %s for %d" % [attacker_card.card_name, "HP" if is_direct else target_card.card_name, dmg]
-		await get_tree().create_timer(0.22).timeout
+		await get_tree().create_timer(0.24).timeout
 		# Highlight target
 		if is_direct:
+			if tgt_hp_bar != null and is_instance_valid(tgt_hp_bar):
+				var tw2 := create_tween()
+				tw2.set_parallel(true)
+				tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.28, 0.28), 0.08)
+				tgt_hp_bar.pivot_offset = tgt_hp_bar.size * 0.5
+				tw2.tween_property(tgt_hp_bar, "scale", Vector2(1.04, 1.04), 0.08)
+				tw2.set_parallel(false)
+				tw2.tween_property(tgt_hp_bar, "scale", Vector2(1.0, 1.0), 0.10)
+				tw2.parallel().tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
+				_spawn_damage_number(tgt_hp_bar, dmg)
+		elif tgt_btn != null and is_instance_valid(tgt_btn):
+			tgt_btn.pivot_offset = tgt_btn.size * 0.5
 			var tw2 := create_tween()
-			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.4, 0.4), 0.12)
-			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
-			# Spawn floating damage number over HP bar
-			_spawn_damage_number(tgt_hp_bar, dmg)
-		elif tgt_btn != null:
-			var tw2 := create_tween()
-			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.35, 0.35), 0.10)
-			tw2.tween_property(tgt_btn, "position", tgt_btn.position + Vector2(4, 0), 0.05)
-			tw2.tween_property(tgt_btn, "position", tgt_btn.position, 0.05)
-			tw2.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.30, 0.30), 0.06)
+			var shake2 := create_tween()
+			shake2.tween_property(tgt_btn, "rotation", 0.09, 0.05).set_trans(Tween.TRANS_SINE)
+			shake2.tween_property(tgt_btn, "rotation", -0.09, 0.05)
+			shake2.tween_property(tgt_btn, "rotation", 0.05, 0.04)
+			shake2.tween_property(tgt_btn, "rotation", 0.0, 0.04)
+			var punch2 := create_tween()
+			punch2.set_parallel(true)
+			punch2.tween_property(tgt_btn, "scale", Vector2(0.92, 0.92), 0.06)
+			punch2.set_parallel(false)
+			punch2.tween_property(tgt_btn, "scale", Vector2(1.0, 1.0), 0.10).set_trans(Tween.TRANS_BACK)
 			_spawn_damage_number(tgt_btn, dmg)
 			# Fighter Jet splash: spawn explosion on adjacent tiles
 			if attacker_card is FighterJet:
 				var adj_sqs: Array = _get_adjacent_squares(defender, target_sq)
 				for adj_sq in adj_sqs:
 					var adj_btn: Button = _get_button_for_square(defender, adj_sq)
-					if adj_btn != null and adj_sq.Inhabitant != null:
+					if adj_btn != null and is_instance_valid(adj_btn) and adj_sq.Inhabitant != null:
 						_spawn_special_effect(adj_btn, "fighter_jet_splash")
 				# also spawn on main target for splash center
 				_spawn_special_effect(tgt_btn, "fighter_jet_splash")
+			await shake2.finished
+			if is_instance_valid(tgt_btn):
+				var fade := create_tween()
+				fade.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
 		await get_tree().create_timer(0.32).timeout
 	# Brief pause then refresh to show updated HP / deaths
 	await get_tree().create_timer(0.15).timeout
@@ -1604,7 +1693,6 @@ func _spawn_special_effect(anchor: Control, kind: String):
 		return
 	var spr := TextureRect.new()
 	spr.texture = frames[0]
-	# Larger, more visible — effects are 128x128, show at 96x96
 	spr.custom_minimum_size = Vector2(96, 96)
 	spr.size = Vector2(96, 96)
 	spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -1612,55 +1700,73 @@ func _spawn_special_effect(anchor: Control, kind: String):
 	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	spr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spr.modulate = Color(1,1,1,1)
-	spr.z_index = 200
+	spr.z_index = 400
 	# Add as overlay to GameController to avoid clip_contents of Button
 	add_child(spr)
-	# Center over anchor using global rect -> local
+	# Center over anchor using global rect -> local (handle zero-size anchors)
 	var anchor_rect: Rect2 = anchor.get_global_rect()
+	if anchor_rect.size == Vector2.ZERO:
+		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80, 80))
 	var center: Vector2 = anchor_rect.get_center()
-	# Convert to local position of GameController
 	var local_center: Vector2 = center - get_global_rect().position
 	spr.position = local_center - spr.size * 0.5
 	spr.pivot_offset = spr.size * 0.5
-	# Fade + scale out
+	spr.scale = Vector2(0.6, 0.6)
+	# Pop-in + fade + scale out
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(spr, "scale", Vector2(1.3, 1.3), 0.45)
-	tw.tween_property(spr, "modulate", Color(1,1,1,0), 0.45)
+	tw.tween_property(spr, "scale", Vector2(1.1, 1.1), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(spr, "modulate", Color(1,1,1,1), 0.12)
 	tw.set_parallel(false)
+	tw.tween_property(spr, "scale", Vector2(1.35, 1.35), 0.35)
+	tw.parallel().tween_property(spr, "modulate", Color(1,1,1,0), 0.35)
 	tw.tween_callback(func(): if is_instance_valid(spr): spr.queue_free())
 	# Animate frames if more than one
 	if frames.size() > 1:
 		for i in range(1, frames.size()):
 			var tex: Texture2D = frames[i]
 			var delay: float = i * 0.06
-			# capture tex correctly via bind
 			create_tween().tween_callback(func(t: Texture2D = tex): if is_instance_valid(spr): spr.texture = t).set_delay(delay)
 
 func _spawn_damage_number(anchor: Control, dmg: int):
 	if anchor == null or not is_instance_valid(anchor):
 		return
+	if dmg <= 0:
+		return
 	var lbl := Label.new()
 	lbl.text = "-%d" % dmg
-	lbl.add_theme_font_size_override("font_size", 36)
-	lbl.add_theme_color_override("font_color", Color(1, 0.25, 0.25))
-	lbl.z_index = 100
+	lbl.add_theme_font_size_override("font_size", 42)
+	lbl.add_theme_color_override("font_color", Color(1, 0.18, 0.18))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	lbl.add_theme_constant_override("outline_size", 6)
+	lbl.z_index = 300
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.modulate = Color(1, 0.18, 0.18, 1)
 	# Overlay on GameController so board refresh doesn't free the label mid-tween
 	add_child(lbl)
+	# Use global center of anchor, convert to local; GameController covers viewport so subtract its global pos
 	var anchor_rect: Rect2 = anchor.get_global_rect()
+	if anchor_rect.size == Vector2.ZERO:
+		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80, 80))
 	var center: Vector2 = anchor_rect.get_center()
 	var local_center: Vector2 = center - get_global_rect().position
-	lbl.position = local_center + Vector2(-10, -8)
+	lbl.position = local_center + Vector2(-16, -10)
+	# pop-in scale then float up and fade
+	lbl.scale = Vector2(0.7, 0.7)
+	lbl.pivot_offset = lbl.size * 0.5
 	var tw := create_tween()
-	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -18), 0.45)
-	tw.parallel().tween_property(lbl, "modulate", Color(1, 0.25, 0.25, 0), 0.45)
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "scale", Vector2(1.15, 1.15), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "position", local_center + Vector2(-16, -28), 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate", Color(1, 0.18, 0.18, 0), 0.45).set_delay(0.18)
+	tw.set_parallel(false)
 	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
 
 func _inspect_pile(title: String, pile: Array):
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
 	# Clear previous grid
 	for child in inspect_grid.get_children():
+		inspect_grid.remove_child(child)
 		child.queue_free()
 	if pile.is_empty():
 		var empty_lbl := Label.new()

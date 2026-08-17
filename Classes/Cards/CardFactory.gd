@@ -68,8 +68,36 @@ static func make_horde_deck() -> Array:
 	deck.shuffle()
 	return deck
 
+static func make_coalition_army_deck() -> Array:
+	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 1 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation] =43
+	var deck: Array = []
+	for i in range(10):
+		deck.append(Wall.new())
+	for i in range(8):
+		deck.append(Infantry.new())
+	for i in range(8):
+		deck.append(Drone.new())
+	for i in range(2):
+		deck.append(Tank.new())
+	for i in range(2):
+		deck.append(Artilery.new())
+	for i in range(1):
+		deck.append(RocketLauncher.new())
+	for i in range(4):
+		deck.append(FighterJet.new())
+	for i in range(4):
+		deck.append(Factory.new())
+	for i in range(1):
+		deck.append(Housing.new())
+	for i in range(2):
+		deck.append(Barracks.new())
+	for i in range(1):
+		deck.append(Corporation.new())
+	deck.shuffle()
+	return deck
+
 static func make_euro_army_deck() -> Array:
-	# Euro Army: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artilery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack] =41
+	# Euro Army kept for backward compat (old spec 41) — alias to coalition without RL/Corp for legacy tests
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -89,6 +117,28 @@ static func make_euro_army_deck() -> Array:
 		deck.append(Housing.new())
 	for i in range(2):
 		deck.append(Barracks.new())
+	deck.shuffle()
+	return deck
+
+static func make_corporate_troops_deck() -> Array:
+	# Corporate Troops: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher] =42
+	var deck: Array = []
+	for i in range(10):
+		deck.append(Wall.new())
+	for i in range(4):
+		deck.append(Infantry.new())
+	for i in range(14):
+		deck.append(Drone.new())
+	for i in range(4):
+		deck.append(FighterJet.new())
+	for i in range(2):
+		deck.append(Corporation.new())
+	for i in range(1):
+		deck.append(Housing.new())
+	for i in range(4):
+		deck.append(Barracks.new())
+	for i in range(3):
+		deck.append(RocketLauncher.new())
 	deck.shuffle()
 	return deck
 
@@ -141,9 +191,23 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 	p.DrawPile = make_horde_deck()
 	return p
 
-static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(60, 80, 50, 5, "Euro Army", "City with european style towers", 50)
+static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
+	var p := AIPlayer.new(60, 80, 50, 5, "Coalition Army", "City with european style towers", 50)
 	# Board: 2 Housing and 1 Factory randomly placed at back row furthest from enemy - row 3 for human, row 0 for AI
+	var back_row: int = p.Board.size() - 1 if for_human else 0
+	var positions: Array = []
+	for c in range(10):
+		positions.append(c)
+	positions.shuffle()
+	p.Board[back_row].Squares[positions[0]].place(Housing.new())
+	p.Board[back_row].Squares[positions[1]].place(Housing.new())
+	p.Board[back_row].Squares[positions[2]].place(Factory.new())
+	p.DrawPile = make_coalition_army_deck()
+	return p
+
+static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
+	# Backward compat alias — Euro Army same stats as Coalition Army per rename
+	var p := AIPlayer.new(60, 80, 50, 5, "Euro Army", "City with european style towers", 50)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -155,10 +219,22 @@ static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 	p.DrawPile = make_euro_army_deck()
 	return p
 
+static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
+	# Corporate Troops: HitPoints 30, Background Cyberpunk Skyrises, Board 2 Corporation at back row, Diff 6, Bio 10 Money 100 Influence 50
+	var p := AIPlayer.new(30, 10, 100, 6, "Corporate Troops", "Cyberpunk Skyrises", 50)
+	var back_row: int = p.Board.size() - 1 if for_human else 0
+	var positions: Array = []
+	for c in range(10):
+		positions.append(c)
+	positions.shuffle()
+	p.Board[back_row].Squares[positions[0]].place(Corporation.new())
+	p.Board[back_row].Squares[positions[1]].place(Corporation.new())
+	p.DrawPile = make_corporate_troops_deck()
+	return p
+
 static func all_enemy_players_sorted() -> Array:
-	var arr: Array = [make_insurgents_player(), make_state_troops_player(), make_horde_player(), make_euro_army_player()]
-	# Sort by Difficulty ascending per spec: Insurgents 1, State Troops 2, Horde 4, Euro 5
-	# But State Troops is playable, not enemy if player chose it — filter later
+	# Per new spec 5 players: Insurgents 1, State Troops 2, Horde 4, Coalition 5, Corporate 6 (Euro kept as alias for compat not in sorted list)
+	var arr: Array = [make_insurgents_player(), make_state_troops_player(), make_horde_player(), make_coalition_army_player(), make_corporate_troops_player()]
 	arr.sort_custom(func(a, b): return a.Difficulty < b.Difficulty)
 	return arr
 
@@ -168,7 +244,9 @@ static func enemy_sequence_for_player(chosen_name: String) -> Array:
 	for e in all:
 		if e.display_name == chosen_name:
 			continue
-		# Insurgents is always first per spec "starting with insurgents" then higher difficulty
+		# Also exclude Euro alias duplicate — only Coalition represents difficulty 5
+		if e.display_name == "Euro Army":
+			continue
 		seq.append(e)
 	# Ensure Insurgents first, then sorted by difficulty
 	seq.sort_custom(func(a, b):

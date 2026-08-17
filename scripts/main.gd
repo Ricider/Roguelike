@@ -39,7 +39,7 @@ func _build_player_chooser():
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	chooser.add_child(row)
-	for name in ["Insurgents", "State Troops", "Horde", "Euro Army"]:
+	for name in ["Insurgents", "State Troops", "Horde", "Coalition Army", "Corporate Troops"]:
 		var btn := Button.new()
 		btn.text = name
 		btn.name = name.replace(" ", "")

@@ -323,12 +323,12 @@ func test_player_chooser_state_troops_recommended():
 	var seq := CardFactory.enemy_sequence_for_player("State Troops")
 	assert_eq(seq[0].display_name, "Insurgents", "first enemy insurgents")
 	assert_true(seq[0].Difficulty < seq[1].Difficulty, "sorted ascending")
-	assert_eq(seq.size(), 3, "3 enemies when player is State Troops (excludes self)")
-	# All difficulties 1,4,5 for State Troops chooser
+	assert_eq(seq.size(), 4, "4 enemies when player is State Troops (excludes self) per new spec with Corporate Troops")
+	# All difficulties 1,4,5,6 for State Troops chooser (Insurgents 1, Horde 4, Coalition 5, Corporate 6)
 	var diffs: Array = []
 	for e in seq:
 		diffs.append(e.Difficulty)
-	assert_true(diffs.has(1) and diffs.has(4) and diffs.has(5), "difficulties 1,4,5")
+	assert_true(diffs.has(1) and diffs.has(4) and diffs.has(5) and diffs.has(6), "difficulties 1,4,5,6")
 
 func test_shop_rules_and_influence_gain():
 	var gs = load("res://GodotHelpers/GameState.gd").new()
