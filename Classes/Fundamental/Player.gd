@@ -7,17 +7,19 @@ var Difficulty: int = 0
 var BackgroundImage: String = ""
 var BioSupply: int = 100
 var MoneySupply: int = 20
+var Influence: int = 0
 var DrawPile: Array = [] # Card[]
 var DiscardPile: Array = [] # Card[]
 var Hand: Array = [] # Card[]
 var Graveyard: Array = [] # Card[]
 var display_name: String = ""
 
-func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = ""):
+func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = "", influence: int = 0):
 	super._init()
 	HitPoints = hp
 	BioSupply = bio
 	MoneySupply = money
+	Influence = influence
 	Difficulty = difficulty
 	display_name = name
 	BackgroundImage = background
@@ -85,15 +87,25 @@ func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
 		return false
 	if not Hand.has(card):
 		return false
-	if MoneySupply < card.MoneyCost:
+	var effective_money: int = card.MoneyCost
+	# Corporation reduces MoneyCost by 20% per Corporation on board (multiplicative)
+	if Corporation != null:
+		# Avoid hard dependency cycle if Corporation not loaded yet
+		effective_money = Corporation.discounted_money_cost(self, card.MoneyCost)
+	if MoneySupply < effective_money:
 		return false
 	if BioSupply < card.BioCost:
 		return false
 	var sq: Square = (Board[row_idx] as Row).Squares[col_idx]
 	if not sq.is_empty():
 		return false
-	MoneySupply -= card.MoneyCost
+	MoneySupply -= effective_money
 	BioSupply -= card.BioCost
 	sq.place(card)
 	Hand.erase(card)
 	return true
+
+func get_effective_money_cost(card: Card) -> int:
+	if Corporation != null:
+		return Corporation.discounted_money_cost(self, card.MoneyCost)
+	return card.MoneyCost

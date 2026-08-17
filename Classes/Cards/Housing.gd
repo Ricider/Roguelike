@@ -2,7 +2,7 @@ extends Building
 class_name Housing
 
 func _init():
-	super._init(50, 2, 20, 30, "Housing")
+	super._init(50, 2, 20, 30, "Housing", 15)
 	SpecialEffect = "In your economy phase gain 4% more BioSupply"
 
 static func extra_bio_rate(player: Player) -> float:

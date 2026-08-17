@@ -19,14 +19,16 @@ config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
 name="Roguelike"
 
+[autoload]
+
+GameState="*res://GodotHelpers/GameState.gd"
+
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/size/resizable=true
 window/stretch/mode="viewport"
 window/stretch/aspect="expand"
-window/stretch/scale=1.0
 window/stretch/scale_mode="bilinear"
 
 [input]
@@ -74,10 +76,6 @@ restart={
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":0,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":82,"physical_keycode":0,"key_label":0,"unicode":114,"location":0,"echo":false,"script":null)
 ]
 }
-
-[autoload]
-
-GameState="*res://GodotHelpers/GameState.gd"
 
 [rendering]
 

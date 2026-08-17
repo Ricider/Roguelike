@@ -69,18 +69,35 @@ var preview_built: bool = false
 var debug_popup: PanelContainer
 var debug_built: bool = false
 var debug_enemy_option: OptionButton
+var shop_popup: PanelContainer
+var shop_built: bool = false
+
+func _clear_board(player: Player):
+	for row in player.Board:
+		for sq in row.Squares:
+			sq.clear()
 
 func _ready():
-	human = Player.new(100, 100, 20, 0, "JohnDoe", "")
-	# Enemy selected via GameState debug menu (default Euro Army) — displays BackgroundImage per spec
 	var gs = get_node_or_null("/root/GameState")
-	if gs != null:
-		ai_player = gs.make_selected_enemy()
+	# Roguelike run: use persistent player/enemy sequence per Main Game Rules
+	if gs != null and gs.run_started and gs.run_player != null:
+		human = gs.run_player
+		ai_player = gs.get_current_enemy()
+		if ai_player == null:
+			# fallback legacy
+			ai_player = gs.make_selected_enemy()
+		# Fresh board for new battle (clear previous placements but keep deck/influence)
+		# Only clear if this is start of a battle (shop closed). The run_player board may still have old placements from previous battle end
+		# We keep it empty for now; actual clear will be done on battle start after shop
 	else:
-		ai_player = CardFactory.make_euro_army_player()
-	human.display_name = "JohnDoe"
-	human.BackgroundImage = ""
-	human.DrawPile = CardFactory.make_starting_deck()
+		human = Player.new(100, 100, 20, 0, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 20)
+		if gs != null:
+			ai_player = gs.make_selected_enemy()
+		else:
+			ai_player = CardFactory.make_euro_army_player()
+		human.display_name = human.display_name if human.display_name != "" else "State Troops"
+		if human.DrawPile.is_empty():
+			human.DrawPile = CardFactory.make_state_troops_deck()
 	_update_background()
 	state = CombatState.new(human, ai_player)
 	end_turn_btn.pressed.connect(_on_end_turn)
@@ -92,6 +109,7 @@ func _ready():
 	_ensure_preview_popup()
 	_ensure_debug_popup()
 	_add_debug_button()
+	_ensure_shop_popup()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -467,6 +485,229 @@ func _restart_game():
 		g.set_enemy(debug_enemy_option.get_item_text(debug_enemy_option.selected))
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
+func _ensure_shop_popup():
+	if shop_built:
+		return
+	shop_popup = PanelContainer.new()
+	shop_popup.name = "ShopPopup"
+	shop_popup.visible = false
+	shop_popup.z_index = 105
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09,0.09,0.16,0.98)
+	sb.border_color = Color(1,0.9,0.4,1)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	shop_popup.add_theme_stylebox_override("panel", sb)
+	shop_popup.custom_minimum_size = Vector2(900, 320)
+	add_child(shop_popup)
+	shop_built = true
+
+func _show_shop():
+	_ensure_shop_popup()
+	# Clear previous
+	for c in shop_popup.get_children():
+		c.queue_free()
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	shop_popup.add_child(vbox)
+	var gs = get_node_or_null("/root/GameState")
+	var influence: int = human.Influence if human != null else 0
+	if gs != null and gs.run_player != null:
+		influence = gs.run_player.Influence
+	var title := Label.new()
+	title.text = "Shop — Between Battles (Influence: %d)" % influence
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(1,0.92,0.5))
+	vbox.add_child(title)
+	var hint := Label.new()
+	hint.text = "Buy 5 cards using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.85,0.85,0.9))
+	vbox.add_child(hint)
+	var offer: Array = []
+	if gs != null and not gs.shop_offer.is_empty():
+		offer = gs.shop_offer
+	else:
+		offer = CardFactory.random_shop_offer()
+		if gs != null:
+			gs.shop_offer = offer
+			gs.shop_remove_used = false
+	var grid := HBoxContainer.new()
+	grid.alignment = BoxContainer.ALIGNMENT_CENTER
+	grid.add_theme_constant_override("separation", 12)
+	vbox.add_child(grid)
+	for card in offer:
+		var cell := VBoxContainer.new()
+		cell.alignment = BoxContainer.ALIGNMENT_CENTER
+		cell.custom_minimum_size = Vector2(150, 180)
+		var art := Card.create_sprite_for(card.card_name, Vector2(96,96))
+		art.clip_contents = true
+		cell.add_child(art)
+		var name_lbl := Label.new()
+		name_lbl.text = card.card_name
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		cell.add_child(name_lbl)
+		var cost_lbl := Label.new()
+		cost_lbl.text = "Cost: %d Influence" % card.InfluenceCost
+		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cost_lbl.add_theme_font_size_override("font_size", 11)
+		cost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
+		cell.add_child(cost_lbl)
+		var stats := Label.new()
+		if card is Unit:
+			stats.text = "HP:%d DMG:%d" % [(card as Unit).HitPoints, (card as Unit).Damage]
+		elif card is Building:
+			stats.text = "HP:%d INC:%d" % [(card as Building).HitPoints, (card as Building).Income]
+		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stats.add_theme_font_size_override("font_size", 10)
+		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
+		cell.add_child(stats)
+		if card.SpecialEffect != "":
+			var eff := Label.new()
+			eff.text = card.SpecialEffect
+			eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			eff.custom_minimum_size = Vector2(140, 28)
+			eff.add_theme_font_size_override("font_size", 8)
+			eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
+			cell.add_child(eff)
+		var buy_btn := Button.new()
+		buy_btn.text = "Buy"
+		buy_btn.custom_minimum_size = Vector2(80, 28)
+		buy_btn.disabled = influence < card.InfluenceCost
+		if buy_btn.disabled:
+			buy_btn.modulate = Color(0.6,0.6,0.6)
+		var _card_ref: Card = card
+		buy_btn.pressed.connect(func(): _buy_shop_card(_card_ref))
+		cell.add_child(buy_btn)
+		grid.add_child(cell)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_row)
+	var remove_btn := Button.new()
+	remove_btn.text = "Remove a card (25 Influence) — once per shop"
+	remove_btn.custom_minimum_size = Vector2(260, 32)
+	if gs != null and gs.shop_remove_used:
+		remove_btn.disabled = true
+		remove_btn.text = "Remove used this shop"
+	elif influence < 25:
+		remove_btn.disabled = true
+	remove_btn.pressed.connect(func(): _show_remove_dialog())
+	btn_row.add_child(remove_btn)
+	var cont_btn := Button.new()
+	cont_btn.text = "Continue to Next Battle"
+	cont_btn.custom_minimum_size = Vector2(200, 36)
+	cont_btn.add_theme_font_size_override("font_size", 14)
+	cont_btn.pressed.connect(func(): _continue_from_shop())
+	btn_row.add_child(cont_btn)
+	shop_popup.visible = true
+	var vp: Vector2 = get_viewport_rect().size
+	shop_popup.position = (vp - shop_popup.size) / 2.0
+	shop_popup.position.y = max(8, shop_popup.position.y)
+
+func _buy_shop_card(card: Card):
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null:
+		return
+	if gs.buy_card(card):
+		human.Influence = gs.run_player.Influence
+		_show_shop()
+		_refresh_ui()
+
+func _show_remove_dialog():
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null or gs.run_player == null:
+		return
+	# Simple remove: show deck cards to remove
+	_ensure_shop_popup()
+	shop_popup.visible = false
+	var dlg := PanelContainer.new()
+	dlg.z_index = 106
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09,0.09,0.14,0.98)
+	sb.border_color = Color(1,0.6,0.6,1)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	dlg.add_theme_stylebox_override("panel", sb)
+	dlg.custom_minimum_size = Vector2(700, 300)
+	add_child(dlg)
+	var vbox := VBoxContainer.new()
+	dlg.add_child(vbox)
+	var title := Label.new()
+	title.text = "Choose a card to remove for 25 Influence (once per shop)"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(title)
+	var grid := GridContainer.new()
+	grid.columns = 6
+	vbox.add_child(grid)
+	var all_cards: Array = []
+	for pile in [human.DrawPile, human.DiscardPile, human.Graveyard]:
+		for c in pile:
+			all_cards.append(c)
+			if all_cards.size() >= 24:
+				break
+	for c in all_cards:
+		var btn := Button.new()
+		btn.text = c.card_name
+		btn.custom_minimum_size = Vector2(100, 36)
+		btn.add_theme_font_size_override("font_size", 11)
+		var _c: Card = c
+		btn.pressed.connect(func():
+			var g2 = get_node_or_null("/root/GameState")
+			if g2 != null and g2.remove_card_from_deck(_c):
+				human.Influence = g2.run_player.Influence
+				dlg.queue_free()
+				_show_shop()
+				_refresh_ui()
+			else:
+				message_label.text = "Cannot remove (already used or insufficient Influence)"
+		)
+		grid.add_child(btn)
+	var close_btn := Button.new()
+	close_btn.text = "Cancel"
+	close_btn.pressed.connect(func(): dlg.queue_free(); _show_shop())
+	vbox.add_child(close_btn)
+	dlg.position = (get_viewport_rect().size - dlg.size) / 2.0
+	dlg.visible = true
+
+func _continue_from_shop():
+	shop_popup.visible = false
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null and gs.run_started:
+		# Clear boards for fresh battle — human board cleared, ai old board irrelevant
+		_clear_board(human)
+		# Do not clear next_enemy's board (it has starting placements); old ai_player board already empty after death
+		var next_enemy: Player = gs.get_current_enemy()
+		if next_enemy != null:
+			ai_player = next_enemy
+			state = CombatState.new(human, ai_player)
+			_update_background()
+			_start_new_round()
+			# Re-enable end turn after shop → next battle (was disabled on victory)
+			end_turn_btn.disabled = false
+		else:
+			message_label.text = "Run Complete! All enemies defeated! [Menu]"
+			end_turn_btn.disabled = true
+			shop_popup.visible = false
+	else:
+		shop_popup.visible = false
+		_refresh_ui()
+		end_turn_btn.disabled = false
+
 func _start_new_round():
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)
 	human.economy_phase()
@@ -481,23 +722,42 @@ func _start_new_round():
 
 func _refresh_ui():
 	_hide_hover()
-	ai_info.text = ""
-	player_info.text = ""
-	ai_info.visible = false
-	player_info.visible = false
+	# Show Influence in info labels per spec
+	var gs_run = get_node_or_null("/root/GameState")
+	if ai_info != null:
+		if gs_run != null and gs_run.run_started:
+			ai_info.text = "Influence: %d | Diff %d" % [ai_player.Influence, ai_player.Difficulty]
+			ai_info.visible = true
+		else:
+			ai_info.text = ""
+			ai_info.visible = false
+	if player_info != null:
+		player_info.text = "Influence: %d" % human.Influence
+		player_info.visible = true
+	else:
+		ai_info.text = ""
+		player_info.text = ""
 	# Update flag art and labels for players (custom flags)
 	if ai_label != null:
 		ai_label.text = ai_player.display_name if ai_player.display_name != "" else "Euro Army"
 	if player_label != null:
-		player_label.text = human.display_name if human.display_name != "" else "JohnDoe"
+		player_label.text = human.display_name if human.display_name != "" else "State Troops"
 	if ai_flag != null:
-		var euro_tex := load("res://Assets/Players/Euro Army/flag.png") as Texture2D
-		if euro_tex != null:
-			ai_flag.texture = euro_tex
+		var flag_path: String = "res://Assets/Players/%s/flag.png" % ai_player.display_name
+		if ResourceLoader.exists(flag_path):
+			var t := load(flag_path) as Texture2D
+			if t != null:
+				ai_flag.texture = t
+		elif ResourceLoader.exists("res://Assets/Players/Euro Army/flag.png"):
+			ai_flag.texture = load("res://Assets/Players/Euro Army/flag.png") as Texture2D
 	if player_flag != null:
-		var john_tex := load("res://Assets/Players/JohnDoe/flag.png") as Texture2D
-		if john_tex != null:
-			player_flag.texture = john_tex
+		var p_flag_path: String = "res://Assets/Players/%s/flag.png" % human.display_name
+		if ResourceLoader.exists(p_flag_path):
+			var pt := load(p_flag_path) as Texture2D
+			if pt != null:
+				player_flag.texture = pt
+		elif ResourceLoader.exists("res://Assets/Players/State Troops/flag.png"):
+			player_flag.texture = load("res://Assets/Players/State Troops/flag.png") as Texture2D
 	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income()
 	var p_income: int = human.total_money_income()
@@ -790,7 +1050,7 @@ func _refresh_hand():
 			btn.modulate = Color(1, 1, 1)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
-		elif human.MoneySupply < card.MoneyCost or human.BioSupply < card.BioCost:
+		elif human.get_effective_money_cost(card) > human.MoneySupply or human.BioSupply < card.BioCost:
 			btn.modulate = Color(1, 0.45, 0.45)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1042,16 +1302,40 @@ func _inspect_pile(title: String, pile: Array):
 	inspect_popup.visible = true
 
 func _check_game_over() -> bool:
+	var gs = get_node_or_null("/root/GameState")
+	var is_run: bool = gs != null and gs.run_started
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:
 		message_label.text = "Draw! Both fell. [Menu] to restart"
 		end_turn_btn.disabled = true
 		return true
 	elif ai_player.HitPoints <= 0:
-		message_label.text = "VICTORY! AI defeated. [Menu] to restart"
-		end_turn_btn.disabled = true
-		return true
+		if is_run:
+			var gained: int = ai_player.Influence
+			# Gain starting influence per Main Game Rules
+			gs.gain_influence(gained)
+			human.Influence = gs.run_player.Influence
+			message_label.text = "VICTORY! Defeated %s! Gained %d Influence. Influence: %d" % [ai_player.display_name, gained, human.Influence]
+			# Prepare next enemy index (next battle)
+			gs.advance_enemy()
+			if gs.is_run_complete():
+				message_label.text += " — RUN COMPLETE! All enemies defeated! [Menu]"
+				end_turn_btn.disabled = true
+				_refresh_ui()
+				return true
+			else:
+				# Show shop between battles
+				_refresh_ui()
+				_show_shop()
+				end_turn_btn.disabled = true
+				return true
+		else:
+			message_label.text = "VICTORY! AI defeated. [Menu] to restart"
+			end_turn_btn.disabled = true
+			return true
 	elif human.HitPoints <= 0:
 		message_label.text = "DEFEAT! You fell. [Menu] to restart"
 		end_turn_btn.disabled = true
+		if is_run:
+			gs.run_started = false
 		return true
 	return false

@@ -17,6 +17,8 @@ class Player(GameObject):
     BioSupply: int
     MoneySupply: int
 
+    Influence: int
+
     DrawPile: Card[]
     DiscardPile: Card[]
     Hand: Card[]
@@ -29,22 +31,21 @@ class CombatState(GameObject):
 
 class Card(GameObject):
     SpecialEffect: AIIntrepretedString (I put text, you write the ability)
+    
+    MoneyCost: int
+    BioCost: int
+
+    InfluenceCost: int
 
 class Building (Cards):
     HitPoints: int
     Income: int
-    
-    MoneyCost: int
-    BioCost: int
 
 class Unit (Cards):
     HitPoints: int
     Damage: int
     HasRange: bool
     Flying: bool
-    
-    MoneyCost: int
-    BioCost: int
 
 # Class Group: GameBoard
 
@@ -84,6 +85,8 @@ Card: Infantry
     MoneyCost: 5
     BioCost: 15
 
+    InfluenceCost: 10
+
 Card: Tank
     Hp: 25
     Damage: 8
@@ -93,6 +96,8 @@ Card: Tank
     MoneyCost: 25
     BioCost: 10
 
+    InfluenceCost: 15
+
 Card: Artilery
     Hp: 12
     Damage: 8
@@ -101,6 +106,8 @@ Card: Artilery
     
     MoneyCost: 20
     BioCost: 8
+
+    InfluenceCost: 20
 
 Card: Rocket Launcher
     Hp: 12
@@ -113,6 +120,8 @@ Card: Rocket Launcher
 
     SpecialEffect: attacks 4 times every Combat Phase
 
+    InfluenceCost: 30
+
 Card: Drone
     Hp: 6
     Damage: 3
@@ -121,6 +130,8 @@ Card: Drone
     
     MoneyCost: 5
     BioCost: 0
+
+    InfluenceCost: 15
 
 Card: Fighter Jet
     Hp: 14
@@ -133,6 +144,8 @@ Card: Fighter Jet
 
     SpecialEffect: Also damages tiles adjacent to where it hit
 
+    InfluenceCost: 40
+
 ### Building Cards ###
 
 Card: Factory
@@ -141,6 +154,8 @@ Card: Factory
 
     MoneyCost: 30
     BioCost 20
+
+    InfluenceCost: 20
 
 Card: Barracks
     Hp: 30
@@ -151,6 +166,8 @@ Card: Barracks
 
     SpecialEffect: Friendly units in adjacent squares have +2 damage
 
+    InfluenceCost: 30
+
 Card: Housing
     Hp: 50
     MoneyIncome: 2
@@ -160,6 +177,8 @@ Card: Housing
 
     SpecialEffect: In your economy phase gain 4% more BioSupply
 
+    InfluenceCost: 15
+
 Card: Wall
     Hp: 20
     MoneyIncome: 0
@@ -167,23 +186,23 @@ Card: Wall
     MoneyCost: 10
     BioCost: 0
 
+    InfluenceCost: 5
+
+Card: Corporation
+    Hp: 25
+    MoneyIncome: 12
+
+    MoneyCost: 70
+    BioCost: 20
+
+    SpecialEffect: Reduce MoneyCost of playing all cards by 20%
+
+    InfluenceCost: 60
+
 ### Players ###
 
-Player: JohnDoe
-    HitPoints=100
-    Board=Empty
-    Difficulty=0
-    BackgroundImage=N/A, johndoe is the player so no background
-
-    BioSupply=100
-    MoneySupply=20
-
-    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack]
-    DiscardPile: []
-    Hand: []
-
 Player: Insurgents
-    HitPoints=100
+    HitPoints=120
     Board=Empty
     Difficulty=1
     BackgroundImage=Sparse mountain village
@@ -191,18 +210,53 @@ Player: Insurgents
     BioSupply=120
     MoneySupply=10
 
+    Influence=10
+
     DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack]
+    DiscardPile: []
+    Hand: []
+
+
+Player: State Troops
+    HitPoints=100
+    Board=1 Housing and 1 Infantry randomly placed at back row
+    Difficulty=2
+    BackgroundImage=Middle Eastern town, add some mosques around, don't make the entire thing a desert
+
+    BioSupply=100
+    MoneySupply=20
+
+    Influence=20
+
+    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack]
+    DiscardPile: []
+    Hand: []
+
+Player: Horde
+    HitPoints=200
+    Board=2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp
+    Difficulty=4
+    BackgroundImage=Russian style city, snowy, add few trees
+
+    BioSupply=160
+    MoneySupply=0
+
+    Influence=25
+
+    DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
     DiscardPile: []
     Hand: []
 
 Player: Euro Army
     HitPoints=60
     Board=2 Housing and 1 Factory randomly placed at back row
-    Difficulty=2
+    Difficulty=5
     BackgroundImage=City with european style towers
 
     BioSupply=80
     MoneySupply=50
+
+    Influence=50
 
     DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
     DiscardPile: []
@@ -210,7 +264,20 @@ Player: Euro Army
 
 ### Rules ###
 
-## Turn Phases ##
+## Main Game Rules ##
+
+- Player choses any Player to play as with "State Troops" marked as the recommended option with a border.
+- Player fights Enemies in battles starting with insurgents and if they can defeat them they face enemies with higer difficulty each turn (just sort from lowest diffculty to highest)
+- Between each Battle player gets to visit a shop
+- When a player defeats an enemy it gains their starting influence
+
+## Shop Rules ##
+
+- Player starts with as many influence as specified in their influence field
+- Offer 5 Cards to the player to buy from and add to their deck using influence
+- Player can also use 25 influence to remove a card once per shop
+
+## Battle Phases ##
 
 Every player has 3 phases they go through each turn. First player to drop to 0 hp loses
 

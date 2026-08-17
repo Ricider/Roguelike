@@ -4,4 +4,5 @@ class_name RocketLauncher
 func _init():
 	super._init()
 	card_name = "Rocket Launcher"
-	# Keep Howitzer stats/SpecialEffect (8HP 2DMG HasRange true 25/4 attacks 4×)
+	InfluenceCost = 30
+	# Keep Howitzer stats/SpecialEffect (12HP 2DMG HasRange true 25/5 attacks 4×)

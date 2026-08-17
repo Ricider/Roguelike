@@ -3,6 +3,7 @@ class_name Card
 
 var MoneyCost: int = 0
 var BioCost: int = 0
+var InfluenceCost: int = 0
 var card_name: String = "Card"
 var SpecialEffect: String = "" # AIInterpretedString per spec
 
