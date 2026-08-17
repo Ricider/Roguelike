@@ -201,7 +201,7 @@ func _show_card_preview(card: Card):
 	var name_lbl := Label.new()
 	name_lbl.text = card.card_name
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	name_lbl.add_theme_font_size_override("font_size", 17)
+	name_lbl.add_theme_font_size_override("font_size", 34)
 	name_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.clip_contents = true
@@ -236,7 +236,7 @@ func _show_card_preview(card: Card):
 	left_stats.add_child(hp_icon)
 	var hp_lbl := Label.new()
 	hp_lbl.text = "%d" % hp
-	hp_lbl.add_theme_font_size_override("font_size", 15)
+	hp_lbl.add_theme_font_size_override("font_size", 30)
 	hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	left_stats.add_child(hp_lbl)
 	if is_unit:
@@ -249,13 +249,13 @@ func _show_card_preview(card: Card):
 		left_stats.add_child(sw)
 		var dmg_lbl := Label.new()
 		dmg_lbl.text = "%d" % (card as Unit).Damage
-		dmg_lbl.add_theme_font_size_override("font_size", 15)
+		dmg_lbl.add_theme_font_size_override("font_size", 30)
 		dmg_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		left_stats.add_child(dmg_lbl)
 	else:
 		var inc_lbl := Label.new()
 		inc_lbl.text = "INC %d" % (card as Building).Income
-		inc_lbl.add_theme_font_size_override("font_size", 13)
+		inc_lbl.add_theme_font_size_override("font_size", 26)
 		inc_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		left_stats.add_child(inc_lbl)
 	var sep := VSeparator.new()
@@ -274,7 +274,7 @@ func _show_card_preview(card: Card):
 	costs.add_child(m_icon)
 	var m_lbl := Label.new()
 	m_lbl.text = "%d" % card.MoneyCost
-	m_lbl.add_theme_font_size_override("font_size", 13)
+	m_lbl.add_theme_font_size_override("font_size", 26)
 	m_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	costs.add_child(m_lbl)
 	var b_icon := TextureRect.new()
@@ -286,7 +286,7 @@ func _show_card_preview(card: Card):
 	costs.add_child(b_icon)
 	var b_lbl := Label.new()
 	b_lbl.text = "%d" % card.BioCost
-	b_lbl.add_theme_font_size_override("font_size", 13)
+	b_lbl.add_theme_font_size_override("font_size", 26)
 	b_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	costs.add_child(b_lbl)
 	# effect spans full width below — fixed 32px height for all cards, no variation, clipped if longer
@@ -302,7 +302,7 @@ func _show_card_preview(card: Card):
 	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	eff.custom_minimum_size = Vector2(264, 32)
 	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	eff.add_theme_font_size_override("font_size", 11)
+	eff.add_theme_font_size_override("font_size", 22)
 	eff.add_theme_color_override("font_color", Color(0.92,0.92,1) if card.SpecialEffect != "" else Color(1,1,1,0))
 	root.add_child(eff)
 	# filler to ensure root fills fixed popup height with no empty bottom variation — expands only if needed, keeps outer 168 constant
@@ -395,7 +395,7 @@ func _ensure_debug_popup():
 	var title := Label.new()
 	title.text = "Debug Menu"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", Color(1,1,0.7))
 	vbox.add_child(title)
 	var row := HBoxContainer.new()
@@ -404,7 +404,7 @@ func _ensure_debug_popup():
 	vbox.add_child(row)
 	var lbl := Label.new()
 	lbl.text = "Enemy:"
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(1,1,1))
 	row.add_child(lbl)
 	debug_enemy_option = OptionButton.new()
@@ -426,7 +426,7 @@ func _ensure_debug_popup():
 	var summon_title := Label.new()
 	summon_title.text = "Summon Card to Battlefield:"
 	summon_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	summon_title.add_theme_font_size_override("font_size", 14)
+	summon_title.add_theme_font_size_override("font_size", 28)
 	summon_title.add_theme_color_override("font_color", Color(1,1,1))
 	vbox.add_child(summon_title)
 	var summon_row := HBoxContainer.new()
@@ -446,7 +446,7 @@ func _ensure_debug_popup():
 	var summon_btn := Button.new()
 	summon_btn.text = "Summon"
 	summon_btn.custom_minimum_size = Vector2(90, 32)
-	summon_btn.add_theme_font_size_override("font_size", 14)
+	summon_btn.add_theme_font_size_override("font_size", 28)
 	summon_btn.pressed.connect(func():
 		var cname2: String = debug_summon_card_option.get_item_text(debug_summon_card_option.selected)
 		var target_is_ai: bool = debug_summon_target_option.selected == 1
@@ -460,7 +460,7 @@ func _ensure_debug_popup():
 	var restart_btn := Button.new()
 	restart_btn.text = "Switch & Restart"
 	restart_btn.custom_minimum_size = Vector2(150, 36)
-	restart_btn.add_theme_font_size_override("font_size", 15)
+	restart_btn.add_theme_font_size_override("font_size", 30)
 	restart_btn.pressed.connect(_restart_game)
 	btn_row.add_child(restart_btn)
 	var close_dbtn := Button.new()
@@ -470,7 +470,7 @@ func _ensure_debug_popup():
 	btn_row.add_child(close_dbtn)
 	var info := Label.new()
 	info.text = "Background: " + (ai_player.BackgroundImage if ai_player.BackgroundImage != "" else ai_player.display_name)
-	info.add_theme_font_size_override("font_size", 11)
+	info.add_theme_font_size_override("font_size", 22)
 	info.add_theme_color_override("font_color", Color(0.8,0.8,0.85))
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(info)
@@ -595,13 +595,13 @@ func _show_shop():
 	var title := Label.new()
 	title.text = "Shop — Between Battles (Influence: %d)" % influence
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", Color(1,0.92,0.5))
 	vbox.add_child(title)
 	var hint := Label.new()
 	hint.text = "Buy 5 cards using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_font_size_override("font_size", 22)
 	hint.add_theme_color_override("font_color", Color(0.85,0.85,0.9))
 	vbox.add_child(hint)
 	var offer: Array = []
@@ -626,13 +626,13 @@ func _show_shop():
 		var name_lbl := Label.new()
 		name_lbl.text = card.card_name
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_font_size_override("font_size", 24)
 		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		cell.add_child(name_lbl)
 		var cost_lbl := Label.new()
 		cost_lbl.text = "Cost: %d Influence" % card.InfluenceCost
 		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cost_lbl.add_theme_font_size_override("font_size", 11)
+		cost_lbl.add_theme_font_size_override("font_size", 22)
 		cost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		cell.add_child(cost_lbl)
 		var stats := Label.new()
@@ -641,7 +641,7 @@ func _show_shop():
 		elif card is Building:
 			stats.text = "HP:%d INC:%d" % [(card as Building).HitPoints, (card as Building).Income]
 		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stats.add_theme_font_size_override("font_size", 10)
+		stats.add_theme_font_size_override("font_size", 20)
 		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
 		cell.add_child(stats)
 		if card.SpecialEffect != "":
@@ -650,7 +650,7 @@ func _show_shop():
 			eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			eff.custom_minimum_size = Vector2(140, 28)
-			eff.add_theme_font_size_override("font_size", 8)
+			eff.add_theme_font_size_override("font_size", 16)
 			eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
 			cell.add_child(eff)
 		var buy_btn := Button.new()
@@ -680,7 +680,7 @@ func _show_shop():
 	var cont_btn := Button.new()
 	cont_btn.text = "Continue to Next Battle"
 	cont_btn.custom_minimum_size = Vector2(200, 36)
-	cont_btn.add_theme_font_size_override("font_size", 14)
+	cont_btn.add_theme_font_size_override("font_size", 28)
 	cont_btn.pressed.connect(func(): _continue_from_shop())
 	btn_row.add_child(cont_btn)
 	shop_popup.visible = true
@@ -723,7 +723,7 @@ func _show_remove_dialog():
 	var title := Label.new()
 	title.text = "Choose a card to remove for 25 Influence (once per shop)"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_font_size_override("font_size", 28)
 	vbox.add_child(title)
 	var grid := GridContainer.new()
 	grid.columns = 6
@@ -738,7 +738,7 @@ func _show_remove_dialog():
 		var btn := Button.new()
 		btn.text = c.card_name
 		btn.custom_minimum_size = Vector2(100, 36)
-		btn.add_theme_font_size_override("font_size", 11)
+		btn.add_theme_font_size_override("font_size", 22)
 		var _c: Card = c
 		btn.pressed.connect(func():
 			var g2 = get_node_or_null("/root/GameState")
@@ -908,7 +908,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					btn.modulate = Color(0.32, 0.32, 0.38) # noticeably lighter - player can place
 				else:
 					btn.modulate = Color(0.05, 0.05, 0.08) # noticeably darker - AI side
-				btn.add_theme_font_size_override("font_size", 14)
+				btn.add_theme_font_size_override("font_size", 28)
 				btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				if is_human:
 					btn.pressed.connect(func(): _on_board_click(r, c))
@@ -969,7 +969,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var name_lbl := Label.new()
 				name_lbl.text = card.card_name
 				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				name_lbl.add_theme_font_size_override("font_size", 7)
+				name_lbl.add_theme_font_size_override("font_size", 14)
 				name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				name_lbl.clip_contents = true
 				name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1003,7 +1003,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var hp_lbl := Label.new()
 				hp_lbl.text = "%d" % hp
 				hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				hp_lbl.add_theme_font_size_override("font_size", 8)
+				hp_lbl.add_theme_font_size_override("font_size", 16)
 				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 				hp_lbl.clip_contents = true
 				hp_lbl.custom_minimum_size = Vector2(22, 10)
@@ -1025,7 +1025,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					var dmg_lbl := Label.new()
 					dmg_lbl.text = "%d" % (card as Unit).Damage
 					dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-					dmg_lbl.add_theme_font_size_override("font_size", 8)
+					dmg_lbl.add_theme_font_size_override("font_size", 16)
 					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 					dmg_lbl.clip_contents = true
 					dmg_lbl.custom_minimum_size = Vector2(22, 10)
@@ -1048,7 +1048,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					var inc_lbl := Label.new()
 					inc_lbl.text = "%d" % (card as Building).Income
 					inc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-					inc_lbl.add_theme_font_size_override("font_size", 8)
+					inc_lbl.add_theme_font_size_override("font_size", 16)
 					inc_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 					inc_lbl.clip_contents = true
 					inc_lbl.custom_minimum_size = Vector2(22, 10)
@@ -1119,7 +1119,7 @@ func _refresh_hand():
 		var hand_name := Label.new()
 		hand_name.text = card.card_name
 		hand_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		hand_name.add_theme_font_size_override("font_size", 8)
+		hand_name.add_theme_font_size_override("font_size", 16)
 		hand_name.add_theme_color_override("font_color", Color(1, 1, 1))
 		hand_name.clip_contents = true
 		hand_name.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1142,7 +1142,7 @@ func _refresh_hand():
 		hand_stats.add_child(h_heart)
 		var h_hp := Label.new()
 		h_hp.text = "%d" % hp
-		h_hp.add_theme_font_size_override("font_size", 8)
+		h_hp.add_theme_font_size_override("font_size", 16)
 		h_hp.add_theme_color_override("font_color", Color(1, 1, 1))
 		h_hp.clip_contents = true
 		hand_stats.add_child(h_hp)
@@ -1157,14 +1157,14 @@ func _refresh_hand():
 			hand_stats.add_child(h_sword)
 			var h_dmg := Label.new()
 			h_dmg.text = "%d" % (card as Unit).Damage
-			h_dmg.add_theme_font_size_override("font_size", 8)
+			h_dmg.add_theme_font_size_override("font_size", 16)
 			h_dmg.add_theme_color_override("font_color", Color(1, 1, 1))
 			h_dmg.clip_contents = true
 			hand_stats.add_child(h_dmg)
 		else:
 			var h_inc := Label.new()
 			h_inc.text = extra
-			h_inc.add_theme_font_size_override("font_size", 7)
+			h_inc.add_theme_font_size_override("font_size", 14)
 			h_inc.add_theme_color_override("font_color", Color(1, 1, 1))
 			h_inc.clip_contents = true
 			h_inc.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1186,7 +1186,7 @@ func _refresh_hand():
 		hand_costs.add_child(m_icon)
 		var m_lbl := Label.new()
 		m_lbl.text = "%d" % card.MoneyCost
-		m_lbl.add_theme_font_size_override("font_size", 8)
+		m_lbl.add_theme_font_size_override("font_size", 16)
 		m_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		m_lbl.clip_contents = true
 		hand_costs.add_child(m_lbl)
@@ -1200,7 +1200,7 @@ func _refresh_hand():
 		hand_costs.add_child(b_icon)
 		var b_lbl := Label.new()
 		b_lbl.text = "%d" % card.BioCost
-		b_lbl.add_theme_font_size_override("font_size", 8)
+		b_lbl.add_theme_font_size_override("font_size", 16)
 		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		b_lbl.clip_contents = true
 		hand_costs.add_child(b_lbl)
@@ -1220,16 +1220,16 @@ func _refresh_hand():
 		btn.add_child(hand_hbox)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 1, 1)
-			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_font_size_override("font_size", 28)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		elif human.get_effective_money_cost(card) > human.MoneySupply or human.BioSupply < card.BioCost:
 			btn.modulate = Color(1, 0.45, 0.45)
-			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_font_size_override("font_size", 28)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 			# keep enabled so tooltip still shows on hover (was disabled, blocked hover)
 		else:
 			btn.modulate = Color(1, 1, 1)
-			btn.add_theme_font_size_override("font_size", 14)
+			btn.add_theme_font_size_override("font_size", 28)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		var captured_idx: int = idx
 		btn.pressed.connect(func(): _on_hand_click(captured_idx))
@@ -1436,7 +1436,7 @@ func _spawn_special_effect(anchor: Control, kind: String):
 func _spawn_damage_number(anchor: Control, dmg: int):
 	var lbl := Label.new()
 	lbl.text = "-%d" % dmg
-	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.add_theme_font_size_override("font_size", 36)
 	lbl.add_theme_color_override("font_color", Color(1, 0.25, 0.25))
 	lbl.z_index = 100
 	# Place over anchor
@@ -1472,7 +1472,7 @@ func _inspect_pile(title: String, pile: Array):
 			var lbl := Label.new()
 			lbl.text = cname
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.add_theme_font_size_override("font_size", 10)
+			lbl.add_theme_font_size_override("font_size", 20)
 			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 			cell.add_child(lbl)
 			if card is Card and (card as Card).SpecialEffect != "":
@@ -1483,7 +1483,7 @@ func _inspect_pile(title: String, pile: Array):
 				eff3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				eff3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				eff3.custom_minimum_size = Vector2(0, 0)
-				eff3.add_theme_font_size_override("font_size", 8)
+				eff3.add_theme_font_size_override("font_size", 16)
 				eff3.add_theme_color_override("font_color", Color(1, 1, 1))
 				cell.add_child(eff3)
 			inspect_grid.add_child(cell)
