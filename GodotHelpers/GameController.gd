@@ -220,11 +220,12 @@ func _show_card_preview(card: Card):
 	# single compact grid: HP | DMG/INC || Money | Bio — uses horizontal space fully
 	var grid := HBoxContainer.new()
 	grid.alignment = BoxContainer.ALIGNMENT_BEGIN
-	grid.clip_contents = true
+	grid.clip_contents = false
 	grid.add_theme_constant_override("separation", 10)
 	details.add_child(grid)
 	var left_stats := HBoxContainer.new()
 	left_stats.alignment = BoxContainer.ALIGNMENT_BEGIN
+	left_stats.clip_contents = false
 	left_stats.add_theme_constant_override("separation", 3)
 	grid.add_child(left_stats)
 	var hp_icon := TextureRect.new()
@@ -238,6 +239,8 @@ func _show_card_preview(card: Card):
 	hp_lbl.text = "%d" % hp
 	hp_lbl.add_theme_font_size_override("font_size", 30)
 	hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	hp_lbl.clip_contents = false
+	hp_lbl.custom_minimum_size = Vector2(0, 30)
 	left_stats.add_child(hp_lbl)
 	if is_unit:
 		var sw := TextureRect.new()
@@ -251,12 +254,23 @@ func _show_card_preview(card: Card):
 		dmg_lbl.text = "%d" % (card as Unit).Damage
 		dmg_lbl.add_theme_font_size_override("font_size", 30)
 		dmg_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		dmg_lbl.clip_contents = false
+		dmg_lbl.custom_minimum_size = Vector2(0, 30)
 		left_stats.add_child(dmg_lbl)
 	else:
+		var inc_icon := TextureRect.new()
+		inc_icon.texture = load("res://Assets/UI/income_icon.png") as Texture2D
+		inc_icon.custom_minimum_size = Vector2(24, 24)
+		inc_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		inc_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		inc_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		left_stats.add_child(inc_icon)
 		var inc_lbl := Label.new()
-		inc_lbl.text = "INC %d" % (card as Building).Income
+		inc_lbl.text = "%d" % (card as Building).Income
 		inc_lbl.add_theme_font_size_override("font_size", 26)
 		inc_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		inc_lbl.clip_contents = false
+		inc_lbl.custom_minimum_size = Vector2(0, 30)
 		left_stats.add_child(inc_lbl)
 	var sep := VSeparator.new()
 	sep.custom_minimum_size = Vector2(1, 14)
@@ -1005,8 +1019,10 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				hp_lbl.add_theme_font_size_override("font_size", 16)
 				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-				hp_lbl.clip_contents = true
-				hp_lbl.custom_minimum_size = Vector2(22, 10)
+				hp_lbl.clip_contents = false
+				hp_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+				hp_lbl.custom_minimum_size = Vector2(22, 16)
+				hp_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				hp_col.add_child(hp_lbl)
 				right_vbox.add_child(hp_col)
 				if is_unit:
@@ -1027,8 +1043,10 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 					dmg_lbl.add_theme_font_size_override("font_size", 16)
 					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-					dmg_lbl.clip_contents = true
-					dmg_lbl.custom_minimum_size = Vector2(22, 10)
+					dmg_lbl.clip_contents = false
+					dmg_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+					dmg_lbl.custom_minimum_size = Vector2(22, 16)
+					dmg_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 					dmg_col.add_child(dmg_lbl)
 					right_vbox.add_child(dmg_col)
 				else:
@@ -1037,8 +1055,8 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					inc_col.clip_contents = true
 					inc_col.add_theme_constant_override("separation", 0)
 					var inc_icon := TextureRect.new()
-					# Use money icon for income
-					inc_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
+					# Use distinct income icon for MoneyIncome
+					inc_icon.texture = load("res://Assets/UI/income_icon.png") as Texture2D
 					inc_icon.custom_minimum_size = Vector2(14, 14)
 					inc_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 					inc_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -1050,8 +1068,10 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					inc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 					inc_lbl.add_theme_font_size_override("font_size", 16)
 					inc_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-					inc_lbl.clip_contents = true
-					inc_lbl.custom_minimum_size = Vector2(22, 10)
+					inc_lbl.clip_contents = false
+					inc_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+					inc_lbl.custom_minimum_size = Vector2(22, 16)
+					inc_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 					inc_col.add_child(inc_lbl)
 					right_vbox.add_child(inc_col)
 				outer_hbox.add_child(right_vbox)
@@ -1121,17 +1141,17 @@ func _refresh_hand():
 		hand_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		hand_name.add_theme_font_size_override("font_size", 16)
 		hand_name.add_theme_color_override("font_color", Color(1, 1, 1))
-		hand_name.clip_contents = true
+		hand_name.clip_contents = false
 		hand_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 		hand_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		hand_name.custom_minimum_size = Vector2(48, 10)
+		hand_name.custom_minimum_size = Vector2(48, 16)
 		hand_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.add_child(hand_name)
 		var hand_stats := HBoxContainer.new()
 		hand_stats.alignment = BoxContainer.ALIGNMENT_BEGIN
-		hand_stats.clip_contents = true
+		hand_stats.clip_contents = false
 		hand_stats.add_theme_constant_override("separation", 2)
-		hand_stats.custom_minimum_size = Vector2(48, 10)
+		hand_stats.custom_minimum_size = Vector2(48, 16)
 		var h_heart := TextureRect.new()
 		h_heart.texture = load("res://Assets/UI/heart.png") as Texture2D
 		h_heart.custom_minimum_size = Vector2(10, 10)
@@ -1144,7 +1164,9 @@ func _refresh_hand():
 		h_hp.text = "%d" % hp
 		h_hp.add_theme_font_size_override("font_size", 16)
 		h_hp.add_theme_color_override("font_color", Color(1, 1, 1))
-		h_hp.clip_contents = true
+		h_hp.clip_contents = false
+		h_hp.autowrap_mode = TextServer.AUTOWRAP_OFF
+		h_hp.custom_minimum_size = Vector2(0, 16)
 		hand_stats.add_child(h_hp)
 		if card is Unit:
 			var h_sword := TextureRect.new()
@@ -1159,23 +1181,35 @@ func _refresh_hand():
 			h_dmg.text = "%d" % (card as Unit).Damage
 			h_dmg.add_theme_font_size_override("font_size", 16)
 			h_dmg.add_theme_color_override("font_color", Color(1, 1, 1))
-			h_dmg.clip_contents = true
+			h_dmg.clip_contents = false
+			h_dmg.autowrap_mode = TextServer.AUTOWRAP_OFF
+			h_dmg.custom_minimum_size = Vector2(0, 16)
 			hand_stats.add_child(h_dmg)
 		else:
+			var h_inc_icon := TextureRect.new()
+			h_inc_icon.texture = load("res://Assets/UI/income_icon.png") as Texture2D
+			h_inc_icon.custom_minimum_size = Vector2(10, 10)
+			h_inc_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			h_inc_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			h_inc_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			h_inc_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hand_stats.add_child(h_inc_icon)
 			var h_inc := Label.new()
-			h_inc.text = extra
+			h_inc.text = "%d" % (card as Building).Income
 			h_inc.add_theme_font_size_override("font_size", 14)
+			h_inc.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 			h_inc.add_theme_color_override("font_color", Color(1, 1, 1))
-			h_inc.clip_contents = true
+			h_inc.clip_contents = false
 			h_inc.autowrap_mode = TextServer.AUTOWRAP_OFF
 			h_inc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			h_inc.custom_minimum_size = Vector2(0, 16)
 			hand_stats.add_child(h_inc)
 		details.add_child(hand_stats)
 		var hand_costs := HBoxContainer.new()
 		hand_costs.alignment = BoxContainer.ALIGNMENT_BEGIN
-		hand_costs.clip_contents = true
+		hand_costs.clip_contents = false
 		hand_costs.add_theme_constant_override("separation", 2)
-		hand_costs.custom_minimum_size = Vector2(48, 10)
+		hand_costs.custom_minimum_size = Vector2(48, 16)
 		var m_icon := TextureRect.new()
 		m_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
 		m_icon.custom_minimum_size = Vector2(10, 10)
@@ -1188,7 +1222,9 @@ func _refresh_hand():
 		m_lbl.text = "%d" % card.MoneyCost
 		m_lbl.add_theme_font_size_override("font_size", 16)
 		m_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		m_lbl.clip_contents = true
+		m_lbl.clip_contents = false
+		m_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		m_lbl.custom_minimum_size = Vector2(0, 16)
 		hand_costs.add_child(m_lbl)
 		var b_icon := TextureRect.new()
 		b_icon.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
@@ -1202,7 +1238,9 @@ func _refresh_hand():
 		b_lbl.text = "%d" % card.BioCost
 		b_lbl.add_theme_font_size_override("font_size", 16)
 		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		b_lbl.clip_contents = true
+		b_lbl.clip_contents = false
+		b_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		b_lbl.custom_minimum_size = Vector2(0, 16)
 		hand_costs.add_child(b_lbl)
 		details.add_child(hand_costs)
 		# Magnified preview on hover — hand card art + symbols + text enlarged
