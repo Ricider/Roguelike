@@ -722,6 +722,10 @@ func _animate_combat(log: Array):
 		var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 		var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 		var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
+		# Barracks aura: show +2 buff on attacker if adjacent to Barracks
+		if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
+			if atk_btn != null:
+				_spawn_special_effect(atk_btn, "barracks_aura")
 		# Highlight attacker: scale pulse + yellow tint
 		if atk_btn != null:
 			var tw := create_tween()
@@ -745,10 +749,84 @@ func _animate_combat(log: Array):
 			tw2.tween_property(tgt_btn, "position", tgt_btn.position, 0.05)
 			tw2.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
 			_spawn_damage_number(tgt_btn, dmg)
+			# Fighter Jet splash: spawn explosion on adjacent tiles
+			if attacker_card is FighterJet:
+				var adj_sqs: Array = _get_adjacent_squares(defender, target_sq)
+				for adj_sq in adj_sqs:
+					var adj_btn: Button = _get_button_for_square(defender, adj_sq)
+					if adj_btn != null and adj_sq.Inhabitant != null:
+						_spawn_special_effect(adj_btn, "fighter_jet_splash")
+				# also spawn on main target for splash center
+				_spawn_special_effect(tgt_btn, "fighter_jet_splash")
 		await get_tree().create_timer(0.32).timeout
 	# Brief pause then refresh to show updated HP / deaths
 	await get_tree().create_timer(0.15).timeout
 	_refresh_ui()
+
+func _get_adjacent_squares(player: Player, center: Square) -> Array:
+	var res: Array = []
+	var pos = null
+	for r in range(player.Board.size()):
+		for c in range(player.Board[r].Squares.size()):
+			if player.Board[r].Squares[c] == center:
+				pos = {"r": r, "c": c}
+				break
+		if pos != null:
+			break
+	if pos == null:
+		return res
+	for dr in [-1,0,1]:
+		for dc in [-1,0,1]:
+			if dr==0 and dc==0:
+				continue
+			var nr: int = pos["r"]+dr
+			var nc: int = pos["c"]+dc
+			if nr<0 or nr>=player.Board.size():
+				continue
+			if nc<0 or nc>=10:
+				continue
+			res.append((player.Board[nr] as Row).Squares[nc])
+	return res
+
+func _spawn_special_effect(anchor: Control, kind: String):
+	var tex_path: String = "res://Assets/Effects/%s.png" % kind
+	if not ResourceLoader.exists(tex_path):
+		# fallback to single frame if animated not found
+		return
+	var tex: Texture2D = load(tex_path) as Texture2D
+	if tex == null:
+		return
+	var spr := TextureRect.new()
+	spr.texture = tex
+	spr.custom_minimum_size = Vector2(64, 64)
+	spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spr.modulate = Color(1,1,1,0.95)
+	# center over anchor
+	anchor.add_child(spr)
+	spr.position = Vector2(anchor.size.x*0.5 -32, anchor.size.y*0.5 -32)
+	spr.z_index = 50
+	var tw := create_tween()
+	tw.tween_property(spr, "scale", Vector2(1.15,1.15), 0.12)
+	tw.tween_property(spr, "modulate", Color(1,1,1,0), 0.35)
+	tw.tween_callback(func(): spr.queue_free())
+	# try animated frames if exist: fighter_jet_splash_0..7 / barracks_aura_0..7
+	if kind == "fighter_jet_splash" or kind == "barracks_aura":
+		var frames: Array = []
+		for i in range(8):
+			var p: String = "res://Assets/Effects/%s_%d.png" % [kind, i]
+			if ResourceLoader.exists(p):
+				frames.append(load(p) as Texture2D)
+		if frames.size() > 1:
+			var idx: int = 0
+			var timer := get_tree().create_timer(0.06)
+			# simple frame cycling via tween callback
+			for f in frames:
+				var f_tex: Texture2D = f
+				create_tween().tween_callback(func(): if is_instance_valid(spr): spr.texture = f_tex).set_delay(idx*0.06)
+				idx+=1
 
 func _spawn_damage_number(anchor: Control, dmg: int):
 	var lbl := Label.new()
