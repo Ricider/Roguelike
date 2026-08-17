@@ -411,10 +411,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					dmg = "INC:%d" % (card as Building).Income
 				btn.text = ""
 				btn.icon = null
-				if is_unit:
-					btn.modulate = Color(0.15, 0.55, 1.0)
-				else:
-					btn.modulate = Color(1.0, 0.72, 0.0)
+				btn.modulate = Color(1, 1, 1)
 				btn.clip_contents = true
 				var hbox := HBoxContainer.new()
 				hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -611,16 +608,16 @@ func _refresh_hand():
 			btn.tooltip_text = ""
 		btn.add_child(hand_hbox)
 		if idx == selected_card_idx:
-			btn.modulate = Color(1, 0.88, 0.15)
+			btn.modulate = Color(1, 1, 1)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		elif human.MoneySupply < card.MoneyCost or human.BioSupply < card.BioCost:
-			btn.modulate = Color(0.25, 0.25, 0.3)
+			btn.modulate = Color(1, 0.45, 0.45)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 			# keep enabled so tooltip still shows on hover (was disabled, blocked hover)
 		else:
-			btn.modulate = Color(0.2, 0.85, 0.45)
+			btn.modulate = Color(1, 1, 1)
 			btn.add_theme_font_size_override("font_size", 14)
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		var captured_idx: int = idx
