@@ -63,19 +63,25 @@ var selected_card_idx: int = -1
 @onready var close_btn: Button = $InspectPopup/VBox/CloseBtn
 @onready var hover_popup: PanelContainer = $HoverPopup
 @onready var hover_label: Label = $HoverPopup/HoverLabel
+@onready var bg_rect: TextureRect = $BG
 var preview_popup: PanelContainer
 var preview_built: bool = false
+var debug_popup: PanelContainer
+var debug_built: bool = false
+var debug_enemy_option: OptionButton
 
 func _ready():
-	human = Player.new(100, 100, 20, 0, "JohnDoe")
-	# Enemy is Euro Army per updated spec (was Insurgents)
-	ai_player = CardFactory.make_euro_army_player()
-	# Fallback: if called via manual AIPlayer still set display names
+	human = Player.new(100, 100, 20, 0, "JohnDoe", "")
+	# Enemy selected via GameState debug menu (default Euro Army) — displays BackgroundImage per spec
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		ai_player = gs.make_selected_enemy()
+	else:
+		ai_player = CardFactory.make_euro_army_player()
 	human.display_name = "JohnDoe"
-	ai_player.display_name = "Euro Army"
+	human.BackgroundImage = ""
 	human.DrawPile = CardFactory.make_starting_deck()
-	# Euro Army deck already set in factory, but ensure shuffle
-	# Keep Euro Army board placement (2 Housing +1 Factory already placed)
+	_update_background()
 	state = CombatState.new(human, ai_player)
 	end_turn_btn.pressed.connect(_on_end_turn)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
@@ -84,6 +90,8 @@ func _ready():
 	# Hide hover when inspecting or ending turn
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ensure_preview_popup()
+	_ensure_debug_popup()
+	_add_debug_button()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -309,6 +317,155 @@ func _hide_card_preview():
 func _hide_hover():
 	hover_popup.visible = false
 	_hide_card_preview()
+
+func _update_background():
+	if bg_rect == null:
+		bg_rect = get_node_or_null("BG") as TextureRect
+	if bg_rect == null:
+		return
+	var path: String = ""
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		path = gs.background_path_for(ai_player.display_name)
+	else:
+		if ai_player.display_name == "Insurgents":
+			path = "res://Assets/Players/Insurgents/background.png"
+		elif ai_player.display_name == "Euro Army":
+			path = "res://Assets/Players/Euro Army/background.png"
+	if path != "" and ResourceLoader.exists(path):
+		var tex := load(path) as Texture2D
+		if tex != null:
+			bg_rect.texture = tex
+			bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			bg_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	# keep overlay visible over background
+	_update_flag_textures()
+
+func _update_flag_textures():
+	if ai_flag != null:
+		var p: String = "res://Assets/Players/Euro Army/flag.png"
+		if ai_player.display_name == "Insurgents":
+			p = "res://Assets/Players/Insurgents/flag.png"
+		if ResourceLoader.exists(p):
+			var t := load(p) as Texture2D
+			if t != null:
+				ai_flag.texture = t
+
+func _ensure_debug_popup():
+	if debug_built:
+		return
+	debug_popup = PanelContainer.new()
+	debug_popup.name = "DebugPopup"
+	debug_popup.visible = false
+	debug_popup.z_index = 102
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.97)
+	sb.border_color = Color(0.9, 0.85, 0.4, 1)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	debug_popup.add_theme_stylebox_override("panel", sb)
+	debug_popup.custom_minimum_size = Vector2(340, 160)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	debug_popup.add_child(vbox)
+	var title := Label.new()
+	title.text = "Debug Menu"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(1,1,0.7))
+	vbox.add_child(title)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	vbox.add_child(row)
+	var lbl := Label.new()
+	lbl.text = "Enemy:"
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", Color(1,1,1))
+	row.add_child(lbl)
+	debug_enemy_option = OptionButton.new()
+	debug_enemy_option.custom_minimum_size = Vector2(180, 32)
+	debug_enemy_option.add_item("Euro Army", 0)
+	debug_enemy_option.add_item("Insurgents", 1)
+	var gs2 = get_node_or_null("/root/GameState")
+	var cur: String = "Euro Army"
+	if gs2 != null:
+		cur = gs2.selected_enemy
+	debug_enemy_option.selected = 1 if cur == "Insurgents" else 0
+	debug_enemy_option.item_selected.connect(func(idx: int):
+		var g = get_node_or_null("/root/GameState")
+		if g != null:
+			g.set_enemy(debug_enemy_option.get_item_text(idx))
+	)
+	row.add_child(debug_enemy_option)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(btn_row)
+	var restart_btn := Button.new()
+	restart_btn.text = "Switch & Restart"
+	restart_btn.custom_minimum_size = Vector2(150, 36)
+	restart_btn.add_theme_font_size_override("font_size", 15)
+	restart_btn.pressed.connect(_restart_game)
+	btn_row.add_child(restart_btn)
+	var close_dbtn := Button.new()
+	close_dbtn.text = "Close"
+	close_dbtn.custom_minimum_size = Vector2(80, 36)
+	close_dbtn.pressed.connect(func(): debug_popup.visible = false)
+	btn_row.add_child(close_dbtn)
+	var info := Label.new()
+	info.text = "Background: " + (ai_player.BackgroundImage if ai_player.BackgroundImage != "" else ai_player.display_name)
+	info.add_theme_font_size_override("font_size", 11)
+	info.add_theme_color_override("font_color", Color(0.8,0.8,0.85))
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(info)
+	add_child(debug_popup)
+	# center popup
+	debug_popup.position = Vector2.ZERO
+	debug_built = true
+
+func _add_debug_button():
+	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	if controls == null:
+		return
+	if controls.has_node("DebugBtn"):
+		return
+	var btn := Button.new()
+	btn.name = "DebugBtn"
+	btn.text = "Debug"
+	btn.custom_minimum_size = Vector2(90, 40)
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(1,1,0.6))
+	btn.pressed.connect(func():
+		_ensure_debug_popup()
+		debug_popup.visible = !debug_popup.visible
+		if debug_popup.visible:
+			_center_debug_popup()
+	)
+	controls.add_child(btn)
+	# keep MenuBtn last
+	var menu = controls.get_node_or_null("MenuBtn")
+	if menu:
+		controls.move_child(btn, menu.get_index())
+
+func _center_debug_popup():
+	if debug_popup == null:
+		return
+	var vp: Vector2 = get_viewport_rect().size
+	var sz: Vector2 = debug_popup.size
+	if sz.x < 100:
+		sz = Vector2(340, 160)
+	debug_popup.position = (vp - sz) / 2.0
+
+func _restart_game():
+	var g = get_node_or_null("/root/GameState")
+	if g != null and debug_enemy_option != null:
+		g.set_enemy(debug_enemy_option.get_item_text(debug_enemy_option.selected))
+	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _start_new_round():
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)

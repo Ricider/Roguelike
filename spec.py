@@ -12,6 +12,8 @@ class Player(GameObject):
     Board: Row[4]
     Difficulty: int
 
+    BackgroundImage: AIIntrepretedString (I put text, you write the ability)
+
     BioSupply: int
     MoneySupply: int
 
@@ -171,6 +173,7 @@ Player: JohnDoe
     HitPoints=100
     Board=Empty
     Difficulty=0
+    BackgroundImage=N/A, johndoe is the player so no background
 
     BioSupply=100
     MoneySupply=20
@@ -183,6 +186,7 @@ Player: Insurgents
     HitPoints=100
     Board=Empty
     Difficulty=1
+    BackgroundImage=Sparse mountain village
 
     BioSupply=120
     MoneySupply=10
@@ -192,9 +196,10 @@ Player: Insurgents
     Hand: []
 
 Player: Euro Army
-    Difficulty=2
     HitPoints=60
-    Board= 2 Housing and 1 Factory randomly placed at back row
+    Board=2 Housing and 1 Factory randomly placed at back row
+    Difficulty=2
+    BackgroundImage=City with european style towers
 
     BioSupply=80
     MoneySupply=50

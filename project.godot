@@ -75,6 +75,10 @@ restart={
 ]
 }
 
+[autoload]
+
+GameState="*res://GodotHelpers/GameState.gd"
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

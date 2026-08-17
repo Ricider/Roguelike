@@ -4,6 +4,7 @@ class_name Player
 var HitPoints: int = 100
 var Board: Array = [] # Row[4]
 var Difficulty: int = 0
+var BackgroundImage: String = ""
 var BioSupply: int = 100
 var MoneySupply: int = 20
 var DrawPile: Array = [] # Card[]
@@ -12,13 +13,14 @@ var Hand: Array = [] # Card[]
 var Graveyard: Array = [] # Card[]
 var display_name: String = ""
 
-func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = ""):
+func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = ""):
 	super._init()
 	HitPoints = hp
 	BioSupply = bio
 	MoneySupply = money
 	Difficulty = difficulty
 	display_name = name
+	BackgroundImage = background
 	Board = []
 	for i in range(4):
 		Board.append(Row.new())

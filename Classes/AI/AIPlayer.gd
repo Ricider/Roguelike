@@ -3,8 +3,8 @@ class_name AIPlayer
 
 var rng := RandomNumberGenerator.new()
 
-func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 1, name: String = ""):
-	super._init(hp, bio, money, difficulty, name)
+func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 1, name: String = "", background: String = ""):
+	super._init(hp, bio, money, difficulty, name, background)
 	rng.randomize()
 
 func take_build_turn():
