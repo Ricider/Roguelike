@@ -109,9 +109,10 @@ static func make_insurgents_player() -> AIPlayer:
 	p.DrawPile = make_insurgents_deck()
 	return p
 
-static func make_state_troops_player() -> AIPlayer:
+static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	var p := AIPlayer.new(100, 100, 20, 2, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 20)
-	var back_row: int = 0
+	# Back row is furthest from enemy: row 3 for human (bottom), row 0 for AI (top)
+	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
 		positions.append(c)
@@ -121,9 +122,9 @@ static func make_state_troops_player() -> AIPlayer:
 	p.DrawPile = make_state_troops_deck()
 	return p
 
-static func make_horde_player() -> AIPlayer:
+static func make_horde_player(for_human: bool = false) -> AIPlayer:
 	var p := AIPlayer.new(200, 160, 0, 4, "Horde", "Russian style city, snowy, add few trees", 25)
-	var back_row: int = 0
+	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
 		positions.append(c)
@@ -140,10 +141,10 @@ static func make_horde_player() -> AIPlayer:
 	p.DrawPile = make_horde_deck()
 	return p
 
-static func make_euro_army_player() -> AIPlayer:
+static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 	var p := AIPlayer.new(60, 80, 50, 5, "Euro Army", "City with european style towers", 50)
-	# Board: 2 Housing and 1 Factory randomly placed at back row (other side of field vs front) - row 0 is back for AI (top) per spec correction
-	var back_row: int = 0
+	# Board: 2 Housing and 1 Factory randomly placed at back row furthest from enemy - row 3 for human, row 0 for AI
+	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
 		positions.append(c)

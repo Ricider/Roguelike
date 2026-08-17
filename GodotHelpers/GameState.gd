@@ -19,18 +19,18 @@ func set_enemy(name: String):
 	if name in ["Euro Army", "Insurgents", "Horde", "State Troops"]:
 		selected_enemy = name
 
-func make_player_by_name(name: String) -> Player:
+func make_player_by_name(name: String, for_human: bool = false) -> Player:
 	match name:
 		"Insurgents":
 			return CardFactory.make_insurgents_player()
 		"State Troops":
-			return CardFactory.make_state_troops_player()
+			return CardFactory.make_state_troops_player(for_human)
 		"Horde":
-			return CardFactory.make_horde_player()
+			return CardFactory.make_horde_player(for_human)
 		"Euro Army":
-			return CardFactory.make_euro_army_player()
+			return CardFactory.make_euro_army_player(for_human)
 		_:
-			return CardFactory.make_state_troops_player()
+			return CardFactory.make_state_troops_player(for_human)
 
 func make_selected_enemy() -> AIPlayer:
 	if selected_enemy == "Insurgents":
@@ -54,7 +54,7 @@ func background_path_for(player_name: String) -> String:
 
 func start_run(chosen_name: String):
 	selected_player_name = chosen_name
-	run_player = make_player_by_name(chosen_name)
+	run_player = make_player_by_name(chosen_name, true)
 	# deep copy? Keep reference as run_player
 	run_enemies = CardFactory.enemy_sequence_for_player(chosen_name)
 	run_enemy_index = 0

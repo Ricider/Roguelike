@@ -69,6 +69,8 @@ var preview_built: bool = false
 var debug_popup: PanelContainer
 var debug_built: bool = false
 var debug_enemy_option: OptionButton
+var debug_summon_card_option: OptionButton
+var debug_summon_target_option: OptionButton
 var shop_popup: PanelContainer
 var shop_built: bool = false
 
@@ -386,7 +388,7 @@ func _ensure_debug_popup():
 	sb.content_margin_top = 10
 	sb.content_margin_bottom = 10
 	debug_popup.add_theme_stylebox_override("panel", sb)
-	debug_popup.custom_minimum_size = Vector2(340, 160)
+	debug_popup.custom_minimum_size = Vector2(420, 300)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
 	debug_popup.add_child(vbox)
@@ -420,6 +422,37 @@ func _ensure_debug_popup():
 			g.set_enemy(debug_enemy_option.get_item_text(idx))
 	)
 	row.add_child(debug_enemy_option)
+	# Summon any card to battlefield
+	var summon_title := Label.new()
+	summon_title.text = "Summon Card to Battlefield:"
+	summon_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	summon_title.add_theme_font_size_override("font_size", 14)
+	summon_title.add_theme_color_override("font_color", Color(1,1,1))
+	vbox.add_child(summon_title)
+	var summon_row := HBoxContainer.new()
+	summon_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	summon_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(summon_row)
+	debug_summon_card_option = OptionButton.new()
+	debug_summon_card_option.custom_minimum_size = Vector2(180, 32)
+	for cname in ["Wall", "Infantry", "Tank", "Artilery", "Rocket Launcher", "Drone", "Fighter Jet", "Factory", "Barracks", "Housing", "Corporation", "Howitzer"]:
+		debug_summon_card_option.add_item(cname)
+	summon_row.add_child(debug_summon_card_option)
+	debug_summon_target_option = OptionButton.new()
+	debug_summon_target_option.custom_minimum_size = Vector2(110, 32)
+	debug_summon_target_option.add_item("Player", 0)
+	debug_summon_target_option.add_item("AI", 1)
+	summon_row.add_child(debug_summon_target_option)
+	var summon_btn := Button.new()
+	summon_btn.text = "Summon"
+	summon_btn.custom_minimum_size = Vector2(90, 32)
+	summon_btn.add_theme_font_size_override("font_size", 14)
+	summon_btn.pressed.connect(func():
+		var cname2: String = debug_summon_card_option.get_item_text(debug_summon_card_option.selected)
+		var target_is_ai: bool = debug_summon_target_option.selected == 1
+		_debug_summon_card(cname2, target_is_ai)
+	)
+	summon_row.add_child(summon_btn)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 10)
@@ -476,8 +509,49 @@ func _center_debug_popup():
 	var vp: Vector2 = get_viewport_rect().size
 	var sz: Vector2 = debug_popup.size
 	if sz.x < 100:
-		sz = Vector2(340, 160)
+		sz = Vector2(420, 300)
 	debug_popup.position = (vp - sz) / 2.0
+
+func _create_card_by_name(cname: String) -> Card:
+	match cname:
+		"Wall": return Wall.new()
+		"Infantry": return Infantry.new()
+		"Tank": return Tank.new()
+		"Artilery": return Artilery.new()
+		"Rocket Launcher": return RocketLauncher.new()
+		"Drone": return Drone.new()
+		"Fighter Jet": return FighterJet.new()
+		"Factory": return Factory.new()
+		"Barracks": return Barracks.new()
+		"Housing": return Housing.new()
+		"Corporation": return Corporation.new()
+		"Howitzer": return Howitzer.new()
+		_: return Wall.new()
+
+func _debug_summon_card(cname: String, to_ai: bool):
+	var target: Player = ai_player if to_ai else human
+	if target == null:
+		return
+	var empties: Array = target.get_empty_squares()
+	if empties.is_empty():
+		message_label.text = "No empty squares on %s board!" % ("AI" if to_ai else "Player")
+		return
+	# pick first empty in row-major (predictable) or random
+	empties.shuffle()
+	var sq: Square = empties[0] as Square
+	# find coords for logging
+	var found := false
+	for r in range(target.Board.size()):
+		for c in range(target.Board[r].Squares.size()):
+			if target.Board[r].Squares[c] == sq:
+				var card: Card = _create_card_by_name(cname)
+				sq.place(card)
+				message_label.text = "Summoned %s to %s [%d,%d]" % [cname, "AI" if to_ai else "Player", r, c]
+				_refresh_ui()
+				found = true
+				break
+		if found:
+			break
 
 func _restart_game():
 	var g = get_node_or_null("/root/GameState")
@@ -851,65 +925,133 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				btn.text = ""
 				btn.icon = null
 				btn.modulate = Color(1, 1, 1)
-				btn.clip_contents = true
-				var hbox := HBoxContainer.new()
-				hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				hbox.clip_contents = true
-				hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-				hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-				var anim := Card.create_sprite_for(card.card_name, Vector2(90, 90))
-				anim.clip_contents = true
-				hbox.add_child(anim)
-				var vbox := VBoxContainer.new()
-				vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-				vbox.clip_contents = true
-				vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-				vbox.custom_minimum_size = Vector2(0, 0)
+				btn.clip_contents = false
+				# Transparent background for battlefield cards
+				btn.flat = true
+				var trans_sb := StyleBoxFlat.new()
+				trans_sb.bg_color = Color(0, 0, 0, 0)
+				trans_sb.border_width_left = 0
+				trans_sb.border_width_right = 0
+				trans_sb.border_width_top = 0
+				trans_sb.border_width_bottom = 0
+				btn.add_theme_stylebox_override("normal", trans_sb)
+				btn.add_theme_stylebox_override("hover", trans_sb)
+				btn.add_theme_stylebox_override("pressed", trans_sb)
+				btn.add_theme_stylebox_override("disabled", trans_sb)
+				btn.add_theme_stylebox_override("focus", trans_sb)
+				# HBox: art extends 2x to right and 2x to bottom beyond tile, indicators on right vertically stacked on top
+				var outer_hbox := HBoxContainer.new()
+				outer_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				outer_hbox.clip_contents = false
+				outer_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				outer_hbox.add_theme_constant_override("separation", 2)
+				outer_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				outer_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				var left_vbox := VBoxContainer.new()
+				left_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				left_vbox.clip_contents = false
+				left_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				left_vbox.add_theme_constant_override("separation", 1)
+				left_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				left_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				# Art extends 2x to right and 2x to bottom: 128x128 base (2x 64) overflows tile, clipped false lets it spill
+				var anim := Card.create_sprite_for(card.card_name, Vector2(128, 128))
+				anim.clip_contents = false
+				anim.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				anim.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				anim.custom_minimum_size = Vector2(128, 128)
+				anim.z_index = 1
+				left_vbox.add_child(anim)
 				var name_lbl := Label.new()
 				name_lbl.text = card.card_name
-				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-				name_lbl.add_theme_font_size_override("font_size", 11)
+				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				name_lbl.add_theme_font_size_override("font_size", 7)
 				name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-				vbox.add_child(name_lbl)
-				var stats := HBoxContainer.new()
-				stats.alignment = BoxContainer.ALIGNMENT_BEGIN
-				stats.clip_contents = true
+				name_lbl.clip_contents = true
+				name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+				name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+				name_lbl.custom_minimum_size = Vector2(0, 9)
+				name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				left_vbox.add_child(name_lbl)
+				outer_hbox.add_child(left_vbox)
+				# Right side: health / damage / income vertically stacked
+				var right_vbox := VBoxContainer.new()
+				right_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				right_vbox.clip_contents = true
+				right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+				right_vbox.add_theme_constant_override("separation", 3)
+				right_vbox.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+				right_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				right_vbox.custom_minimum_size = Vector2(22, 0)
+				# Health stacked
+				var hp_col := VBoxContainer.new()
+				hp_col.alignment = BoxContainer.ALIGNMENT_CENTER
+				hp_col.clip_contents = true
+				hp_col.add_theme_constant_override("separation", 0)
 				var hp_icon := TextureRect.new()
 				hp_icon.texture = load("res://Assets/UI/heart.png") as Texture2D
-				hp_icon.custom_minimum_size = Vector2(16, 16)
+				hp_icon.custom_minimum_size = Vector2(14, 14)
 				hp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				hp_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-				stats.add_child(hp_icon)
+				hp_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+				hp_col.add_child(hp_icon)
 				var hp_lbl := Label.new()
 				hp_lbl.text = "%d" % hp
-				hp_lbl.add_theme_font_size_override("font_size", 11)
+				hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				hp_lbl.add_theme_font_size_override("font_size", 8)
 				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-				stats.add_child(hp_lbl)
+				hp_lbl.clip_contents = true
+				hp_lbl.custom_minimum_size = Vector2(22, 10)
+				hp_col.add_child(hp_lbl)
+				right_vbox.add_child(hp_col)
 				if is_unit:
+					var dmg_col := VBoxContainer.new()
+					dmg_col.alignment = BoxContainer.ALIGNMENT_CENTER
+					dmg_col.clip_contents = true
+					dmg_col.add_theme_constant_override("separation", 0)
 					var sword_icon := TextureRect.new()
 					sword_icon.texture = load("res://Assets/UI/sword.png") as Texture2D
-					sword_icon.custom_minimum_size = Vector2(16, 16)
+					sword_icon.custom_minimum_size = Vector2(14, 14)
 					sword_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 					sword_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 					sword_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-					stats.add_child(sword_icon)
+					sword_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+					dmg_col.add_child(sword_icon)
 					var dmg_lbl := Label.new()
 					dmg_lbl.text = "%d" % (card as Unit).Damage
-					dmg_lbl.add_theme_font_size_override("font_size", 10)
+					dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					dmg_lbl.add_theme_font_size_override("font_size", 8)
 					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-					stats.add_child(dmg_lbl)
+					dmg_lbl.clip_contents = true
+					dmg_lbl.custom_minimum_size = Vector2(22, 10)
+					dmg_col.add_child(dmg_lbl)
+					right_vbox.add_child(dmg_col)
 				else:
-					var dmg_lbl := Label.new()
-					dmg_lbl.text = " " + dmg
-					dmg_lbl.add_theme_font_size_override("font_size", 10)
-					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-					stats.add_child(dmg_lbl)
-				vbox.add_child(stats)
-				hbox.add_child(vbox)
-				btn.add_child(hbox)
+					var inc_col := VBoxContainer.new()
+					inc_col.alignment = BoxContainer.ALIGNMENT_CENTER
+					inc_col.clip_contents = true
+					inc_col.add_theme_constant_override("separation", 0)
+					var inc_icon := TextureRect.new()
+					# Use money icon for income
+					inc_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
+					inc_icon.custom_minimum_size = Vector2(14, 14)
+					inc_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+					inc_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+					inc_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+					inc_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+					inc_col.add_child(inc_icon)
+					var inc_lbl := Label.new()
+					inc_lbl.text = "%d" % (card as Building).Income
+					inc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					inc_lbl.add_theme_font_size_override("font_size", 8)
+					inc_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+					inc_lbl.clip_contents = true
+					inc_lbl.custom_minimum_size = Vector2(22, 10)
+					inc_col.add_child(inc_lbl)
+					right_vbox.add_child(inc_col)
+				outer_hbox.add_child(right_vbox)
+				btn.add_child(outer_hbox)
 				# Magnified preview on hover — art + symbols + text enlarged
 				var _card_prev: Card = card
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
@@ -947,90 +1089,116 @@ func _refresh_hand():
 			hp = (card as Building).HitPoints
 			extra = "INC %d" % (card as Building).Income
 		btn.text = ""
-		# Right-side layout: sprite left | details right (uses empty right space efficiently, no overflow)
+		# Right-side layout: sprite left | details right, clipped to prevent overflow (48x48 art fits 108x68)
 		var hand_hbox := HBoxContainer.new()
 		hand_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hand_hbox.clip_contents = true
 		hand_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		hand_hbox.add_theme_constant_override("separation", 4)
 		hand_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hand_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(72, 72))
 		hand_anim.clip_contents = true
+		hand_anim.custom_minimum_size = Vector2(72, 72)
+		hand_anim.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		hand_anim.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_hbox.add_child(hand_anim)
 		var details := VBoxContainer.new()
 		details.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		details.clip_contents = true
 		details.alignment = BoxContainer.ALIGNMENT_CENTER
+		details.add_theme_constant_override("separation", 1)
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		details.custom_minimum_size = Vector2(48, 0)
 		hand_hbox.add_child(details)
 		var hand_name := Label.new()
 		hand_name.text = card.card_name
 		hand_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		hand_name.add_theme_font_size_override("font_size", 11)
+		hand_name.add_theme_font_size_override("font_size", 8)
 		hand_name.add_theme_color_override("font_color", Color(1, 1, 1))
+		hand_name.clip_contents = true
+		hand_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+		hand_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		hand_name.custom_minimum_size = Vector2(48, 10)
+		hand_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.add_child(hand_name)
 		var hand_stats := HBoxContainer.new()
 		hand_stats.alignment = BoxContainer.ALIGNMENT_BEGIN
 		hand_stats.clip_contents = true
+		hand_stats.add_theme_constant_override("separation", 2)
+		hand_stats.custom_minimum_size = Vector2(48, 10)
 		var h_heart := TextureRect.new()
 		h_heart.texture = load("res://Assets/UI/heart.png") as Texture2D
-		h_heart.custom_minimum_size = Vector2(16, 16)
+		h_heart.custom_minimum_size = Vector2(10, 10)
 		h_heart.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		h_heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		h_heart.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		h_heart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_stats.add_child(h_heart)
 		var h_hp := Label.new()
 		h_hp.text = "%d" % hp
-		h_hp.add_theme_font_size_override("font_size", 10)
+		h_hp.add_theme_font_size_override("font_size", 8)
 		h_hp.add_theme_color_override("font_color", Color(1, 1, 1))
+		h_hp.clip_contents = true
 		hand_stats.add_child(h_hp)
 		if card is Unit:
 			var h_sword := TextureRect.new()
 			h_sword.texture = load("res://Assets/UI/sword.png") as Texture2D
-			h_sword.custom_minimum_size = Vector2(16, 16)
+			h_sword.custom_minimum_size = Vector2(10, 10)
 			h_sword.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			h_sword.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			h_sword.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			h_sword.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			hand_stats.add_child(h_sword)
 			var h_dmg := Label.new()
 			h_dmg.text = "%d" % (card as Unit).Damage
-			h_dmg.add_theme_font_size_override("font_size", 10)
+			h_dmg.add_theme_font_size_override("font_size", 8)
 			h_dmg.add_theme_color_override("font_color", Color(1, 1, 1))
+			h_dmg.clip_contents = true
 			hand_stats.add_child(h_dmg)
 		else:
 			var h_inc := Label.new()
-			h_inc.text = " " + extra
-			h_inc.add_theme_font_size_override("font_size", 9)
+			h_inc.text = extra
+			h_inc.add_theme_font_size_override("font_size", 7)
 			h_inc.add_theme_color_override("font_color", Color(1, 1, 1))
+			h_inc.clip_contents = true
+			h_inc.autowrap_mode = TextServer.AUTOWRAP_OFF
+			h_inc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 			hand_stats.add_child(h_inc)
 		details.add_child(hand_stats)
 		var hand_costs := HBoxContainer.new()
 		hand_costs.alignment = BoxContainer.ALIGNMENT_BEGIN
 		hand_costs.clip_contents = true
+		hand_costs.add_theme_constant_override("separation", 2)
+		hand_costs.custom_minimum_size = Vector2(48, 10)
 		var m_icon := TextureRect.new()
 		m_icon.texture = load("res://Assets/UI/money_icon.png") as Texture2D
-		m_icon.custom_minimum_size = Vector2(14, 14)
+		m_icon.custom_minimum_size = Vector2(10, 10)
 		m_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		m_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		m_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		m_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_costs.add_child(m_icon)
 		var m_lbl := Label.new()
 		m_lbl.text = "%d" % card.MoneyCost
-		m_lbl.add_theme_font_size_override("font_size", 9)
+		m_lbl.add_theme_font_size_override("font_size", 8)
 		m_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		m_lbl.clip_contents = true
 		hand_costs.add_child(m_lbl)
 		var b_icon := TextureRect.new()
 		b_icon.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
-		b_icon.custom_minimum_size = Vector2(14, 14)
+		b_icon.custom_minimum_size = Vector2(10, 10)
 		b_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		b_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		b_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		b_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_costs.add_child(b_icon)
 		var b_lbl := Label.new()
 		b_lbl.text = "%d" % card.BioCost
-		b_lbl.add_theme_font_size_override("font_size", 9)
+		b_lbl.add_theme_font_size_override("font_size", 8)
 		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		b_lbl.clip_contents = true
 		hand_costs.add_child(b_lbl)
 		details.add_child(hand_costs)
 		# Magnified preview on hover — hand card art + symbols + text enlarged
@@ -1206,44 +1374,60 @@ func _get_adjacent_squares(player: Player, center: Square) -> Array:
 	return res
 
 func _spawn_special_effect(anchor: Control, kind: String):
-	var tex_path: String = "res://Assets/Effects/%s.png" % kind
-	if not ResourceLoader.exists(tex_path):
-		# fallback to single frame if animated not found
+	if anchor == null or not is_instance_valid(anchor):
 		return
-	var tex: Texture2D = load(tex_path) as Texture2D
-	if tex == null:
+	# Collect frames: try 0..7 first, fallback to base png
+	var frames: Array = []
+	for i in range(8):
+		var p: String = "res://Assets/Effects/%s_%d.png" % [kind, i]
+		if ResourceLoader.exists(p):
+			var tex2: Texture2D = load(p) as Texture2D
+			if tex2 != null:
+				frames.append(tex2)
+	if frames.is_empty():
+		var base_path: String = "res://Assets/Effects/%s.png" % kind
+		if ResourceLoader.exists(base_path):
+			var base_tex: Texture2D = load(base_path) as Texture2D
+			if base_tex != null:
+				frames.append(base_tex)
+		else:
+			return
+	if frames.is_empty():
 		return
 	var spr := TextureRect.new()
-	spr.texture = tex
-	spr.custom_minimum_size = Vector2(64, 64)
+	spr.texture = frames[0]
+	# Larger, more visible — effects are 128x128, show at 96x96
+	spr.custom_minimum_size = Vector2(96, 96)
+	spr.size = Vector2(96, 96)
 	spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	spr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	spr.modulate = Color(1,1,1,0.95)
-	# center over anchor
-	anchor.add_child(spr)
-	spr.position = Vector2(anchor.size.x*0.5 -32, anchor.size.y*0.5 -32)
-	spr.z_index = 50
+	spr.modulate = Color(1,1,1,1)
+	spr.z_index = 200
+	# Add as overlay to GameController to avoid clip_contents of Button
+	add_child(spr)
+	# Center over anchor using global rect -> local
+	var anchor_rect: Rect2 = anchor.get_global_rect()
+	var center: Vector2 = anchor_rect.get_center()
+	# Convert to local position of GameController
+	var local_center: Vector2 = center - get_global_rect().position
+	spr.position = local_center - spr.size * 0.5
+	spr.pivot_offset = spr.size * 0.5
+	# Fade + scale out
 	var tw := create_tween()
-	tw.tween_property(spr, "scale", Vector2(1.15,1.15), 0.12)
-	tw.tween_property(spr, "modulate", Color(1,1,1,0), 0.35)
-	tw.tween_callback(func(): spr.queue_free())
-	# try animated frames if exist: fighter_jet_splash_0..7 / barracks_aura_0..7
-	if kind == "fighter_jet_splash" or kind == "barracks_aura":
-		var frames: Array = []
-		for i in range(8):
-			var p: String = "res://Assets/Effects/%s_%d.png" % [kind, i]
-			if ResourceLoader.exists(p):
-				frames.append(load(p) as Texture2D)
-		if frames.size() > 1:
-			var idx: int = 0
-			var timer := get_tree().create_timer(0.06)
-			# simple frame cycling via tween callback
-			for f in frames:
-				var f_tex: Texture2D = f
-				create_tween().tween_callback(func(): if is_instance_valid(spr): spr.texture = f_tex).set_delay(idx*0.06)
-				idx+=1
+	tw.set_parallel(true)
+	tw.tween_property(spr, "scale", Vector2(1.3, 1.3), 0.45)
+	tw.tween_property(spr, "modulate", Color(1,1,1,0), 0.45)
+	tw.set_parallel(false)
+	tw.tween_callback(func(): if is_instance_valid(spr): spr.queue_free())
+	# Animate frames if more than one
+	if frames.size() > 1:
+		for i in range(1, frames.size()):
+			var tex: Texture2D = frames[i]
+			var delay: float = i * 0.06
+			# capture tex correctly via bind
+			create_tween().tween_callback(func(t: Texture2D = tex): if is_instance_valid(spr): spr.texture = t).set_delay(delay)
 
 func _spawn_damage_number(anchor: Control, dmg: int):
 	var lbl := Label.new()

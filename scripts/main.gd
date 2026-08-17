@@ -88,13 +88,7 @@ func _select_player(name: String):
 		var b: Button = _player_buttons[n]
 		b.modulate = Color(1,1,1,1) if n == name else Color(1,1,1,0.7)
 		b.button_pressed = (n == name)
-	# Update subtitle with BackgroundImage hint
-	var sub = get_node_or_null("CenterContainer/VBox/SubtitleLabel")
-	if sub != null:
-		var gs = get_node_or_null("/root/GameState")
-		if gs != null:
-			var p = gs.make_player_by_name(name)
-			sub.text = p.BackgroundImage
+	# Subtitle stays as title, do not show BackgroundImage text per spec
 
 func _on_play_pressed():
 	var gs = get_node_or_null("/root/GameState")
