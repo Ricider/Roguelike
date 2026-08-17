@@ -109,8 +109,8 @@ static func make_insurgents_player() -> AIPlayer:
 	p.DrawPile = make_insurgents_deck()
 	return p
 
-static func make_state_troops_player() -> Player:
-	var p := Player.new(100, 100, 20, 2, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 20)
+static func make_state_troops_player() -> AIPlayer:
+	var p := AIPlayer.new(100, 100, 20, 2, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 20)
 	var back_row: int = 0
 	var positions: Array = []
 	for c in range(10):

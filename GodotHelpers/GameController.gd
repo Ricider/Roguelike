@@ -691,7 +691,7 @@ func _continue_from_shop():
 		# Clear boards for fresh battle — human board cleared, ai old board irrelevant
 		_clear_board(human)
 		# Do not clear next_enemy's board (it has starting placements); old ai_player board already empty after death
-		var next_enemy: Player = gs.get_current_enemy()
+		var next_enemy: AIPlayer = gs.get_current_enemy()
 		if next_enemy != null:
 			ai_player = next_enemy
 			state = CombatState.new(human, ai_player)

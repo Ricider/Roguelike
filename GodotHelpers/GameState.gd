@@ -62,11 +62,11 @@ func start_run(chosen_name: String):
 	shop_offer.clear()
 	shop_remove_used = false
 
-func get_current_enemy() -> Player:
+func get_current_enemy() -> AIPlayer:
 	if run_enemies.is_empty():
 		return make_selected_enemy()
 	if run_enemy_index < run_enemies.size():
-		return run_enemies[run_enemy_index]
+		return run_enemies[run_enemy_index] as AIPlayer
 	return null
 
 func advance_enemy():

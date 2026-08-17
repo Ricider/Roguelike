@@ -174,9 +174,11 @@ func test_flag_art_exists():
 func test_heart_and_gauge_textures():
 	# heart flipped still 32x32
 	assert_true(ResourceLoader.exists("res://Assets/UI/heart.png"), "heart exists")
-	# gauge fills must be vertical 12x124 not 124x12
+	# gauge fills must be vertical 12x124 not 124x12 and tall enough to fill dead space
 	var gc_tscn := FileAccess.get_file_as_string("res://scenes/Game.tscn")
-	assert_true(gc_tscn.contains("Vector2(26, 62)"), "gauge vertical size 26x62")
+	assert_true(gc_tscn.contains("Vector2(26, 180)"), "gauge vertical size 26x180 (takes dead space)")
+	assert_false(gc_tscn.contains("Vector2(26, 62)"), "old small gauge 26x62 removed")
+	assert_true(gc_tscn.contains("size_flags_vertical = 3"), "gauges expand vertically to fill dead space")
 	# check files are vertical via existence (rotated)
 	assert_true(FileAccess.file_exists("res://Assets/UI/hp_fill.png"), "hp_fill exists")
 	assert_true(FileAccess.file_exists("res://Assets/UI/hp_bg.png"), "hp_bg exists")
@@ -265,11 +267,26 @@ func test_gauge_scaling_and_board_hand_sizes():
 	var tscn := FileAccess.get_file_as_string("res://scenes/Game.tscn")
 	assert_true(tscn.contains("Vector2(124, 0)"), "Left/Right Gauges 124")
 	assert_true(tscn.contains("Vector2(44, 44)"), "gauge icons 44")
-	assert_true(tscn.contains("Vector2(26, 62)"), "gauge bars 26x62")
+	assert_true(tscn.contains("Vector2(26, 180)"), "gauge bars 26x180 tall to fill dead space")
+	assert_true(tscn.contains("size_flags_vertical = 3"), "gauges expand vertically")
 	assert_true(tscn.contains("font_size = 30") or tscn.contains("font_size = 22"), "gauge headers scaled")
 	# boards/hand untouched per gauges-only scaling
 	assert_true(tscn.contains("Vector2(0, 150)"), "boards 150 untouched")
 	assert_true(tscn.contains("Vector2(0, 80)"), "hand 80 untouched")
+
+func test_gauges_vertically_long_fill_dead_space():
+	# Regression: gauges must be tall enough to fill left/right dead space
+	var tscn := FileAccess.get_file_as_string("res://scenes/Game.tscn")
+	# All 6 main gauges (AIHP/AIBio/AIMoney/PlayerHP/Bio/Money) must be 26x180
+	var count_180 := tscn.count("Vector2(26, 180)")
+	assert_true(count_180 >= 6, "6 main gauges 26x180 (got %d)" % count_180)
+	# Must expand to fill remaining dead space
+	assert_true(tscn.contains("AIGauges") and tscn.contains("PlayerGauges"), "gauge containers exist")
+	# Spacer should no longer hog dead space (was size_flags_vertical=3 with 12)
+	assert_true(tscn.contains("Vector2(0, 6)"), "spacers reduced to 6 not 12 hogging dead space")
+	# Verify left/right dead space is used by gauges not spacer (gauges have expand, spacer not)
+	var gauges_expand := tscn.count("size_flags_vertical = 3")
+	assert_true(gauges_expand >= 10, "gauges and containers expand vertically (found %d)" % gauges_expand)
 
 func test_corporation_discount_and_influence():
 	var p := Player.new(100, 100, 100, 0, "Test", "", 0)
