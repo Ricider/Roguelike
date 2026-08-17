@@ -66,8 +66,8 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(euro.MoneySupply,50, "Euro 50 money")
 	assert_eq(euro.Difficulty,2, "Euro diff 2")
 	assert_eq(euro.display_name,"Euro Army", "Euro name")
-	# board 2 Housing +1 Factory at back row 3
-	var back = euro.Board[3]
+	# board 2 Housing +1 Factory at back row 0 (other side vs front row 3 for AI top)
+	var back = euro.Board[0]
 	var hous = 0
 	var fac = 0
 	for sq in back.Squares:
@@ -75,8 +75,8 @@ func test_decks_johndoe_insurgents_euro():
 			hous+=1
 		if sq.Inhabitant is Factory:
 			fac+=1
-	assert_eq(hous,2, "Euro back row 2 Housing")
-	assert_eq(fac,1, "Euro back row 1 Factory")
+	assert_eq(hous,2, "Euro back row 0 2 Housing")
+	assert_eq(fac,1, "Euro back row 0 1 Factory")
 
 func test_player_difficulty_and_enemy_is_euro():
 	var p := Player.new(100,100,20,1,"Test")

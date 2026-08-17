@@ -67,8 +67,8 @@ static func make_euro_army_deck() -> Array:
 
 static func make_euro_army_player() -> AIPlayer:
 	var p := AIPlayer.new(60, 80, 50, 2, "Euro Army")
-	# Board: 2 Housing and 1 Factory randomly placed at back row (row 3)
-	var back_row: int = 3
+	# Board: 2 Housing and 1 Factory randomly placed at back row (other side of field vs front) - row 0 is back for AI (top) per spec correction
+	var back_row: int = 0
 	var positions: Array = []
 	for c in range(10):
 		positions.append(c)
