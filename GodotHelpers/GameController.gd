@@ -1308,15 +1308,67 @@ func _on_board_click(r: int, c: int):
 		message_label.text = "Cannot place there (cost or occupied)"
 	_refresh_ui()
 
+func _refresh_gauges_only():
+	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
+	var ai_income: int = ai_player.total_money_income() if ai_player != null else 0
+	var p_income: int = human.total_money_income() if human != null else 0
+	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply if ai_player != null else 0
+	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply if human != null else 0
+	ai_hp_bar.max_value = 100
+	ai_bio_bar.max_value = 200
+	ai_money_bar.max_value = 200
+	player_hp_bar.max_value = 100
+	player_bio_bar.max_value = 200
+	player_money_bar.max_value = 200
+	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, 100) if ai_player != null else 0
+	ai_bio_bar.value = clamp(ai_player.BioSupply, 0, 200) if ai_player != null else 0
+	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 200) if ai_player != null else 0
+	player_hp_bar.value = clamp(human.HitPoints, 0, 100) if human != null else 0
+	player_bio_bar.value = clamp(human.BioSupply, 0, 200) if human != null else 0
+	player_money_bar.value = clamp(human.MoneySupply, 0, 200) if human != null else 0
+	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0) if ai_player != null else 0, 100]
+	ai_bio_value.text = "%d/%d" % [max(ai_player.BioSupply, 0) if ai_player != null else 0, 200]
+	ai_money_value.text = "%d/%d" % [max(ai_player.MoneySupply, 0) if ai_player != null else 0, 200]
+	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0) if human != null else 0, 100]
+	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0) if human != null else 0, 200]
+	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0) if human != null else 0, 200]
+	ai_bio_income.text = "+%d" % ai_bio_inc
+	player_bio_income.text = "+%d" % p_bio_inc
+	ai_money_income.text = "+%d" % (10 + ai_income)
+	player_money_income.text = "+%d" % (10 + p_income)
+	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
+		bar.max_value = 33
+	ai_deck_bar.value = clamp(ai_player.DrawPile.size(), 0, 33) if ai_player != null else 0
+	player_deck_bar.value = clamp(human.DrawPile.size(), 0, 33) if human != null else 0
+	ai_discard_bar.value = clamp(ai_player.DiscardPile.size(), 0, 33) if ai_player != null else 0
+	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33) if human != null else 0
+	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33) if ai_player != null else 0
+	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33) if human != null else 0
+	ai_deck_value.text = "%d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
+	player_deck_value.text = "%d/33" % (human.DrawPile.size() if human != null else 0)
+	ai_discard_value.text = "%d/33" % (ai_player.DiscardPile.size() if ai_player != null else 0)
+	player_discard_value.text = "%d/33" % (human.DiscardPile.size() if human != null else 0)
+	ai_graveyard_value.text = "%d/33" % (ai_player.Graveyard.size() if ai_player != null else 0)
+	player_graveyard_value.text = "%d/33" % (human.Graveyard.size() if human != null else 0)
+	for pair in [[ai_deck_icon, ai_player.DrawPile.size() if ai_player != null else 0], [player_deck_icon, human.DrawPile.size() if human != null else 0]]:
+		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
+	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player != null and ai_player.HitPoints < 30 else Color(1,1,1)
+	player_hp_bar.tint_progress = Color(1, 0.35, 0.35) if human != null and human.HitPoints < 30 else Color(1,1,1)
+
+func _refresh_boards_only():
+	_refresh_board(ai_board_container, ai_player, false)
+	_refresh_board(player_board_container, human, true)
+
 func _on_end_turn():
 	end_turn_btn.disabled = true
-	# Combat phase with simple per-attack animation: highlight attacker → target
-	var log: Array = state.combat_phase()
+	selected_card = null
+	selected_card_idx = -1
+	# Live combat: damage is applied and UI refreshed per hit, not deferred to end
+	var log: Array = await _execute_combat_live()
 	if log.is_empty():
 		message_label.text = "No attacks this turn"
 	else:
-		message_label.text = "Combat: %d attacks..." % log.size()
-		await _animate_combat(log)
+		message_label.text = "Combat: %d attacks done" % log.size()
 	# Discard remaining hand — now owned by Player
 	human.discard_hand()
 	ai_player.discard_hand()
@@ -1327,6 +1379,115 @@ func _on_end_turn():
 	# Next round
 	_start_new_round()
 	end_turn_btn.disabled = false
+
+func _execute_combat_live() -> Array:
+	# Mirrors CombatState.combat_phase but applies damage incrementally with per-hit animation + UI refresh
+	var log: Array = []
+	if state == null or human == null or ai_player == null:
+		return log
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in range(state.Players.size()):
+		var attacker: Player = state.Players[i]
+		var defender: Player = state.Players[1 - i]
+		var attackers: Array = []
+		for row in attacker.Board:
+			for sq in row.Squares:
+				if sq.Inhabitant != null and sq.Inhabitant is Unit:
+					attackers.append({"card": sq.Inhabitant, "square": sq})
+		for info in attackers:
+			var unit: Unit = info["card"]
+			var sq: Square = info["square"]
+			if unit.HitPoints <= 0:
+				continue
+			var dmg: int = state._effective_damage(attacker, unit, sq)
+			var attacks: int = 4 if unit is RocketLauncher or unit is Howitzer else 1
+			for a_idx in range(attacks):
+				if unit.HitPoints <= 0:
+					break
+				var target = state._pick_target(defender, unit.HasRange, rng)
+				if target == null:
+					defender.HitPoints -= dmg
+					var entry: Dictionary = {"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true}
+					log.append(entry)
+					await _animate_live_entry(entry)
+					# show player HP drop immediately
+					_refresh_gauges_only()
+					continue
+				var target_card: Card = target["card"]
+				var target_sq: Square = target["square"]
+				var actual_dmg: int = dmg
+				if target_card is Unit and (target_card as Unit).Flying and not unit.HasRange:
+					actual_dmg = int(actual_dmg / 2)
+					if actual_dmg < 1:
+						actual_dmg = 1
+				if target_card is Unit:
+					(target_card as Unit).HitPoints -= actual_dmg
+				elif target_card is Building:
+					(target_card as Building).HitPoints -= actual_dmg
+				if unit is FighterJet:
+					state._apply_fighter_splash(defender, target_sq, actual_dmg)
+				state._apply_special_effect(unit, target_card)
+				var entry2: Dictionary = {"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": actual_dmg, "is_direct": false}
+				log.append(entry2)
+				await _animate_live_entry(entry2)
+				state._resolve_deaths(defender)
+				# reflect HP bars, card HP/INC labels, and deaths immediately
+				_refresh_gauges_only()
+				_refresh_boards_only()
+				# if target died already handled, next iteration picks new alive target
+			state._resolve_deaths(defender)
+			_refresh_gauges_only()
+			_refresh_boards_only()
+	return log
+
+func _animate_live_entry(entry: Dictionary):
+	var attacker_sq: Square = entry["attacker_sq"]
+	var attacker_player: Player = entry["attacker_player"]
+	var defender: Player = entry["defender"]
+	var target_sq: Square = entry["target_sq"]
+	var dmg: int = entry["damage"]
+	var is_direct: bool = entry["is_direct"]
+	var attacker_card: Card = entry["attacker"]
+	var target_card: Card = entry["target"]
+	var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
+	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
+	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
+	if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
+		if atk_btn != null:
+			_spawn_special_effect(atk_btn, "barracks_aura")
+	if atk_btn != null:
+		var tw := create_tween()
+		tw.tween_property(atk_btn, "scale", Vector2(1.08, 1.08), 0.12)
+		tw.tween_property(atk_btn, "modulate", Color(1, 0.95, 0.4), 0.12)
+		tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.12)
+		tw.tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.12)
+		message_label.text = "%s attacks %s for %d" % [attacker_card.card_name, "HP" if is_direct else target_card.card_name, dmg]
+	await get_tree().create_timer(0.22).timeout
+	if is_direct:
+		if tgt_hp_bar != null:
+			var tw2 := create_tween()
+			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 0.4, 0.4), 0.12)
+			tw2.tween_property(tgt_hp_bar, "modulate", Color(1, 1, 1), 0.12)
+			_spawn_damage_number(tgt_hp_bar, dmg)
+	else:
+		if tgt_btn != null:
+			var tw2 := create_tween()
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 0.35, 0.35), 0.10)
+			tw2.tween_property(tgt_btn, "position", tgt_btn.position + Vector2(4, 0), 0.05)
+			tw2.tween_property(tgt_btn, "position", tgt_btn.position, 0.05)
+			tw2.tween_property(tgt_btn, "modulate", Color(1, 1, 1), 0.10)
+			_spawn_damage_number(tgt_btn, dmg)
+			if attacker_card is FighterJet:
+				var adj_sqs: Array = _get_adjacent_squares(defender, target_sq)
+				for adj_sq in adj_sqs:
+					var adj_btn: Button = _get_button_for_square(defender, adj_sq)
+					if adj_btn != null and adj_sq.Inhabitant != null:
+						_spawn_special_effect(adj_btn, "fighter_jet_splash")
+						# splash damage number on adjacent (same dmg)
+						_spawn_damage_number(adj_btn, dmg)
+				_spawn_special_effect(tgt_btn, "fighter_jet_splash")
+	await get_tree().create_timer(0.32).timeout
 
 func _get_button_for_square(player: Player, square: Square) -> Button:
 	var container: GridContainer = ai_board_container if player == ai_player else player_board_container
@@ -1477,18 +1638,24 @@ func _spawn_special_effect(anchor: Control, kind: String):
 			create_tween().tween_callback(func(t: Texture2D = tex): if is_instance_valid(spr): spr.texture = t).set_delay(delay)
 
 func _spawn_damage_number(anchor: Control, dmg: int):
+	if anchor == null or not is_instance_valid(anchor):
+		return
 	var lbl := Label.new()
 	lbl.text = "-%d" % dmg
 	lbl.add_theme_font_size_override("font_size", 36)
 	lbl.add_theme_color_override("font_color", Color(1, 0.25, 0.25))
 	lbl.z_index = 100
-	# Place over anchor
-	anchor.add_child(lbl)
-	lbl.position = Vector2(anchor.size.x * 0.5 - 10, -8)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Overlay on GameController so board refresh doesn't free the label mid-tween
+	add_child(lbl)
+	var anchor_rect: Rect2 = anchor.get_global_rect()
+	var center: Vector2 = anchor_rect.get_center()
+	var local_center: Vector2 = center - get_global_rect().position
+	lbl.position = local_center + Vector2(-10, -8)
 	var tw := create_tween()
 	tw.tween_property(lbl, "position", lbl.position + Vector2(0, -18), 0.45)
 	tw.parallel().tween_property(lbl, "modulate", Color(1, 0.25, 0.25, 0), 0.45)
-	tw.tween_callback(func(): lbl.queue_free())
+	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
 
 func _inspect_pile(title: String, pile: Array):
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
