@@ -1100,7 +1100,7 @@ func _refresh_hand():
 	for idx in range(human.Hand.size()):
 		var card: Card = human.Hand[idx]
 		var btn := Button.new()
-		btn.clip_contents = true
+		btn.clip_contents = false
 		btn.custom_minimum_size = Vector2(108, 68)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1113,10 +1113,10 @@ func _refresh_hand():
 			hp = (card as Building).HitPoints
 			extra = "INC %d" % (card as Building).Income
 		btn.text = ""
-		# Right-side layout: sprite left | details right, clipped to prevent overflow (48x48 art fits 108x68)
+		# Right-side layout: sprite left | details right - income always visible
 		var hand_hbox := HBoxContainer.new()
 		hand_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hand_hbox.clip_contents = true
+		hand_hbox.clip_contents = false
 		hand_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		hand_hbox.add_theme_constant_override("separation", 4)
 		hand_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1129,7 +1129,7 @@ func _refresh_hand():
 		hand_hbox.add_child(hand_anim)
 		var details := VBoxContainer.new()
 		details.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		details.clip_contents = true
+		details.clip_contents = false
 		details.alignment = BoxContainer.ALIGNMENT_CENTER
 		details.add_theme_constant_override("separation", 1)
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1188,22 +1188,27 @@ func _refresh_hand():
 		else:
 			var h_inc_icon := TextureRect.new()
 			h_inc_icon.texture = load("res://Assets/UI/income_icon.png") as Texture2D
-			h_inc_icon.custom_minimum_size = Vector2(10, 10)
+			h_inc_icon.custom_minimum_size = Vector2(14, 14)
 			h_inc_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			h_inc_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			h_inc_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			h_inc_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h_inc_icon.modulate = Color(1,1,1,1)
 			hand_stats.add_child(h_inc_icon)
 			var h_inc := Label.new()
 			h_inc.text = "%d" % (card as Building).Income
-			h_inc.add_theme_font_size_override("font_size", 14)
+			h_inc.add_theme_font_size_override("font_size", 16)
 			h_inc.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 			h_inc.add_theme_color_override("font_color", Color(1, 1, 1))
+			h_inc.modulate = Color(1,1,1,1)
 			h_inc.clip_contents = false
 			h_inc.autowrap_mode = TextServer.AUTOWRAP_OFF
 			h_inc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 			h_inc.custom_minimum_size = Vector2(0, 16)
+			h_inc.visible = true
 			hand_stats.add_child(h_inc)
+			hand_stats.modulate = Color(1,1,1,1)
+			details.modulate = Color(1,1,1,1)
 		details.add_child(hand_stats)
 		var hand_costs := HBoxContainer.new()
 		hand_costs.alignment = BoxContainer.ALIGNMENT_BEGIN
