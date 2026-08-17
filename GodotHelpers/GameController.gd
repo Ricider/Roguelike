@@ -64,7 +64,7 @@ var preview_built: bool = false
 
 func _ready():
 	human = Player.new(100, 100, 20)
-	ai_player = AIPlayer.new(100, 100, 20)
+	ai_player = AIPlayer.new(100, 120, 10)
 	human.DrawPile = CardFactory.make_starting_deck()
 	ai_player.DrawPile = CardFactory.make_insurgents_deck()
 	state = CombatState.new(human, ai_player)

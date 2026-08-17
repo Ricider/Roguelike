@@ -38,6 +38,7 @@ class Unit (Cards):
     HitPoints: int
     Damage: int
     HasRange: bool
+    Flying: bool
     
     MoneyCost: int
     BioCost: int
@@ -72,38 +73,62 @@ Assets
 ### Unit Cards ###
 
 Card: Infantry
-    Hp: 10
+    Hp: 12
     Damage: 2
     HasRange: false
+    Flying: false
     
     MoneyCost: 5
     BioCost: 15
 
 Card: Tank
-    Hp: 20
-    Damage: 6
+    Hp: 25
+    Damage: 8
     HasRange: false
+    Flying: false
     
     MoneyCost: 25
     BioCost: 10
 
 Card: Artilery
-    Hp: 8
-    Damage: 6
+    Hp: 12
+    Damage: 8
     HasRange: true
+    Flying: false
     
     MoneyCost: 20
-    BioCost: 6
+    BioCost: 8
 
 Card: Rocket Launcher
-    Hp: 8
+    Hp: 12
     Damage: 2
     HasRange: true
+    Flying: false
     
     MoneyCost: 25
-    BioCost: 4
+    BioCost: 5
 
     SpecialEffect: attacks 4 times every Combat Phase
+
+Card: Drone
+    Hp: 6
+    Damage: 3
+    HasRange: false
+    Flying: true
+    
+    MoneyCost: 5
+    BioCost: 0
+
+Card: Fighter Jet
+    Hp: 14
+    Damage: 6
+    HasRange: true
+    Flying: true
+    
+    MoneyCost: 35
+    BioCost: 5
+
+    SpecialEffect: Also damages tiles adjacent to where it hit
 
 ### Building Cards ###
 
@@ -148,7 +173,7 @@ Player: JohnDoe
     BioSupply=100
     MoneySupply=20
 
-    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Rocket Launcher, 2 Factory, 2 Housing, 1 Barrack]
+    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Rocket Launcher, 2 Factory, 2 Housing, 1 Barrack, 2 Fighter Jet]
     DiscardPile: []
     Hand: []
 
@@ -156,10 +181,10 @@ Player: Insurgents
     HitPoints=100
     Board=Empty
 
-    BioSupply=100
-    MoneySupply=20
+    BioSupply=120
+    MoneySupply=10
 
-    DrawPile: [8 wall, 5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack]
+    DrawPile: [8 wall, 5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack, 8 Drones]
     DiscardPile: []
     Hand: []
 
@@ -185,6 +210,7 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 - Game Plays in Autochess format in a one versus one format. 
 - At the end of each players turn all of their cards that have a damage deal their damage to a random enemy prioritizing the closest enemy.
 - If a card has HasRange to true then it can randomly attack any random enemy instead of being forced to attack one in the closest row
+- If a card has Flying set to true then it takes half damage from enemies without HasRange set to true
 - If a card has a special effect defined it is applied during the combat phase after the damage is calculated
 - Whenever a card is destroyed the original BioSupply that was paid to play it gets deduced from the owning players hp
 - When a card dies it goes into the graveyard, where it can only be brought back by card effects

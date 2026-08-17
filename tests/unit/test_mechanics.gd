@@ -5,7 +5,7 @@ extends GutTest
 
 func test_cardfactory_deck_composition():
 	var deck: Array = CardFactory.make_starting_deck()
-	assert_eq(deck.size(), 33, "deck size 33 per spec [10 Wall,10I,3T,3A,2 Rocket Launcher,2F,2H,1B]")
+	assert_eq(deck.size(), 35, "deck size 35 per spec [10 Wall,10I,3T,3A,2 Rocket Launcher,2F,2H,1B,2 Fighter Jet]")
 	var c := {}
 	for card in deck:
 		c[card.card_name] = c.get(card.card_name, 0) + 1
@@ -17,6 +17,7 @@ func test_cardfactory_deck_composition():
 	assert_eq(c.get("Factory", 0), 2, "Factory x2")
 	assert_eq(c.get("Barracks", 0), 1, "Barracks x1")
 	assert_eq(c.get("Housing", 0), 2, "Housing x2")
+	assert_eq(c.get("Fighter Jet", 0), 2, "Fighter Jet x2")
 
 func test_player_economy_basic():
 	var p := Player.new(100, 100, 20)

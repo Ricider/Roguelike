@@ -42,12 +42,21 @@ func combat_phase() -> Array:
 					continue
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
+				var actual_dmg: int = dmg
+				# Flying: half damage from non-ranged attackers
+				if target_card is Unit and (target_card as Unit).Flying and not unit.HasRange:
+					actual_dmg = int(actual_dmg / 2)
+					if actual_dmg < 1:
+						actual_dmg = 1
 				if target_card is Unit:
-					(target_card as Unit).HitPoints -= dmg
+					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:
-					(target_card as Building).HitPoints -= dmg
+					(target_card as Building).HitPoints -= actual_dmg
+				# Fighter Jet splash: also damages tiles adjacent to where it hit
+				if unit is FighterJet:
+					_apply_fighter_splash(defender, target_sq, actual_dmg)
 				_apply_special_effect(unit, target_card)
-				log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": dmg, "is_direct": false})
+				log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": actual_dmg, "is_direct": false})
 				# if target died, allow next hit to pick new target (if remaining attacks)
 				if target_card is Unit and (target_card as Unit).HitPoints <= 0:
 					_resolve_deaths(defender)
@@ -55,6 +64,46 @@ func combat_phase() -> Array:
 					_resolve_deaths(defender)
 		_resolve_deaths(defender)
 	return log
+
+func _apply_fighter_splash(defender: Player, center_sq: Square, dmg: int):
+	var pos = _find_square_pos(defender, center_sq)
+	if pos == null:
+		return
+	var cr: int = pos["r"]
+	var cc: int = pos["c"]
+	for dr in [-1, 0, 1]:
+		for dc in [-1, 0, 1]:
+			if dr == 0 and dc == 0:
+				continue
+			var nr: int = cr + dr
+			var nc: int = cc + dc
+			if nr < 0 or nr >= defender.Board.size():
+				continue
+			if nc < 0 or nc >= 10:
+				continue
+			var sq: Square = (defender.Board[nr] as Row).Squares[nc]
+			if sq.Inhabitant == null:
+				continue
+			var adj: Card = sq.Inhabitant
+			var adj_dmg: int = dmg
+			if adj is Unit and (adj as Unit).Flying and false: # splash is from ranged FighterJet, so flying halved only if needed? keep same
+				pass
+			if adj is Unit:
+				# splash also respects Flying half-damage if splash source is considered ranged (FighterJet HasRange true, so no halving)
+				(adj as Unit).HitPoints -= adj_dmg
+			elif adj is Building:
+				(adj as Building).HitPoints -= adj_dmg
+			if adj is Unit and (adj as Unit).HitPoints <= 0:
+				_resolve_deaths(defender)
+			elif adj is Building and (adj as Building).HitPoints <= 0:
+				_resolve_deaths(defender)
+
+func _find_square_pos(player: Player, sq: Square):
+	for r in range(player.Board.size()):
+		for c in range(player.Board[r].Squares.size()):
+			if player.Board[r].Squares[c] == sq:
+				return {"r": r, "c": c}
+	return null
 
 func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
 	return unit.Damage + Barracks.bonus_if_adjacent(player, square)
