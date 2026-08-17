@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://broguelike_main"]
+[gd_scene load_steps=3 format=3 uid="uid://broguelike_main"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_abc"]
+[ext_resource type="Texture2D" path="res://Assets/UI/main_menu_bg.png" id="2_bg"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -11,14 +12,25 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_abc")
 
-[node name="BG" type="ColorRect" parent="."]
+[node name="BG" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.04, 0.04, 0.08, 1)
+texture = ExtResource("2_bg")
+expand_mode = 3
+stretch_mode = 0
+
+[node name="BGOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.04, 0.08, 0.55)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1

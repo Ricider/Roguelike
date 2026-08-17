@@ -46,29 +46,11 @@ func _build_player_chooser():
 		btn.custom_minimum_size = Vector2(160, 64)
 		btn.add_theme_font_size_override("font_size", 14)
 		btn.add_theme_color_override("font_color", Color(1,1,1))
-		# State Troops recommended border
-		if name == "State Troops":
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.18,0.18,0.22,1)
-			sb.border_color = Color(1,0.85,0.2,1)
-			sb.set_border_width_all(3)
-			sb.set_corner_radius_all(8)
-			sb.content_margin_left = 6
-			sb.content_margin_right = 6
-			sb.content_margin_top = 4
-			sb.content_margin_bottom = 4
-			btn.add_theme_stylebox_override("normal", sb)
-			var sb_hover := StyleBoxFlat.new()
-			sb_hover.bg_color = Color(0.22,0.22,0.28,1)
-			sb_hover.border_color = Color(1,0.9,0.4,1)
-			sb_hover.set_border_width_all(3)
-			sb_hover.set_corner_radius_all(8)
-			btn.add_theme_stylebox_override("hover", sb_hover)
 		btn.pressed.connect(func(): _select_player(name))
 		_player_buttons[name] = btn
 		row.add_child(btn)
 	var hint := Label.new()
-	hint.text = "State Troops (recommended) — Middle Eastern town"
+	hint.text = "State Troops recommended"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(1,0.85,0.3))
@@ -88,6 +70,40 @@ func _select_player(name: String):
 		var b: Button = _player_buttons[n]
 		b.modulate = Color(1,1,1,1) if n == name else Color(1,1,1,0.7)
 		b.button_pressed = (n == name)
+		# Yellow bounding box follows selected option
+		if n == name:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.18,0.18,0.22,1)
+			sb.border_color = Color(1,0.85,0.2,1)
+			sb.set_border_width_all(3)
+			sb.set_corner_radius_all(8)
+			sb.content_margin_left = 6
+			sb.content_margin_right = 6
+			sb.content_margin_top = 4
+			sb.content_margin_bottom = 4
+			b.add_theme_stylebox_override("normal", sb)
+			var sb_hover := StyleBoxFlat.new()
+			sb_hover.bg_color = Color(0.22,0.22,0.28,1)
+			sb_hover.border_color = Color(1,0.9,0.4,1)
+			sb_hover.set_border_width_all(3)
+			sb_hover.set_corner_radius_all(8)
+			b.add_theme_stylebox_override("hover", sb_hover)
+			b.add_theme_stylebox_override("pressed", sb)
+			b.add_theme_stylebox_override("focus", sb)
+		else:
+			var sb_off := StyleBoxFlat.new()
+			sb_off.bg_color = Color(0.12,0.12,0.16,1)
+			sb_off.border_color = Color(0,0,0,0)
+			sb_off.set_border_width_all(0)
+			sb_off.set_corner_radius_all(8)
+			sb_off.content_margin_left = 6
+			sb_off.content_margin_right = 6
+			sb_off.content_margin_top = 4
+			sb_off.content_margin_bottom = 4
+			b.add_theme_stylebox_override("normal", sb_off)
+			b.add_theme_stylebox_override("hover", sb_off)
+			b.add_theme_stylebox_override("pressed", sb_off)
+			b.add_theme_stylebox_override("focus", sb_off)
 	# Subtitle stays as title, do not show BackgroundImage text per spec
 
 func _on_play_pressed():
