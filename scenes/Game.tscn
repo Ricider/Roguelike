@@ -10,6 +10,9 @@
 [ext_resource type="Texture2D" path="res://Assets/UI/bio_icon.png" id="8_bioicon"]
 [ext_resource type="Texture2D" path="res://Assets/UI/money_icon.png" id="9_moneyicon"]
 [ext_resource type="Texture2D" path="res://Assets/UI/card_back.png" id="10_cardback"]
+[ext_resource type="Texture2D" path="res://Assets/Players/JohnDoe/flag.png" id="11_flag_john"]
+[ext_resource type="Texture2D" path="res://Assets/Players/Euro Army/flag.png" id="12_flag_euro"]
+[ext_resource type="Texture2D" path="res://Assets/Players/Insurgents/flag.png" id="13_flag_ins"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -71,12 +74,23 @@ size_flags_horizontal = 0
 size_flags_vertical = 3
 alignment = 0
 
-[node name="AILabel" type="Label" parent="VBox/MainHBox/LeftGauges"]
-custom_minimum_size = Vector2(0, 14)
+[node name="AIHeader" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]
 layout_mode = 2
-text = "Insurgents"
+alignment = 1
+
+[node name="AIFlag" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIHeader"]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+texture = ExtResource("12_flag_euro")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="AILabel" type="Label" parent="VBox/MainHBox/LeftGauges/AIHeader"]
+layout_mode = 2
+text = "Euro Army"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 22
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGauges" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]
@@ -239,12 +253,23 @@ custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="PlayerLabel" type="Label" parent="VBox/MainHBox/LeftGauges"]
-custom_minimum_size = Vector2(0, 14)
+[node name="PlayerHeader" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]
+layout_mode = 2
+alignment = 1
+
+[node name="PlayerFlag" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerHeader"]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+texture = ExtResource("11_flag_john")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 0
+
+[node name="PlayerLabel" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerHeader"]
 layout_mode = 2
 text = "JohnDoe"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 22
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGauges" type="HBoxContainer" parent="VBox/MainHBox/LeftGauges"]

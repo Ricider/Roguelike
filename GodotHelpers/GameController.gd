@@ -17,6 +17,10 @@ var selected_card_idx: int = -1
 @onready var ai_board_container: GridContainer = $VBox/MainHBox/RightContent/AIBoard
 @onready var player_board_container: GridContainer = $VBox/MainHBox/RightContent/PlayerBoard
 @onready var hand_container: HBoxContainer = $VBox/MainHBox/RightContent/Hand
+@onready var ai_label: Label = $VBox/MainHBox/LeftGauges/AIHeader/AILabel
+@onready var player_label: Label = $VBox/MainHBox/LeftGauges/PlayerHeader/PlayerLabel
+@onready var ai_flag: TextureRect = $VBox/MainHBox/LeftGauges/AIHeader/AIFlag
+@onready var player_flag: TextureRect = $VBox/MainHBox/LeftGauges/PlayerHeader/PlayerFlag
 @onready var end_turn_btn: Button = $VBox/MainHBox/RightContent/Controls/EndTurn
 @onready var menu_btn: Button = $VBox/MainHBox/RightContent/Controls/MenuBtn
 @onready var ai_hp_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHP
@@ -63,10 +67,15 @@ var preview_popup: PanelContainer
 var preview_built: bool = false
 
 func _ready():
-	human = Player.new(100, 100, 20)
-	ai_player = AIPlayer.new(100, 120, 10)
+	human = Player.new(100, 100, 20, 0, "JohnDoe")
+	# Enemy is Euro Army per updated spec (was Insurgents)
+	ai_player = CardFactory.make_euro_army_player()
+	# Fallback: if called via manual AIPlayer still set display names
+	human.display_name = "JohnDoe"
+	ai_player.display_name = "Euro Army"
 	human.DrawPile = CardFactory.make_starting_deck()
-	ai_player.DrawPile = CardFactory.make_insurgents_deck()
+	# Euro Army deck already set in factory, but ensure shuffle
+	# Keep Euro Army board placement (2 Housing +1 Factory already placed)
 	state = CombatState.new(human, ai_player)
 	end_turn_btn.pressed.connect(_on_end_turn)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
@@ -319,6 +328,19 @@ func _refresh_ui():
 	player_info.text = ""
 	ai_info.visible = false
 	player_info.visible = false
+	# Update flag art and labels for players (custom flags)
+	if ai_label != null:
+		ai_label.text = ai_player.display_name if ai_player.display_name != "" else "Euro Army"
+	if player_label != null:
+		player_label.text = human.display_name if human.display_name != "" else "JohnDoe"
+	if ai_flag != null:
+		var euro_tex := load("res://Assets/Players/Euro Army/flag.png") as Texture2D
+		if euro_tex != null:
+			ai_flag.texture = euro_tex
+	if player_flag != null:
+		var john_tex := load("res://Assets/Players/JohnDoe/flag.png") as Texture2D
+		if john_tex != null:
+			player_flag.texture = john_tex
 	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income()
 	var p_income: int = human.total_money_income()

@@ -10,6 +10,7 @@ class GameObject(GameObject):
 class Player(GameObject):
     HitPoints: int
     Board: Row[4]
+    Difficulty: int
 
     BioSupply: int
     MoneySupply: int
@@ -169,22 +170,36 @@ Card: Wall
 Player: JohnDoe
     HitPoints=100
     Board=Empty
+    Difficulty=0
 
     BioSupply=100
     MoneySupply=20
 
-    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Rocket Launcher, 2 Factory, 2 Housing, 1 Barrack, 2 Fighter Jet]
+    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack]
     DiscardPile: []
     Hand: []
 
 Player: Insurgents
     HitPoints=100
     Board=Empty
+    Difficulty=1
 
     BioSupply=120
     MoneySupply=10
 
-    DrawPile: [8 wall, 5 Infantry, 2 Tank, 2 Artillery, 2 Factory, 2 Housing, 1 Barrack, 8 Drones]
+    DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack]
+    DiscardPile: []
+    Hand: []
+
+Player: Euro Army
+    Difficulty=2
+    HitPoints=60
+    Board= 2 Housing and 1 Factory randomly placed at back row
+
+    BioSupply=80
+    MoneySupply=50
+
+    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
     DiscardPile: []
     Hand: []
 
