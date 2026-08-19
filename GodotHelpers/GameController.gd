@@ -302,8 +302,7 @@ func _setup_gauge_and_influence_hovers():
 		if node.has_meta("hover_bound"):
 			return
 		node.set_meta("hover_bound", true)
-		# use native tooltip as fallback + custom hover popup
-		node.tooltip_text = text
+		# single custom hover popup only (no native single-line tooltip)
 		var t: String = text
 		node.mouse_entered.connect(func(): _show_hover(t))
 		node.mouse_exited.connect(func(): _hide_hover())
@@ -320,12 +319,22 @@ func _setup_gauge_and_influence_hovers():
 	bind.call(p_hp_box, hp_tip)
 	bind.call(p_bio_box, bio_tip)
 	bind.call(p_money_box, money_tip)
-	# Also bind icons/bars themselves so hover works even if container has gaps
-	for n in [ai_hp_box, ai_bio_box, ai_money_box, p_hp_box, p_bio_box, p_money_box]:
+	# Also bind icons/bars themselves so hover works even if container has gaps — per-gauge tip
+	var gauge_pairs: Array = [
+		[ai_hp_box, "AI " + hp_tip],
+		[ai_bio_box, "AI " + bio_tip],
+		[ai_money_box, "AI " + money_tip],
+		[p_hp_box, hp_tip],
+		[p_bio_box, bio_tip],
+		[p_money_box, money_tip],
+	]
+	for pair in gauge_pairs:
+		var n: Control = pair[0] as Control
+		var tip: String = pair[1] as String
 		if n != null:
 			for child in n.get_children():
 				if child is Control:
-					bind.call(child as Control, (child.get_parent() as Control).tooltip_text if (child.get_parent() as Control).tooltip_text != "" else hp_tip)
+					bind.call(child as Control, tip)
 	# Influence symbol (icon + value) — bind to the whole InfluenceBox
 	var left := get_node_or_null("VBox/MainHBox/LeftGauges") as Control
 	var bottom_row := left.get_node_or_null("BottomRow") as Control if left != null else null
@@ -1564,14 +1573,8 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var _card_prev: Card = card
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
 				btn.mouse_exited.connect(func(): _hide_card_preview())
-				# Hover for special effect — skip Housing (preview already shows identical text)
-				if card.SpecialEffect != "" and card.card_name != "Housing":
-					btn.tooltip_text = card.SpecialEffect
-					var _eff_txt: String = card.SpecialEffect
-					btn.mouse_entered.connect(func(): _show_hover(_eff_txt))
-					btn.mouse_exited.connect(func(): _hide_hover())
-				else:
-					btn.tooltip_text = ""
+				# No separate hover tooltip for cards — preview already shows effect
+				btn.tooltip_text = ""
 				# Keep enabled so hover shows (occupied squares are not clickable anyway)
 				btn.disabled = false
 				btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1737,14 +1740,8 @@ func _refresh_hand():
 		var _hand_prev: Card = card
 		btn.mouse_entered.connect(func(): _show_card_preview(_hand_prev))
 		btn.mouse_exited.connect(func(): _hide_card_preview())
-		# Hover — skip Housing (preview already shows identical text)
-		if card.SpecialEffect != "" and card.card_name != "Housing":
-			btn.tooltip_text = card.SpecialEffect
-			var _eff2_txt: String = card.SpecialEffect
-			btn.mouse_entered.connect(func(): _show_hover(_eff2_txt))
-			btn.mouse_exited.connect(func(): _hide_hover())
-		else:
-			btn.tooltip_text = ""
+		# No separate hover tooltip for cards — preview already shows effect
+		btn.tooltip_text = ""
 		btn.add_child(hand_hbox)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 1, 1)
