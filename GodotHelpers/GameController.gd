@@ -1306,17 +1306,6 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				anim.custom_minimum_size = Vector2(128, 128)
 				anim.z_index = 1
 				left_vbox.add_child(anim)
-				var name_lbl := Label.new()
-				name_lbl.text = card.card_name
-				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				name_lbl.add_theme_font_size_override("font_size", 14)
-				name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-				name_lbl.clip_contents = true
-				name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-				name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-				name_lbl.custom_minimum_size = Vector2(0, 9)
-				name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				left_vbox.add_child(name_lbl)
 				outer_hbox.add_child(left_vbox)
 				# Right side: health / damage / income vertically stacked
 				var right_vbox := VBoxContainer.new()
