@@ -798,8 +798,11 @@ func _continue_from_shop():
 	shop_popup.visible = false
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null and gs.run_started:
-		# Clear boards for fresh battle — human board cleared, ai old board irrelevant
-		_clear_board(human)
+		# Reset player deck/bio/money/board at start of each different encounter per request
+		# _clear_board(human) is now handled via reset_player_for_new_encounter (clears and repopulates starting board)
+		gs.reset_player_for_new_encounter()
+		# Sync local human reference to GameState's run_player (in case instance was replaced)
+		human = gs.run_player
 		# Do not clear next_enemy's board (it has starting placements); old ai_player board already empty after death
 		var next_enemy: AIPlayer = gs.get_current_enemy()
 		if next_enemy != null:

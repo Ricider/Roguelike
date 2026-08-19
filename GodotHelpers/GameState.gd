@@ -86,6 +86,35 @@ func advance_enemy():
 	shop_remove_used = false
 	shop_offer = CardFactory.random_shop_offer()
 
+func reset_player_for_new_encounter():
+	if run_player == null:
+		return
+	var template: Player = make_player_by_name(selected_player_name, true)
+	# Preserve HitPoints, Influence, display_name, Difficulty, BackgroundImage
+	# Reset Bio/Mmoney to starting spec
+	run_player.BioSupply = template.BioSupply
+	run_player.MoneySupply = template.MoneySupply
+	# Reset Board: clear current and copy starting placements (Horde damaged 5, etc.)
+	for row in run_player.Board:
+		for sq in row.Squares:
+			sq.clear()
+	for r in range(template.Board.size()):
+		for c in range(template.Board[r].Squares.size()):
+			var card: Card = template.Board[r].Squares[c].Inhabitant
+			if card != null:
+				# Move the card instance from template (template will be freed, so no duplication needed)
+				# Need to ensure same card type and same HP (e.g., Horde 5 HP). Directly place the instance.
+				run_player.Board[r].Squares[c].place(card)
+				# Clear template square so it doesn't double-free (not needed but keep clean)
+				template.Board[r].Squares[c].clear()
+	# Reset deck piles to starting deck (fresh shuffled). Shop modifications are intentionally discarded per encounter reset request.
+	# Duplicate array to avoid sharing reference with template
+	run_player.DrawPile = template.DrawPile.duplicate()
+	run_player.DrawPile.shuffle()
+	run_player.DiscardPile.clear()
+	run_player.Hand.clear()
+	run_player.Graveyard.clear()
+
 func is_run_complete() -> bool:
 	return run_enemy_index >= run_enemies.size()
 
