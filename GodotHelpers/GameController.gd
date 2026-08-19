@@ -115,6 +115,93 @@ func _style_round_button(btn: Button, primary: bool = true):
 	if not primary:
 		btn.add_theme_color_override("font_color", Color(0.92,0.92,0.95))
 
+func _move_player_piles_to_bottom():
+	# Bottom-right vertical: hide opponent piles, keep player discard/graveyard vertically
+	var right_content = get_node_or_null("VBox/MainHBox/RightContent")
+	var right_gauges = get_node_or_null("VBox/MainHBox/RightGauges")
+	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges")
+	if right_gauges == null:
+		return
+	# Hide opponent piles: AIDeck (left), AIDiscard, AIGraveyard (right)
+	if left_gauges != null:
+		var ai_deck = left_gauges.get_node_or_null("AIDeck")
+		if ai_deck != null:
+			ai_deck.visible = false
+	var ai_discard = right_gauges.get_node_or_null("AIDiscard")
+	if ai_discard != null:
+		ai_discard.visible = false
+	var ai_graveyard = right_gauges.get_node_or_null("AIGraveyard")
+	if ai_graveyard != null:
+		ai_graveyard.visible = false
+	# Clean up old centered bottom container if it exists from previous bottom-center version
+	if right_content != null:
+		var old_bottom = right_content.get_node_or_null("PlayerPilesBottom")
+		if old_bottom != null:
+			for child in old_bottom.get_children():
+				if child.name == "PlayerDiscard" or child.name == "PlayerGraveyard":
+					old_bottom.remove_child(child)
+					right_gauges.add_child(child)
+			old_bottom.queue_free()
+	var player_discard = right_gauges.get_node_or_null("PlayerDiscard")
+	var player_graveyard = right_gauges.get_node_or_null("PlayerGraveyard")
+	if player_discard == null:
+		if right_content != null:
+			var ob = right_content.get_node_or_null("PlayerPilesBottom")
+			if ob != null:
+				player_discard = ob.get_node_or_null("PlayerDiscard")
+	if player_graveyard == null:
+		if right_content != null:
+			var ob = right_content.get_node_or_null("PlayerPilesBottom")
+			if ob != null:
+				player_graveyard = ob.get_node_or_null("PlayerGraveyard")
+	if player_discard == null or player_graveyard == null:
+		return
+	# Ensure RightGauges pushes player piles to bottom: add expanding spacer at top if missing
+	var top_spacer = right_gauges.get_node_or_null("TopPushSpacer")
+	if top_spacer == null:
+		top_spacer = Control.new()
+		top_spacer.name = "TopPushSpacer"
+		top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		top_spacer.custom_minimum_size = Vector2(0, 0)
+		right_gauges.add_child(top_spacer)
+		right_gauges.move_child(top_spacer, 0)
+	# Create bottom-right vertical column inside RightGauges
+	var bottom = right_gauges.get_node_or_null("PlayerPilesBottomRight")
+	if bottom == null:
+		bottom = VBoxContainer.new()
+		bottom.name = "PlayerPilesBottomRight"
+		bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+		bottom.add_theme_constant_override("separation", 8)
+		bottom.custom_minimum_size = Vector2(124, 0)
+		right_gauges.add_child(bottom)
+	# Ensure bottom is last and visible
+	bottom.visible = true
+	right_gauges.move_child(bottom, right_gauges.get_child_count() - 1)
+	if player_discard.get_parent() != bottom:
+		var old_p = player_discard.get_parent()
+		if old_p != null:
+			old_p.remove_child(player_discard)
+		bottom.add_child(player_discard)
+		player_discard.visible = true
+	if player_graveyard.get_parent() != bottom:
+		var old_p2 = player_graveyard.get_parent()
+		if old_p2 != null:
+			old_p2.remove_child(player_graveyard)
+		bottom.add_child(player_graveyard)
+		player_graveyard.visible = true
+	# Also ensure player deck (draw) stays visible on left as HQ
+	if left_gauges != null:
+		var pd = left_gauges.get_node_or_null("PlayerDeck")
+		if pd != null:
+			pd.visible = true
+	# Hide old spacer and discard label gaps
+	var spacer = right_gauges.get_node_or_null("Spacer2")
+	if spacer != null:
+		spacer.visible = false
+	var disc_lbl = right_gauges.get_node_or_null("DiscardLabel")
+	if disc_lbl != null:
+		disc_lbl.visible = false
+
 func _clear_board(player: Player):
 	for row in player.Board:
 		for sq in row.Squares:
@@ -163,6 +250,7 @@ func _ready():
 	player_graveyard_icon.pressed.connect(func(): _inspect_pile("Your Graveyard", human.Graveyard))
 	ai_graveyard_icon.pressed.connect(func(): _inspect_pile("AI Graveyard", ai_player.Graveyard))
 	_start_new_round()
+	_move_player_piles_to_bottom()
 
 func _show_hover(text: String):
 	if text == "":
@@ -990,12 +1078,52 @@ func _refresh_ui():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33)
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33)
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33)
-	ai_deck_value.text = "%d/33" % ai_player.DrawPile.size()
-	player_deck_value.text = "%d/33" % human.DrawPile.size()
-	ai_discard_value.text = "%d/33" % ai_player.DiscardPile.size()
-	player_discard_value.text = "%d/33" % human.DiscardPile.size()
-	ai_graveyard_value.text = "%d/33" % ai_player.Graveyard.size()
-	player_graveyard_value.text = "%d/33" % human.Graveyard.size()
+	ai_deck_value.text = "Draw %d/33" % ai_player.DrawPile.size()
+	player_deck_value.text = "Draw %d/33" % human.DrawPile.size()
+	ai_discard_value.text = "Discard %d/33" % ai_player.DiscardPile.size()
+	player_discard_value.text = "Discard %d/33" % human.DiscardPile.size()
+	ai_graveyard_value.text = "Graveyard %d/33" % ai_player.Graveyard.size()
+	player_graveyard_value.text = "Graveyard %d/33" % human.Graveyard.size()
+	# --- Pile building stylization: HQ / Waiting Zone / Graveyard as grid tiles on right side ---
+	var hq_tex := load("res://Assets/UI/hq_building.png") as Texture2D
+	var hosp_tex := load("res://Assets/UI/waiting_zone_building.png") as Texture2D
+	var grave_tex := load("res://Assets/UI/graveyard_building.png") as Texture2D
+	for entry in [
+		[ai_deck_icon, hq_tex, false],
+		[player_deck_icon, hq_tex, true],
+		[ai_discard_icon, hosp_tex, false],
+		[player_discard_icon, hosp_tex, true],
+		[ai_graveyard_icon, grave_tex, false],
+		[player_graveyard_icon, grave_tex, true]
+	]:
+		var btn: Button = entry[0] as Button
+		var tex: Texture2D = entry[1] as Texture2D
+		var is_human: bool = entry[2] as bool
+		if btn != null and tex != null:
+			btn.icon = tex
+			btn.expand_icon = true
+			btn.custom_minimum_size = Vector2(78, 78)
+			btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			# Grid-tile look: same grey as board squares, building icon on top, count below via label
+			var bg := StyleBoxFlat.new()
+			bg.bg_color = Color(0.32,0.32,0.38,1) if is_human else Color(0.05,0.05,0.08,1)
+			bg.set_corner_radius_all(6)
+			bg.content_margin_left = 4
+			bg.content_margin_right = 4
+			bg.content_margin_top = 4
+			bg.content_margin_bottom = 4
+			bg.border_color = Color(0.6,0.6,0.7,0.6) if is_human else Color(0.3,0.3,0.35,0.5)
+			bg.set_border_width_all(1)
+			btn.add_theme_stylebox_override("normal", bg)
+			btn.add_theme_stylebox_override("hover", bg)
+			btn.add_theme_stylebox_override("pressed", bg)
+			btn.add_theme_stylebox_override("focus", bg)
+			btn.add_theme_stylebox_override("disabled", bg)
+	# Make pile bars 78 wide to sit under building tile like grid
+	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
+		bar.custom_minimum_size = Vector2(78, 8)
+		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# Pulse deck when low
 	for pair in [[ai_deck_icon, ai_player.DrawPile.size()], [player_deck_icon, human.DrawPile.size()]]:
 		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
@@ -1454,12 +1582,30 @@ func _refresh_gauges_only():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33) if human != null else 0
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33) if ai_player != null else 0
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33) if human != null else 0
-	ai_deck_value.text = "%d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
-	player_deck_value.text = "%d/33" % (human.DrawPile.size() if human != null else 0)
-	ai_discard_value.text = "%d/33" % (ai_player.DiscardPile.size() if ai_player != null else 0)
-	player_discard_value.text = "%d/33" % (human.DiscardPile.size() if human != null else 0)
-	ai_graveyard_value.text = "%d/33" % (ai_player.Graveyard.size() if ai_player != null else 0)
-	player_graveyard_value.text = "%d/33" % (human.Graveyard.size() if human != null else 0)
+	ai_deck_value.text = "Draw %d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
+	player_deck_value.text = "Draw %d/33" % (human.DrawPile.size() if human != null else 0)
+	ai_discard_value.text = "Discard %d/33" % (ai_player.DiscardPile.size() if ai_player != null else 0)
+	player_discard_value.text = "Discard %d/33" % (human.DiscardPile.size() if human != null else 0)
+	ai_graveyard_value.text = "Graveyard %d/33" % (ai_player.Graveyard.size() if ai_player != null else 0)
+	player_graveyard_value.text = "Graveyard %d/33" % (human.Graveyard.size() if human != null else 0)
+	# Keep pile buildings styled as grid tiles (also in live updates)
+	var hq_tex2 := load("res://Assets/UI/hq_building.png") as Texture2D
+	var hosp_tex2 := load("res://Assets/UI/waiting_zone_building.png") as Texture2D
+	var grave_tex2 := load("res://Assets/UI/graveyard_building.png") as Texture2D
+	for entry in [
+		[ai_deck_icon, hq_tex2, false],
+		[player_deck_icon, hq_tex2, true],
+		[ai_discard_icon, hosp_tex2, false],
+		[player_discard_icon, hosp_tex2, true],
+		[ai_graveyard_icon, grave_tex2, false],
+		[player_graveyard_icon, grave_tex2, true]
+	]:
+		var b2: Button = entry[0] as Button
+		var t2: Texture2D = entry[1] as Texture2D
+		var ih2: bool = entry[2] as bool
+		if b2 != null and t2 != null and b2.icon != t2:
+			b2.icon = t2
+			b2.custom_minimum_size = Vector2(78,78)
 	for pair in [[ai_deck_icon, ai_player.DrawPile.size() if ai_player != null else 0], [player_deck_icon, human.DrawPile.size() if human != null else 0]]:
 		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
 	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player != null and ai_player.HitPoints < 30 else Color(1,1,1)
