@@ -73,6 +73,8 @@ var debug_summon_card_option: OptionButton
 var debug_summon_target_option: OptionButton
 var shop_popup: PanelContainer
 var shop_built: bool = false
+var influence_value_label: Label
+var influence_icon_rect: TextureRect
 
 func _style_round_button(btn: Button, primary: bool = true):
 	var sb := StyleBoxFlat.new()
@@ -202,6 +204,95 @@ func _move_player_piles_to_bottom():
 	if disc_lbl != null:
 		disc_lbl.visible = false
 
+func _hide_hand_label():
+	var hl = get_node_or_null("VBox/MainHBox/RightContent/HandLabel")
+	if hl != null:
+		hl.visible = false
+		hl.text = ""
+
+func _setup_influence_at_draw_pile():
+	var left = get_node_or_null("VBox/MainHBox/LeftGauges")
+	var pd = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck")
+	if left == null or pd == null:
+		return
+	# Hide old player_info (was center)
+	var old_info = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
+	if old_info != null:
+		old_info.visible = false
+	# Create bottom row HBox at very bottom of left column, right side of draw pile
+	var bottom_row = left.get_node_or_null("BottomRow")
+	if bottom_row == null:
+		bottom_row = HBoxContainer.new()
+		bottom_row.name = "BottomRow"
+		bottom_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		bottom_row.add_theme_constant_override("separation", 10)
+		left.add_child(bottom_row)
+		# Move PlayerDeck into bottom row (keep its VBox vertical)
+		if pd.get_parent() == left:
+			left.remove_child(pd)
+			bottom_row.add_child(pd)
+		# Create influence box to the right of draw pile, at very bottom
+		var inf_box := HBoxContainer.new()
+		inf_box.name = "InfluenceBox"
+		inf_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		inf_box.add_theme_constant_override("separation", 6)
+		inf_box.custom_minimum_size = Vector2(80, 78)
+		inf_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var v_inf := VBoxContainer.new()
+		v_inf.alignment = BoxContainer.ALIGNMENT_CENTER
+		v_inf.add_theme_constant_override("separation", 2)
+		inf_box.add_child(v_inf)
+		var lbl := Label.new()
+		lbl.text = "Influence"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(1,0.92,0.5,1))
+		v_inf.add_child(lbl)
+		var h_row := HBoxContainer.new()
+		h_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		h_row.add_theme_constant_override("separation", 4)
+		v_inf.add_child(h_row)
+		influence_icon_rect = TextureRect.new()
+		influence_icon_rect.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
+		influence_icon_rect.custom_minimum_size = Vector2(28,28)
+		influence_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		influence_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		influence_icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		h_row.add_child(influence_icon_rect)
+		influence_value_label = Label.new()
+		influence_value_label.text = "%d" % human.Influence
+		influence_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		influence_value_label.add_theme_font_size_override("font_size", 26)
+		influence_value_label.add_theme_color_override("font_color", Color(1,1,1))
+		h_row.add_child(influence_value_label)
+		bottom_row.add_child(inf_box)
+	else:
+		# Already exists, just ensure influence label exists
+		var ib = bottom_row.get_node_or_null("InfluenceBox")
+		if ib != null:
+			influence_value_label = ib.get_node_or_null("VBox/HBox/Label") as Label
+			if influence_value_label == null:
+				# fallback find by recursion
+				influence_value_label = _find_influence_label(ib)
+	_refresh_influence_display()
+
+func _find_influence_label(node: Node) -> Label:
+	for c in node.get_children():
+		if c is Label and c.text != "Influence":
+			return c as Label
+		var r := _find_influence_label(c)
+		if r != null:
+			return r
+	return null
+
+func _refresh_influence_display():
+	if influence_value_label != null and is_instance_valid(influence_value_label):
+		influence_value_label.text = "%d" % human.Influence
+	# Also hide old info if still visible
+	var old_info2 = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
+	if old_info2 != null:
+		old_info2.visible = false
+
 func _clear_board(player: Player):
 	for row in player.Board:
 		for sq in row.Squares:
@@ -251,6 +342,8 @@ func _ready():
 	ai_graveyard_icon.pressed.connect(func(): _inspect_pile("AI Graveyard", ai_player.Graveyard))
 	_start_new_round()
 	_move_player_piles_to_bottom()
+	_setup_influence_at_draw_pile()
+	_hide_hand_label()
 
 func _show_hover(text: String):
 	if text == "":
@@ -1000,21 +1093,19 @@ func _start_new_round():
 
 func _refresh_ui():
 	_hide_hover()
-	# Show Influence in info labels per spec
+	_hide_hand_label()
+	# Influence now at very bottom right of draw pile — hide old labels, update new symbol
 	var gs_run = get_node_or_null("/root/GameState")
 	if ai_info != null:
 		if gs_run != null and gs_run.run_started:
 			ai_info.text = "Influence: %d | Diff %d" % [ai_player.Influence, ai_player.Difficulty]
-			ai_info.visible = true
+			ai_info.visible = false # moved to draw pile
 		else:
 			ai_info.text = ""
 			ai_info.visible = false
 	if player_info != null:
-		player_info.text = "Influence: %d" % human.Influence
-		player_info.visible = true
-	else:
-		ai_info.text = ""
-		player_info.text = ""
+		player_info.visible = false
+	_refresh_influence_display()
 	# Update flag art and labels for players (custom flags)
 	if ai_label != null:
 		ai_label.text = ai_player.display_name if ai_player.display_name != "" else "Coalition Army"
@@ -1545,6 +1636,8 @@ func _on_board_click(r: int, c: int):
 	_refresh_ui()
 
 func _refresh_gauges_only():
+	_hide_hand_label()
+	_refresh_influence_display()
 	# Vertical gauges: HP at player's max, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income() if ai_player != null else 0
 	var p_income: int = human.total_money_income() if human != null else 0
