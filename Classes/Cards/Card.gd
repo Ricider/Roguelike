@@ -49,8 +49,19 @@ func create_animated_sprite(size: Vector2) -> Control:
 	asp.animation = "idle"
 	asp.autoplay = "idle"
 	asp.centered = true
-	asp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var scale_f: float = size.x / 128.0
+	# High-res: linear with mipmaps for crisp downscale from 512 source
+	asp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	asp.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
+	var base: float = 512.0
+	# Adapt if source is still 128 (fallback) — detect via first frame size
+	var sf := get_sprite_frames()
+	if sf.get_frame_count("idle") > 0:
+		var tex: Texture2D = sf.get_frame_texture("idle", 0)
+		if tex != null:
+			base = float(tex.get_width())
+			if base < 64:
+				base = 512.0
+	var scale_f: float = size.x / base
 	asp.scale = Vector2(scale_f, scale_f)
 	asp.position = size * 0.5
 	container.add_child(asp)

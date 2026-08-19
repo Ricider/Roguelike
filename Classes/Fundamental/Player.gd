@@ -2,6 +2,7 @@ extends GameObject
 class_name Player
 
 var HitPoints: int = 100
+var MaxHitPoints: int = 100
 var Board: Array = [] # Row[4]
 var Difficulty: int = 0
 var BackgroundImage: String = ""
@@ -17,6 +18,7 @@ var display_name: String = ""
 func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = "", influence: int = 0):
 	super._init()
 	HitPoints = hp
+	MaxHitPoints = hp
 	BioSupply = bio
 	MoneySupply = money
 	Influence = influence
@@ -74,7 +76,11 @@ func economy_phase():
 	BioSupply = int(BioSupply * rate + 5 + 0.0001)
 	if BioSupply == 0:
 		BioSupply = 1
+	# Cap resources at their limits (Bio 200, Money 200, HP at player's max)
+	BioSupply = clamp(BioSupply, 0, 200)
 	MoneySupply += 10 + total_money_income()
+	MoneySupply = clamp(MoneySupply, 0, 200)
+	HitPoints = clamp(HitPoints, 0, MaxHitPoints)
 	draw_cards()
 
 func discard_hand():

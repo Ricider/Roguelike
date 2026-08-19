@@ -873,28 +873,30 @@ func _refresh_ui():
 				player_flag.texture = pt
 		elif ResourceLoader.exists("res://Assets/Players/State Troops/flag.png"):
 			player_flag.texture = load("res://Assets/Players/State Troops/flag.png") as Texture2D
-	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
+	# Vertical gauges: HP at player's max, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income()
 	var p_income: int = human.total_money_income()
 	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply
 	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply
-	# AI gauges
-	ai_hp_bar.max_value = 100
+	# AI gauges — HP max is player's MaxHitPoints
+	var ai_max_hp: int = ai_player.MaxHitPoints if ai_player != null else 100
+	var p_max_hp: int = human.MaxHitPoints if human != null else 100
+	ai_hp_bar.max_value = ai_max_hp
 	ai_bio_bar.max_value = 200
 	ai_money_bar.max_value = 200
-	player_hp_bar.max_value = 100
+	player_hp_bar.max_value = p_max_hp
 	player_bio_bar.max_value = 200
 	player_money_bar.max_value = 200
-	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, 100)
+	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, ai_max_hp)
 	ai_bio_bar.value = clamp(ai_player.BioSupply, 0, 200)
 	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 200)
-	player_hp_bar.value = clamp(human.HitPoints, 0, 100)
+	player_hp_bar.value = clamp(human.HitPoints, 0, p_max_hp)
 	player_bio_bar.value = clamp(human.BioSupply, 0, 200)
 	player_money_bar.value = clamp(human.MoneySupply, 0, 200)
-	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0), 100]
+	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0), ai_max_hp]
 	ai_bio_value.text = "%d/%d" % [max(ai_player.BioSupply, 0), 200]
 	ai_money_value.text = "%d/%d" % [max(ai_player.MoneySupply, 0), 200]
-	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), 100]
+	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), p_max_hp]
 	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0), 200]
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0), 200]
 	# Income shown right on top of symbol (white) — Money +10+buildings, Bio 10%+5+4% per Housing
@@ -1338,27 +1340,29 @@ func _on_board_click(r: int, c: int):
 	_refresh_ui()
 
 func _refresh_gauges_only():
-	# Vertical gauges: HP 0-100, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
+	# Vertical gauges: HP at player's max, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
 	var ai_income: int = ai_player.total_money_income() if ai_player != null else 0
 	var p_income: int = human.total_money_income() if human != null else 0
 	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply if ai_player != null else 0
 	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply if human != null else 0
-	ai_hp_bar.max_value = 100
+	var ai_max_hp: int = ai_player.MaxHitPoints if ai_player != null else 100
+	var p_max_hp: int = human.MaxHitPoints if human != null else 100
+	ai_hp_bar.max_value = ai_max_hp
 	ai_bio_bar.max_value = 200
 	ai_money_bar.max_value = 200
-	player_hp_bar.max_value = 100
+	player_hp_bar.max_value = p_max_hp
 	player_bio_bar.max_value = 200
 	player_money_bar.max_value = 200
-	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, 100) if ai_player != null else 0
+	ai_hp_bar.value = clamp(ai_player.HitPoints, 0, ai_max_hp) if ai_player != null else 0
 	ai_bio_bar.value = clamp(ai_player.BioSupply, 0, 200) if ai_player != null else 0
 	ai_money_bar.value = clamp(ai_player.MoneySupply, 0, 200) if ai_player != null else 0
-	player_hp_bar.value = clamp(human.HitPoints, 0, 100) if human != null else 0
+	player_hp_bar.value = clamp(human.HitPoints, 0, p_max_hp) if human != null else 0
 	player_bio_bar.value = clamp(human.BioSupply, 0, 200) if human != null else 0
 	player_money_bar.value = clamp(human.MoneySupply, 0, 200) if human != null else 0
-	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0) if ai_player != null else 0, 100]
+	ai_hp_value.text = "%d/%d" % [max(ai_player.HitPoints, 0) if ai_player != null else 0, ai_max_hp]
 	ai_bio_value.text = "%d/%d" % [max(ai_player.BioSupply, 0) if ai_player != null else 0, 200]
 	ai_money_value.text = "%d/%d" % [max(ai_player.MoneySupply, 0) if ai_player != null else 0, 200]
-	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0) if human != null else 0, 100]
+	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0) if human != null else 0, p_max_hp]
 	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0) if human != null else 0, 200]
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0) if human != null else 0, 200]
 	ai_bio_income.text = "+%d" % ai_bio_inc
@@ -1437,6 +1441,7 @@ func _execute_combat_live() -> Array:
 				var target = state._pick_target(defender, unit.HasRange, rng)
 				if target == null:
 					defender.HitPoints -= dmg
+					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)
 					var entry: Dictionary = {"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true}
 					log.append(entry)
 					await _animate_live_entry(entry)
@@ -1696,11 +1701,12 @@ func _spawn_special_effect(anchor: Control, kind: String):
 		return
 	var spr := TextureRect.new()
 	spr.texture = frames[0]
-	spr.custom_minimum_size = Vector2(96, 96)
-	spr.size = Vector2(96, 96)
+	# High-res polished: larger crisp effect (256 source downscaled with linear mipmaps)
+	spr.custom_minimum_size = Vector2(140, 140)
+	spr.size = Vector2(140, 140)
 	spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	spr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spr.modulate = Color(1,1,1,1)
 	spr.z_index = 400
@@ -1714,15 +1720,15 @@ func _spawn_special_effect(anchor: Control, kind: String):
 	var local_center: Vector2 = center - get_global_rect().position
 	spr.position = local_center - spr.size * 0.5
 	spr.pivot_offset = spr.size * 0.5
-	spr.scale = Vector2(0.6, 0.6)
-	# Pop-in + fade + scale out
+	spr.scale = Vector2(0.55, 0.55)
+	# Polished pop-in + fade + scale out — smoother cubic/back easing, high-res glow
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(spr, "scale", Vector2(1.1, 1.1), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(spr, "modulate", Color(1,1,1,1), 0.12)
+	tw.tween_property(spr, "scale", Vector2(1.08, 1.08), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(spr, "modulate", Color(1,1,1,1), 0.14)
 	tw.set_parallel(false)
-	tw.tween_property(spr, "scale", Vector2(1.35, 1.35), 0.35)
-	tw.parallel().tween_property(spr, "modulate", Color(1,1,1,0), 0.35)
+	tw.tween_property(spr, "scale", Vector2(1.42, 1.42), 0.38).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(spr, "modulate", Color(1,1,1,0), 0.38)
 	tw.tween_callback(func(): if is_instance_valid(spr): spr.queue_free())
 	# Animate frames if more than one
 	if frames.size() > 1:
@@ -1738,13 +1744,14 @@ func _spawn_damage_number(anchor: Control, dmg: int):
 		return
 	var lbl := Label.new()
 	lbl.text = "-%d" % dmg
-	lbl.add_theme_font_size_override("font_size", 42)
-	lbl.add_theme_color_override("font_color", Color(1, 0.18, 0.18))
+	# High-res polished: larger, crisper outline for 1080p/4k
+	lbl.add_theme_font_size_override("font_size", 52)
+	lbl.add_theme_color_override("font_color", Color(1, 0.16, 0.16))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	lbl.add_theme_constant_override("outline_size", 6)
+	lbl.add_theme_constant_override("outline_size", 8)
 	lbl.z_index = 300
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.modulate = Color(1, 0.18, 0.18, 1)
+	lbl.modulate = Color(1, 0.16, 0.16, 1)
 	# Overlay on GameController so board refresh doesn't free the label mid-tween
 	add_child(lbl)
 	# Use global center of anchor, convert to local; GameController covers viewport so subtract its global pos
@@ -1753,15 +1760,15 @@ func _spawn_damage_number(anchor: Control, dmg: int):
 		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80, 80))
 	var center: Vector2 = anchor_rect.get_center()
 	var local_center: Vector2 = center - get_global_rect().position
-	lbl.position = local_center + Vector2(-16, -10)
-	# pop-in scale then float up and fade
-	lbl.scale = Vector2(0.7, 0.7)
+	lbl.position = local_center + Vector2(-18, -10)
+	# polished pop-in scale then float up and fade — snappier back + cubic
+	lbl.scale = Vector2(0.65, 0.65)
 	lbl.pivot_offset = lbl.size * 0.5
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(lbl, "scale", Vector2(1.15, 1.15), 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(lbl, "position", local_center + Vector2(-16, -28), 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(lbl, "modulate", Color(1, 0.18, 0.18, 0), 0.45).set_delay(0.18)
+	tw.tween_property(lbl, "scale", Vector2(1.18, 1.18), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "position", local_center + Vector2(-18, -32), 0.48).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate", Color(1, 0.16, 0.16, 0), 0.48).set_delay(0.20)
 	tw.set_parallel(false)
 	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
 

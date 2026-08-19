@@ -84,7 +84,7 @@ layout_mode = 2
 texture = ExtResource("12_flag_euro")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="AILabel" type="Label" parent="VBox/MainHBox/LeftGauges/AIHeader"]
 layout_mode = 2
@@ -117,7 +117,7 @@ layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
 custom_minimum_size = Vector2(26, 180)
@@ -159,7 +159,7 @@ layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
 custom_minimum_size = Vector2(26, 180)
@@ -201,7 +201,7 @@ layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
 custom_minimum_size = Vector2(26, 180)
@@ -233,8 +233,8 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
-texture_filter = 0
+texture_filter = 2
+texture_filter = 2
 
 [node name="AIDeckBar" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIDeck"]
 custom_minimum_size = Vector2(32, 6)
@@ -270,7 +270,7 @@ layout_mode = 2
 texture = ExtResource("11_flag_john")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerLabel" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerHeader"]
 layout_mode = 2
@@ -303,7 +303,7 @@ layout_mode = 2
 texture = ExtResource("7_heart")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
 custom_minimum_size = Vector2(26, 180)
@@ -345,7 +345,7 @@ layout_mode = 2
 texture = ExtResource("8_bioicon")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
 custom_minimum_size = Vector2(26, 180)
@@ -387,7 +387,7 @@ layout_mode = 2
 texture = ExtResource("9_moneyicon")
 expand_mode = 1
 stretch_mode = 5
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
 custom_minimum_size = Vector2(26, 180)
@@ -420,8 +420,8 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
-texture_filter = 0
+texture_filter = 2
+texture_filter = 2
 
 [node name="PlayerDeckBar" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerDeck"]
 custom_minimum_size = Vector2(32, 6)
@@ -536,7 +536,7 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
+texture_filter = 2
 
 [node name="AIDiscardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/AIDiscard"]
 custom_minimum_size = Vector2(32, 6)
@@ -566,7 +566,7 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
+texture_filter = 2
 
 [node name="AIGraveyardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/AIGraveyard"]
 custom_minimum_size = Vector2(32, 6)
@@ -602,7 +602,7 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerDiscardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/PlayerDiscard"]
 custom_minimum_size = Vector2(32, 6)
@@ -632,7 +632,7 @@ custom_minimum_size = Vector2(32, 44)
 layout_mode = 2
 icon = ExtResource("10_cardback")
 expand_icon = true
-texture_filter = 0
+texture_filter = 2
 
 [node name="PlayerGraveyardBar" type="TextureProgressBar" parent="VBox/MainHBox/RightGauges/PlayerGraveyard"]
 custom_minimum_size = Vector2(32, 6)

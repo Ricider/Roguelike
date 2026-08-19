@@ -38,6 +38,7 @@ func combat_phase() -> Array:
 				var target = _pick_target(defender, unit.HasRange, rng)
 				if target == null:
 					defender.HitPoints -= dmg
+					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)
 					log.append({"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": null, "target_sq": null, "damage": dmg, "is_direct": true})
 					continue
 				var target_card: Card = target["card"]
@@ -170,5 +171,7 @@ func _resolve_deaths(player: Player):
 				hp = (c as Building).HitPoints
 			if hp <= 0:
 				player.HitPoints -= c.BioCost
+				# Keep HitPoints within limits (never above max, never below 0 for gauge)
+				player.HitPoints = clamp(player.HitPoints, 0, player.MaxHitPoints)
 				player.Graveyard.append(c)
 				sq.clear()
