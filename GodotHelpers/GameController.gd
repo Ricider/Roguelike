@@ -75,6 +75,8 @@ var shop_popup: PanelContainer
 var shop_built: bool = false
 var influence_value_label: Label
 var influence_icon_rect: TextureRect
+var hover_arrow: Control = null
+var hover_arrow_target: Control = null
 
 func _style_round_button(btn: Button, primary: bool = true):
 	var sb := StyleBoxFlat.new()
@@ -661,10 +663,85 @@ func _show_card_preview(card: Card):
 func _hide_card_preview():
 	if preview_popup != null:
 		preview_popup.visible = false
+	_hide_attack_arrow()
 
 func _hide_hover():
 	hover_popup.visible = false
 	_hide_card_preview()
+
+func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player):
+	if attacker == null or attacker_sq == null or defender == null:
+		return
+	var unit = attacker_sq.Inhabitant
+	if unit == null or not (unit is Unit):
+		return
+	if (unit as Unit).HasRange:
+		return
+	_hide_attack_arrow()
+	var cs := CombatState.new(human, ai_player)
+	if cs.Players.size() < 2 or cs.Players[0] == null:
+		cs.Players = [attacker, defender]
+	var pred: Dictionary = cs.predict_target(attacker, attacker_sq, defender)
+	var target_sq: Square = pred.get("square", null) as Square
+	if target_sq == null:
+		return
+	var tgt_btn: Button = _get_button_for_square(defender, target_sq)
+	if tgt_btn == null or not is_instance_valid(tgt_btn):
+		return
+	# Red arrow, top-level overlay centered on target — always on top, inside window, click-through
+	var arrow_text: String = "↑" if attacker == human else "↓"
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.z_index = 400
+	panel.z_as_relative = false
+	if panel.has_method("set_as_top_level"):
+		panel.top_level = true
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.65, 0.05, 0.05, 0.92)
+	sb.border_color = Color(1, 0.95, 0.95, 1)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 2
+	sb.content_margin_bottom = 2
+	panel.add_theme_stylebox_override("panel", sb)
+	var lbl := Label.new()
+	lbl.text = arrow_text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 52)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	lbl.add_theme_constant_override("outline_size", 10)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(lbl)
+	add_child(panel)
+	# Position centered over target button, clamped inside viewport
+	var tgt_rect: Rect2 = tgt_btn.get_global_rect()
+	if tgt_rect.size.x < 4:
+		tgt_rect = Rect2(tgt_btn.get_global_position(), Vector2(78, 78))
+	var sz: Vector2 = Vector2(48, 48)
+	panel.size = sz
+	panel.custom_minimum_size = sz
+	var center: Vector2 = tgt_rect.get_center()
+	var pos: Vector2 = center - sz * 0.5
+	var vp: Vector2 = get_viewport_rect().size
+	pos.x = clamp(pos.x, 4.0, vp.x - sz.x - 4.0)
+	pos.y = clamp(pos.y, 4.0, vp.y - sz.y - 4.0)
+	panel.global_position = pos
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in panel.get_children():
+		if c is Control:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_arrow = panel
+	hover_arrow_target = tgt_btn
+
+func _hide_attack_arrow():
+	if hover_arrow != null and is_instance_valid(hover_arrow):
+		hover_arrow.queue_free()
+	hover_arrow = null
+	hover_arrow_target = null
 
 func _update_background():
 	if bg_rect == null:
@@ -1573,6 +1650,13 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var _card_prev: Card = card
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
 				btn.mouse_exited.connect(func(): _hide_card_preview())
+				# Non-random target arrow: show which enemy will be attacked (Manhattan closest)
+				if card is Unit and not (card as Unit).HasRange:
+					var attacker_player_ref: Player = player
+					var defender_ref: Player = ai_player if player == human else human
+					var sq_ref: Square = sq
+					btn.mouse_entered.connect(func(): _show_attack_arrow(attacker_player_ref, sq_ref, defender_ref))
+					btn.mouse_exited.connect(func(): _hide_attack_arrow())
 				# No separate hover tooltip for cards — preview already shows effect
 				btn.tooltip_text = ""
 				# Keep enabled so hover shows (occupied squares are not clickable anyway)

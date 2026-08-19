@@ -35,7 +35,7 @@ func combat_phase() -> Array:
 			for a_idx in range(attacks):
 				if unit.HitPoints <= 0:
 					break
-				var target = _pick_target(defender, unit.HasRange, rng)
+				var target = _pick_target_manhattan(defender, attacker, sq, unit.HasRange, rng)
 				if target == null:
 					defender.HitPoints -= dmg
 					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)
@@ -108,6 +108,90 @@ func _find_square_pos(player: Player, sq: Square):
 
 func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
 	return unit.Damage + Barracks.bonus_if_adjacent(player, square)
+
+func _manhattan_distance(attacker: Player, attacker_sq: Square, defender: Player, target_sq: Square) -> int:
+	var a_pos = _find_square_pos(attacker, attacker_sq)
+	var d_pos = _find_square_pos(defender, target_sq)
+	if a_pos == null or d_pos == null:
+		return 9999
+	var a_r: int = a_pos.get("r")
+	var a_c: int = a_pos.get("c")
+	var d_r: int = d_pos.get("r")
+	var d_c: int = d_pos.get("c")
+	var n: int = 4
+	var a_idx: int = Players.find(attacker)
+	var d_idx: int = Players.find(defender)
+	var a_dist: int
+	var d_dist: int
+	if a_idx == 0:
+		a_dist = a_r
+	elif a_idx == 1:
+		a_dist = (n - 1) - a_r
+	else:
+		a_dist = a_r
+	if d_idx == 0:
+		d_dist = d_r
+	elif d_idx == 1:
+		d_dist = (n - 1) - d_r
+	else:
+		d_dist = (n - 1) - d_r
+	var row_dist: int = a_dist + d_dist + 1
+	var col_dist: int = absi(a_c - d_c)
+	return row_dist + col_dist
+
+func _pick_target_manhattan(defender: Player, attacker: Player, attacker_sq: Square, has_range: bool, rng: RandomNumberGenerator):
+	if has_range:
+		var all: Array = []
+		for row in defender.Board:
+			for sq in row.Squares:
+				if sq.Inhabitant != null:
+					var c: Card = sq.Inhabitant
+					var hp: int = (c as Unit).HitPoints if c is Unit else (c as Building).HitPoints if c is Building else 1
+					if hp > 0:
+						all.append({"card": c, "square": sq})
+		if all.is_empty():
+			return null
+		return all[rng.randi_range(0, all.size() - 1)]
+	var best: int = 9999
+	var candidates: Array = []
+	for row in defender.Board:
+		for sq in row.Squares:
+			if sq.Inhabitant == null:
+				continue
+			var c2: Card = sq.Inhabitant
+			var hp2: int = (c2 as Unit).HitPoints if c2 is Unit else (c2 as Building).HitPoints if c2 is Building else 1
+			if hp2 <= 0:
+				continue
+			var d: int = _manhattan_distance(attacker, attacker_sq, defender, sq)
+			if d < best:
+				best = d
+				candidates = [{"card": c2, "square": sq}]
+			elif d == best:
+				candidates.append({"card": c2, "square": sq})
+	if candidates.is_empty():
+		return null
+	return candidates[rng.randi_range(0, candidates.size() - 1)]
+
+func predict_target(attacker: Player, attacker_sq: Square, defender: Player) -> Dictionary:
+	if attacker_sq == null:
+		return {}
+	var best: int = 9999
+	var best_sq: Square = null
+	var best_card: Card = null
+	for row in defender.Board:
+		for sq in row.Squares:
+			if sq.Inhabitant == null:
+				continue
+			var c: Card = sq.Inhabitant
+			var hp: int = (c as Unit).HitPoints if c is Unit else (c as Building).HitPoints if c is Building else 1
+			if hp <= 0:
+				continue
+			var d: int = _manhattan_distance(attacker, attacker_sq, defender, sq)
+			if d < best:
+				best = d
+				best_sq = sq
+				best_card = c
+	return {"card": best_card, "square": best_sq, "distance": best} if best_sq != null else {}
 
 func _pick_target(defender: Player, has_range: bool, rng: RandomNumberGenerator):
 	# Only living cards (HP >0) are targetable — prevents overkill on already-lethal targets
