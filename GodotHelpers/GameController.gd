@@ -287,7 +287,7 @@ func _find_influence_label(node: Node) -> Label:
 
 func _setup_gauge_and_influence_hovers():
 	# Gauge + influence tooltips: click-through, inside window, always on top via _show_hover
-	var hp_tip: String = "Hit Points — lose BioSupply when a friendly card dies; at 0 you lose"
+	var hp_tip: String = "Hit Points — when a card dies its owner loses HP equal to its BioSupply cost; at 0 you lose"
 	var bio_tip: String = "BioSupply — pay BioCost to play cards; grows 10% +5 each Economy phase (+4% per Housing)"
 	var money_tip: String = "MoneySupply — pay MoneyCost to play cards; grows +10 + building Income each turn"
 	var inf_tip: String = "Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"
