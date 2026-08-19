@@ -285,6 +285,65 @@ func _find_influence_label(node: Node) -> Label:
 			return r
 	return null
 
+func _setup_gauge_and_influence_hovers():
+	# Gauge + influence tooltips: click-through, inside window, always on top via _show_hover
+	var hp_tip: String = "Hit Points — lose BioSupply when a friendly card dies; at 0 you lose"
+	var bio_tip: String = "BioSupply — pay BioCost to play cards; grows 10% +5 each Economy phase (+4% per Housing)"
+	var money_tip: String = "MoneySupply — pay MoneyCost to play cards; grows +10 + building Income each turn"
+	var inf_tip: String = "Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"
+	# Helper to bind hover to any Control without duplicating connections
+	var bind := func(node: Control, text: String):
+		if node == null:
+			return
+		# make container itself not block clicks to gauges? gauges are non-interactive, but we still want hover
+		# Keep STOP for hover detection, but popups themselves are IGNORE
+		node.mouse_filter = Control.MOUSE_FILTER_STOP
+		# avoid double-connect
+		if node.has_meta("hover_bound"):
+			return
+		node.set_meta("hover_bound", true)
+		# use native tooltip as fallback + custom hover popup
+		node.tooltip_text = text
+		var t: String = text
+		node.mouse_entered.connect(func(): _show_hover(t))
+		node.mouse_exited.connect(func(): _hide_hover())
+	# Player + AI gauges (6 total)
+	var ai_hp_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP") as Control
+	var ai_bio_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio") as Control
+	var ai_money_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney") as Control
+	var p_hp_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP") as Control
+	var p_bio_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio") as Control
+	var p_money_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney") as Control
+	bind.call(ai_hp_box, "AI " + hp_tip)
+	bind.call(ai_bio_box, "AI " + bio_tip)
+	bind.call(ai_money_box, "AI " + money_tip)
+	bind.call(p_hp_box, hp_tip)
+	bind.call(p_bio_box, bio_tip)
+	bind.call(p_money_box, money_tip)
+	# Also bind icons/bars themselves so hover works even if container has gaps
+	for n in [ai_hp_box, ai_bio_box, ai_money_box, p_hp_box, p_bio_box, p_money_box]:
+		if n != null:
+			for child in n.get_children():
+				if child is Control:
+					bind.call(child as Control, (child.get_parent() as Control).tooltip_text if (child.get_parent() as Control).tooltip_text != "" else hp_tip)
+	# Influence symbol (icon + value) — bind to the whole InfluenceBox
+	var left := get_node_or_null("VBox/MainHBox/LeftGauges") as Control
+	var bottom_row := left.get_node_or_null("BottomRow") as Control if left != null else null
+	var inf_box := bottom_row.get_node_or_null("InfluenceBox") as Control if bottom_row != null else null
+	if inf_box != null:
+		bind.call(inf_box, inf_tip)
+		for child in inf_box.get_children():
+			if child is Control:
+				bind.call(child as Control, inf_tip)
+				for grand in (child as Control).get_children():
+					if grand is Control:
+						bind.call(grand as Control, inf_tip)
+	# Fallback direct icons if InfluenceBox not yet built (will be retried next refresh)
+	if influence_icon_rect != null:
+		bind.call(influence_icon_rect, inf_tip)
+	if influence_value_label != null:
+		bind.call(influence_value_label as Control, inf_tip)
+
 func _refresh_influence_display():
 	if influence_value_label != null and is_instance_valid(influence_value_label):
 		influence_value_label.text = "%d" % human.Influence
@@ -292,6 +351,8 @@ func _refresh_influence_display():
 	var old_info2 = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
 	if old_info2 != null:
 		old_info2.visible = false
+	# keep influence hover bound after display refresh (in case it was recreated)
+	_setup_gauge_and_influence_hovers()
 
 func _clear_board(player: Player):
 	for row in player.Board:
@@ -328,12 +389,20 @@ func _ready():
 	close_btn.pressed.connect(func(): inspect_popup.visible = false)
 	_style_round_button(close_btn, false)
 	hover_popup.visible = false
-	# Hide hover when inspecting or ending turn
+	# Hover popup: click-through, inside window, always on top
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_popup.z_index = 200
+	hover_popup.z_as_relative = false
+	if hover_popup.has_method("set_as_top_level"):
+		hover_popup.top_level = true
+	for c in hover_popup.get_children():
+		if c is Control:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ensure_preview_popup()
 	_ensure_debug_popup()
 	_add_debug_button()
 	_ensure_shop_popup()
+	_setup_gauge_and_influence_hovers()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -350,6 +419,12 @@ func _show_hover(text: String):
 		return
 	hover_label.text = text
 	hover_popup.visible = true
+	# click-through, inside window, always on top
+	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_popup.z_index = 200
+	hover_popup.z_as_relative = false
+	if hover_popup.has_method("set_as_top_level"):
+		hover_popup.top_level = true
 	# position near mouse, clamped to viewport so it never spills
 	var vp: Vector2 = get_viewport_rect().size
 	var pos: Vector2 = get_global_mouse_position() + Vector2(14, -36)
@@ -359,7 +434,9 @@ func _show_hover(text: String):
 	pos.x = clamp(pos.x, 4.0, max(4.0, vp.x - sz.x - 4.0))
 	pos.y = clamp(pos.y, 4.0, max(4.0, vp.y - sz.y - 4.0))
 	hover_popup.global_position = pos
-	hover_popup.z_index = 100
+	for c in hover_popup.get_children():
+		if c is Control:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _ensure_preview_popup():
 	if preview_built:
@@ -367,7 +444,10 @@ func _ensure_preview_popup():
 	preview_popup = PanelContainer.new()
 	preview_popup.visible = false
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview_popup.z_index = 101
+	preview_popup.z_index = 201
+	preview_popup.z_as_relative = false
+	if preview_popup.has_method("set_as_top_level"):
+		preview_popup.top_level = true
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
 	sb.border_color = Color(0.9, 0.9, 0.95, 1)
