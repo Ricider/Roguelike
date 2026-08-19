@@ -1081,15 +1081,104 @@ func _continue_from_shop():
 
 func _start_new_round():
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)
+	var human_bio_before: int = human.BioSupply
+	var human_money_before: int = human.MoneySupply
+	var ai_bio_before: int = ai_player.BioSupply
+	var ai_money_before: int = ai_player.MoneySupply
 	human.economy_phase()
 	ai_player.economy_phase()
-	# AI builds immediately — now owned by AIPlayer under Classes/AI
-	ai_player.take_build_turn()
+	_refresh_ui()
+	await _animate_opponent_economy(ai_bio_before, ai_money_before, human_bio_before, human_money_before)
+	# AI builds with animation
+	end_turn_btn.disabled = true
+	message_label.text = "Opponent's turn..."
+	await _animate_opponent_builds()
+	end_turn_btn.disabled = false
 	selected_card = null
 	selected_card_idx = -1
 	message_label.text = "Your turn: play cards then press End Turn"
 	_refresh_ui()
 	_check_game_over()
+
+func _animate_opponent_economy(ai_bio_before: int, ai_money_before: int, _human_bio_before: int, _human_money_before: int):
+	# Flash opponent gauges when income ticks
+	var bars: Array = [ai_bio_bar, ai_money_bar]
+	for bar in bars:
+		if bar != null and is_instance_valid(bar):
+			bar.pivot_offset = bar.size * 0.5
+			var tw := create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(bar, "scale", Vector2(1.08, 1.08), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(bar, "modulate", Color(1, 0.95, 0.4), 0.12)
+			tw.set_parallel(false)
+			tw.tween_property(bar, "scale", Vector2(1.0, 1.0), 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(bar, "modulate", Color(1,1,1), 0.16)
+	var delta_bio: int = ai_player.BioSupply - ai_bio_before
+	var delta_money: int = ai_player.MoneySupply - ai_money_before
+	if delta_bio > 0:
+		_spawn_damage_number(ai_bio_bar, delta_bio)
+		var m1 := ai_bio_bar as Control
+		if m1 != null:
+			m1.modulate = Color(0.6, 1, 0.6)
+			var f := create_tween()
+			f.tween_property(m1, "modulate", Color(1,1,1), 0.4)
+	if delta_money > 0:
+		_spawn_damage_number(ai_money_bar, delta_money)
+	await get_tree().create_timer(0.35).timeout
+
+func _animate_opponent_builds():
+	var placed: Array = ai_player.take_build_turn()
+	if placed.is_empty():
+		message_label.text = "Opponent passes"
+		_refresh_ui()
+		await get_tree().create_timer(0.4).timeout
+		return
+	for entry in placed:
+		var card: Card = entry["card"] as Card
+		var sq: Square = entry["square"] as Square
+		message_label.text = "Opponent plays %s" % card.card_name
+		# Pulse AI deck icon as card drawn
+		if ai_deck_icon != null and is_instance_valid(ai_deck_icon):
+			ai_deck_icon.pivot_offset = ai_deck_icon.size * 0.5
+			var twd := create_tween()
+			twd.tween_property(ai_deck_icon, "scale", Vector2(1.12, 1.12), 0.1).set_trans(Tween.TRANS_BACK)
+			twd.tween_property(ai_deck_icon, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK)
+		_refresh_ui()
+		await get_tree().create_timer(0.18).timeout
+		# Zap-in: electric teleport for opponent card
+		var btn := _get_button_for_square(ai_player, sq)
+		if btn != null and is_instance_valid(btn):
+			btn.pivot_offset = btn.size * 0.5
+			btn.scale = Vector2(0.1, 0.1)
+			btn.modulate = Color(0.7, 0.85, 1.4, 0)
+			btn.rotation = 0.0
+			# Zap flash overlay
+			_spawn_zap_effect(btn)
+			var tw := create_tween()
+			tw.set_parallel(true)
+			# Zap scale: snap open with overbright
+			tw.tween_property(btn, "scale", Vector2(1.32, 1.32), 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(btn, "modulate", Color(1.2, 1.2, 1.6, 1), 0.09)
+			tw.set_parallel(false)
+			# Settle with elastic zap decay + chromatic flicker
+			var tw2 := create_tween()
+			tw2.set_parallel(true)
+			tw2.tween_property(btn, "scale", Vector2(0.96, 0.96), 0.07)
+			tw2.tween_property(btn, "modulate", Color(0.85, 0.95, 1.3, 1), 0.07)
+			tw2.set_parallel(false)
+			tw2.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw2.parallel().tween_property(btn, "modulate", Color(1, 1, 1, 1), 0.14)
+			# Electric outline flicker
+			var flick := create_tween()
+			flick.tween_property(btn, "modulate", Color(0.7, 0.85, 1.5, 1), 0.04)
+			flick.tween_property(btn, "modulate", Color(1,1,1,1), 0.08)
+			await tw.finished
+			await tw2.finished
+			await get_tree().create_timer(0.08).timeout
+		else:
+			await get_tree().create_timer(0.25).timeout
+	_refresh_ui()
+	await get_tree().create_timer(0.2).timeout
 
 func _refresh_ui():
 	_hide_hover()
@@ -2041,6 +2130,71 @@ func _spawn_special_effect(anchor: Control, kind: String):
 			var tex: Texture2D = frames[i]
 			var delay: float = i * 0.06
 			create_tween().tween_callback(func(t: Texture2D = tex): if is_instance_valid(spr): spr.texture = t).set_delay(delay)
+
+func _spawn_zap_effect(anchor: Control):
+	if anchor == null or not is_instance_valid(anchor):
+		return
+	var anchor_rect: Rect2 = anchor.get_global_rect()
+	if anchor_rect.size == Vector2.ZERO:
+		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80, 80))
+	var center: Vector2 = anchor_rect.get_center()
+	var local_center: Vector2 = center - get_global_rect().position
+	# Electric ring
+	var ring := PanelContainer.new()
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.z_index = 399
+	ring.custom_minimum_size = Vector2(90, 90)
+	ring.size = Vector2(90, 90)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.2, 0.5, 1.0, 0.0)
+	sb.border_color = Color(0.6, 0.85, 1.0, 1)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(12)
+	sb.shadow_color = Color(0.3, 0.6, 1.0, 0.6)
+	sb.shadow_size = 12
+	ring.add_theme_stylebox_override("panel", sb)
+	add_child(ring)
+	ring.position = local_center - ring.size * 0.5
+	ring.pivot_offset = ring.size * 0.5
+	ring.scale = Vector2(0.3, 0.3)
+	ring.modulate = Color(1,1,1,1)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ring, "scale", Vector2(1.35, 1.35), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ring, "modulate", Color(1,1,1,0), 0.14)
+	tw.set_parallel(false)
+	tw.tween_callback(func(): if is_instance_valid(ring): ring.queue_free())
+	# Zap flash
+	var flash := ColorRect.new()
+	flash.color = Color(0.8, 0.9, 1.0, 0.85)
+	flash.custom_minimum_size = Vector2(96, 96)
+	flash.size = Vector2(96, 96)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.z_index = 401
+	add_child(flash)
+	flash.position = local_center - flash.size * 0.5
+	flash.pivot_offset = flash.size * 0.5
+	var tw2 := create_tween()
+	tw2.tween_property(flash, "modulate", Color(0.8, 0.9, 1.0, 0), 0.12).set_delay(0.02)
+	tw2.tween_callback(func(): if is_instance_valid(flash): flash.queue_free())
+	# Lightning streaks (3 lines fanning)
+	for i in range(3):
+		var line := ColorRect.new()
+		line.color = Color(0.7, 0.85, 1.0, 0.9)
+		line.custom_minimum_size = Vector2(3, 44)
+		line.size = Vector2(3, 44)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.z_index = 402
+		add_child(line)
+		var ang: float = -30 + i * 30
+		line.position = local_center - line.size * 0.5
+		line.pivot_offset = line.size * 0.5
+		line.rotation_degrees = ang
+		var tw3 := create_tween()
+		tw3.set_parallel(true)
+		tw3.tween_property(line, "scale", Vector2(1, 1.6), 0.07)
+		tw3.tween_property(line, "modulate", Color(0.7, 0.85, 1.0, 0), 0.07).set_delay(0.03)
+		tw3.tween_callback(func(): if is_instance_valid(line): line.queue_free())
 
 func _spawn_damage_number(anchor: Control, dmg: int):
 	if anchor == null or not is_instance_valid(anchor):

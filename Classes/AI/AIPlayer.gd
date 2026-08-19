@@ -7,7 +7,8 @@ func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 1, 
 	super._init(hp, bio, money, difficulty, name, background, influence)
 	rng.randomize()
 
-func take_build_turn():
+func take_build_turn() -> Array:
+	var placed: Array = []
 	var hand_copy: Array = Hand.duplicate()
 	hand_copy.shuffle()
 	for card in hand_copy:
@@ -24,5 +25,7 @@ func take_build_turn():
 		BioSupply -= card.BioCost
 		sq.place(card)
 		Hand.erase(card)
+		placed.append({"card": card, "square": sq})
 		if rng.randf() < 0.3:
 			break
+	return placed
