@@ -74,6 +74,47 @@ var debug_summon_target_option: OptionButton
 var shop_popup: PanelContainer
 var shop_built: bool = false
 
+func _style_round_button(btn: Button, primary: bool = true):
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.18,0.18,0.27,1) if primary else Color(0.14,0.14,0.20,1)
+	sb.border_color = Color(0.95,0.85,0.4,1) if primary else Color(0.35,0.35,0.45,0.6)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(16)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.shadow_color = Color(0,0,0,0.35)
+	sb.shadow_size = 5
+	sb.shadow_offset = Vector2(0,2)
+	btn.add_theme_stylebox_override("normal", sb)
+	var sb_h := StyleBoxFlat.new()
+	sb_h.bg_color = Color(0.24,0.24,0.34,1) if primary else Color(0.20,0.20,0.28,1)
+	sb_h.border_color = Color(1,0.92,0.55,1)
+	sb_h.set_border_width_all(2)
+	sb_h.set_corner_radius_all(16)
+	sb_h.content_margin_left = 12
+	sb_h.content_margin_right = 12
+	sb_h.content_margin_top = 6
+	sb_h.content_margin_bottom = 6
+	sb_h.shadow_color = Color(0,0,0,0.45)
+	sb_h.shadow_size = 6
+	btn.add_theme_stylebox_override("hover", sb_h)
+	var sb_p := StyleBoxFlat.new()
+	sb_p.bg_color = Color(0.12,0.12,0.18,1)
+	sb_p.border_color = sb.border_color
+	sb_p.set_border_width_all(2)
+	sb_p.set_corner_radius_all(16)
+	sb_p.content_margin_left = 12
+	sb_p.content_margin_right = 12
+	sb_p.content_margin_top = 6
+	sb_p.content_margin_bottom = 6
+	btn.add_theme_stylebox_override("pressed", sb_p)
+	btn.add_theme_stylebox_override("focus", sb_h)
+	btn.add_theme_color_override("font_color", Color(1,1,1))
+	if not primary:
+		btn.add_theme_color_override("font_color", Color(0.92,0.92,0.95))
+
 func _clear_board(player: Player):
 	for row in player.Board:
 		for sq in row.Squares:
@@ -103,8 +144,11 @@ func _ready():
 	_update_background()
 	state = CombatState.new(human, ai_player)
 	end_turn_btn.pressed.connect(_on_end_turn)
+	_style_round_button(end_turn_btn, true)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
+	_style_round_button(menu_btn, false)
 	close_btn.pressed.connect(func(): inspect_popup.visible = false)
+	_style_round_button(close_btn, false)
 	hover_popup.visible = false
 	# Hide hover when inspecting or ending turn
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -483,6 +527,7 @@ func _ensure_debug_popup():
 	summon_btn.text = "Summon"
 	summon_btn.custom_minimum_size = Vector2(90, 32)
 	summon_btn.add_theme_font_size_override("font_size", 28)
+	_style_round_button(summon_btn, true)
 	summon_btn.pressed.connect(func():
 		var cname2: String = debug_summon_card_option.get_item_text(debug_summon_card_option.selected)
 		var target_is_ai: bool = debug_summon_target_option.selected == 1
@@ -497,11 +542,13 @@ func _ensure_debug_popup():
 	restart_btn.text = "Switch & Restart"
 	restart_btn.custom_minimum_size = Vector2(150, 36)
 	restart_btn.add_theme_font_size_override("font_size", 30)
+	_style_round_button(restart_btn, true)
 	restart_btn.pressed.connect(_restart_game)
 	btn_row.add_child(restart_btn)
 	var close_dbtn := Button.new()
 	close_dbtn.text = "Close"
 	close_dbtn.custom_minimum_size = Vector2(80, 36)
+	_style_round_button(close_dbtn, false)
 	close_dbtn.pressed.connect(func(): debug_popup.visible = false)
 	btn_row.add_child(close_dbtn)
 	var info := Label.new()
@@ -527,6 +574,7 @@ func _add_debug_button():
 	btn.custom_minimum_size = Vector2(90, 40)
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_color_override("font_color", Color(1,1,0.6))
+	_style_round_button(btn, false)
 	btn.pressed.connect(func():
 		_ensure_debug_popup()
 		debug_popup.visible = !debug_popup.visible
@@ -628,12 +676,23 @@ func _show_shop():
 	var influence: int = human.Influence if human != null else 0
 	if gs != null and gs.run_player != null:
 		influence = gs.run_player.Influence
+	var title_row := HBoxContainer.new()
+	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	title_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(title_row)
+	var inf_icon_title := TextureRect.new()
+	inf_icon_title.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
+	inf_icon_title.custom_minimum_size = Vector2(28,28)
+	inf_icon_title.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	inf_icon_title.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inf_icon_title.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	title_row.add_child(inf_icon_title)
 	var title := Label.new()
 	title.text = "Shop — Between Battles (Influence: %d)" % influence
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", Color(1,0.92,0.5))
-	vbox.add_child(title)
+	title_row.add_child(title)
 	var hint := Label.new()
 	hint.text = "Buy 5 cards using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -665,12 +724,23 @@ func _show_shop():
 		name_lbl.add_theme_font_size_override("font_size", 24)
 		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		cell.add_child(name_lbl)
+		var cost_row := HBoxContainer.new()
+		cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		cost_row.add_theme_constant_override("separation", 4)
+		var cost_icon := TextureRect.new()
+		cost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
+		cost_icon.custom_minimum_size = Vector2(20,20)
+		cost_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cost_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cost_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		cost_row.add_child(cost_icon)
 		var cost_lbl := Label.new()
-		cost_lbl.text = "Cost: %d Influence" % card.InfluenceCost
+		cost_lbl.text = "%d" % card.InfluenceCost
 		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cost_lbl.add_theme_font_size_override("font_size", 22)
 		cost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
-		cell.add_child(cost_lbl)
+		cost_row.add_child(cost_lbl)
+		cell.add_child(cost_row)
 		var stats := Label.new()
 		if card is Unit:
 			stats.text = "HP:%d DMG:%d" % [(card as Unit).HitPoints, (card as Unit).Damage]
@@ -692,6 +762,7 @@ func _show_shop():
 		var buy_btn := Button.new()
 		buy_btn.text = "Buy"
 		buy_btn.custom_minimum_size = Vector2(80, 28)
+		_style_round_button(buy_btn, true)
 		buy_btn.disabled = influence < card.InfluenceCost
 		if buy_btn.disabled:
 			buy_btn.modulate = Color(0.6,0.6,0.6)
@@ -704,8 +775,11 @@ func _show_shop():
 	btn_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(btn_row)
 	var remove_btn := Button.new()
-	remove_btn.text = "Remove a card (25 Influence) — once per shop"
-	remove_btn.custom_minimum_size = Vector2(260, 32)
+	remove_btn.text = "Remove (25 Influence) — once per shop"
+	remove_btn.icon = load("res://Assets/UI/influence_icon.png") as Texture2D
+	remove_btn.expand_icon = true
+	remove_btn.custom_minimum_size = Vector2(300, 32)
+	_style_round_button(remove_btn, false)
 	if gs != null and gs.shop_remove_used:
 		remove_btn.disabled = true
 		remove_btn.text = "Remove used this shop"
@@ -714,9 +788,10 @@ func _show_shop():
 	remove_btn.pressed.connect(func(): _show_remove_dialog())
 	btn_row.add_child(remove_btn)
 	var cont_btn := Button.new()
-	cont_btn.text = "Continue to Next Battle"
+	cont_btn.text = "Continue →"
 	cont_btn.custom_minimum_size = Vector2(200, 36)
 	cont_btn.add_theme_font_size_override("font_size", 28)
+	_style_round_button(cont_btn, true)
 	cont_btn.pressed.connect(func(): _continue_from_shop())
 	btn_row.add_child(cont_btn)
 	shop_popup.visible = true
@@ -774,6 +849,7 @@ func _show_remove_dialog():
 		var btn := Button.new()
 		btn.text = c.card_name
 		btn.custom_minimum_size = Vector2(100, 36)
+		_style_round_button(btn, false)
 		btn.add_theme_font_size_override("font_size", 22)
 		var _c: Card = c
 		btn.pressed.connect(func():
@@ -789,6 +865,7 @@ func _show_remove_dialog():
 		grid.add_child(btn)
 	var close_btn := Button.new()
 	close_btn.text = "Cancel"
+	_style_round_button(close_btn, false)
 	close_btn.pressed.connect(func(): dlg.queue_free(); _show_shop())
 	vbox.add_child(close_btn)
 	dlg.position = (get_viewport_rect().size - dlg.size) / 2.0

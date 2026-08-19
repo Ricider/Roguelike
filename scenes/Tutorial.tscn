@@ -1,0 +1,193 @@
+[gd_scene load_steps=3 format=3 uid="uid://tutorial_scene_001"]
+
+[ext_resource type="Script" path="res://scripts/tutorial.gd" id="1_tut"]
+[ext_resource type="Texture2D" path="res://Assets/UI/main_menu_bg.png" id="2_bg"]
+
+[node name="Tutorial" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_tut")
+
+[node name="BG" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 3
+stretch_mode = 0
+
+[node name="BGOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.04, 0.08, 0.72)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(960, 0)
+layout_mode = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="CenterContainer/VBox"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "TUTORIAL"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.92, 0.4, 1)
+
+[node name="Subtitle" type="Label" parent="CenterContainer/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.85, 0.85, 0.9, 1)
+text = "Roguelike Autochess Cardgame — How to Play"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="CenterContainer/VBox"]
+custom_minimum_size = Vector2(900, 520)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+alignment = 0
+theme_override_constants/separation = 14
+
+[node name="SecGoal" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "1) Goal & Roguelike Run"
+
+[node name="TxtGoal" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 82)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "Choose any faction to play as — [b]State Troops is recommended[/b] (yellow border in menu). Fight enemies in order of Difficulty (lowest first): Insurgents (1) → State Troops (2) → Horde (4) → Coalition/Euro Army (5) → Corporate Troops (6). Between each victory you visit the Shop. Defeating an enemy grants its starting Influence. Lose when your HP drops to 0."
+
+[node name="SecResources" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "2) Resources & Gauges"
+
+[node name="TxtResources" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 118)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "[b]HitPoints (heart, red):[/b] Your HP. Max is your faction's starting HP (30–200). Gauge max adapts. [b]BioSupply (green):[/b] 0–200 cap. [b]MoneySupply (gold):[/b] 0–200 cap. [b]Influence (yellow):[/b] Shop currency, earned on victories. [b]Draw / Discard / Graveyard (right + left gauges):[/b] 0–33. Click the deck icons to inspect piles. HP gauge tints red below 30."
+
+[node name="SecPhases" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "3) Turn Phases (each turn)"
+
+[node name="TxtPhases" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 168)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "[b]Economy Phase (auto):[/b] Bio grows by 10% +5 plus [color=#a8e6a8]+4% per Housing[/color] (capped at 200). Money grows by +10 plus all Building Income (Factory 15, Housing 2, Barracks 2, Corporation 12). Then draw up to [b]10 cards[/b] — if DrawPile empties, Discard shuffles back; if still empty stop at available cards.\n[b]Build Phase (you):[/b] Click a card in Hand then an empty square on your 4×10 board to play it, paying BioCost + MoneyCost (Corporation gives 20% multiplicative discount per Corporation on board). Transparent battlefield cards show HP/Damage or HP/Income.\n[b]Combat Phase (auto):[/b] Press [b]End Turn[/b] — all Units attack. Closest enemy row first, unless unit has [b]HasRange[/b] then any enemy. [b]Flying[/b] takes half damage from non-ranged attackers. Card destruction deducts its BioCost from owner's HP and sends it to Graveyard. Damage numbers and shake animations reflect hits live."
+
+[node name="SecCards" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "4) Cards"
+
+[node name="TxtCards" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 148)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 14
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "[b]Units:[/b] Infantry (12 HP, 2 DMG, 5/15, Inf 10) • Tank (25 HP, 8 DMG, 25/10, Inf 15) • Artilery (12 HP, 8 DMG, Ranged, 20/8, Inf 20) • Rocket Launcher (12 HP, 2 DMG, Ranged, [color=#ffcc66]attacks 4×[/color], 25/5, Inf 30) • Drone (6 HP, 3 DMG, Flying, 5/0, Inf 15) • Fighter Jet (14 HP, 6 DMG, Ranged+Flying, [color=#ffcc66]splash to adjacent tiles[/color], 35/5, Inf 40)\n[b]Buildings:[/b] Factory (20 HP, +15 Money, 30/20, Inf 20) • Barracks (30 HP, +2 Money, [color=#ffcc66]adjacent friendlies +2 DMG[/color], 20/25, Inf 30) • Housing (50 HP, +2 Money, +4% Bio/phase, 20/30, Inf 15) • Wall (20 HP, 10/0, Inf 5) • Corporation (25 HP, +12 Money, [color=#ffcc66]−20% MoneyCost per Corporation (multiplicative)[/color], 70/20, Inf 60)"
+
+[node name="SecShop" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "5) Shop (between battles)"
+
+[node name="TxtShop" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "5 random cards offered. Buy with Influence (cost = InfluenceCost). Once per shop you may [b]Remove a card for 25 Influence[/b] (from Draw/Discard/Graveyard). Deck resets each encounter but shop purchases persist."
+
+[node name="SecBoard" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "6) Board & Controls"
+
+[node name="TxtBoard" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 82)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "Each player has a 4×10 board; together they form 8×10 (AI top, back row far side). Light grey = your side (can place), dark = enemy. Use [b]Hand → Board → End Turn[/b]. Hover cards for magnified preview. Deck/Discard/Graveyard buttons inspect piles. Debug button can summon any card. [b]Menu[/b] returns to faction chooser."
+
+[node name="SecTips" type="Label" parent="CenterContainer/VBox/Scroll/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+text = "7) Faction Tips"
+
+[node name="TxtTips" type="RichTextLabel" parent="CenterContainer/VBox/Scroll/Content"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 14
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+text = "Insurgents: cheap Infantry/Drone swarm. Horde: starts wounded (5 HP on back row) but many Fighter Jets. Corporate Troops: 2 Corporations + Skyrises background — stack discounts, rush Drones/Jets. Coalition/Euro: balanced towers. Watch BioCost on death — losing big buildings hurts HP!"
+
+[node name="BackButton" type="Button" parent="CenterContainer/VBox"]
+custom_minimum_size = Vector2(240, 56)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "Back to Menu"

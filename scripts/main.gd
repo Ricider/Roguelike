@@ -10,6 +10,54 @@ func _ready():
 		play_btn.grab_focus()
 	_wire_buttons()
 	_build_player_chooser()
+	_style_menu_buttons()
+
+func _style_menu_buttons():
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton"]:
+		var b: Button = get_node_or_null(path) as Button
+		if b == null:
+			continue
+		_style_pill_button(b, Color(0.16,0.16,0.26,1), Color(0.22,0.22,0.34,1), Color(0.9,0.85,0.4,0.9))
+
+func _style_pill_button(btn: Button, bg: Color, hover_bg: Color, border: Color):
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(24)
+	sb.content_margin_left = 18
+	sb.content_margin_right = 18
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	sb.shadow_color = Color(0,0,0,0.35)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2(0,3)
+	btn.add_theme_stylebox_override("normal", sb)
+	var sb_h := StyleBoxFlat.new()
+	sb_h.bg_color = hover_bg
+	sb_h.border_color = Color(1,0.92,0.55,1)
+	sb_h.set_border_width_all(2)
+	sb_h.set_corner_radius_all(24)
+	sb_h.content_margin_left = 18
+	sb_h.content_margin_right = 18
+	sb_h.content_margin_top = 10
+	sb_h.content_margin_bottom = 10
+	sb_h.shadow_color = Color(0,0,0,0.45)
+	sb_h.shadow_size = 8
+	btn.add_theme_stylebox_override("hover", sb_h)
+	var sb_p := StyleBoxFlat.new()
+	sb_p.bg_color = Color(0.12,0.12,0.18,1)
+	sb_p.border_color = border
+	sb_p.set_border_width_all(2)
+	sb_p.set_corner_radius_all(24)
+	sb_p.content_margin_left = 18
+	sb_p.content_margin_right = 18
+	sb_p.content_margin_top = 10
+	sb_p.content_margin_bottom = 10
+	btn.add_theme_stylebox_override("pressed", sb_p)
+	btn.add_theme_stylebox_override("focus", sb_h)
+	btn.add_theme_color_override("font_color", Color(1,1,1))
+	btn.add_theme_color_override("font_hover_color", Color(1,1,1))
 
 func _wire_buttons():
 	var play = get_node_or_null("CenterContainer/VBox/PlayButton")
@@ -70,36 +118,42 @@ func _select_player(name: String):
 		var b: Button = _player_buttons[n]
 		b.modulate = Color(1,1,1,1) if n == name else Color(1,1,1,0.7)
 		b.button_pressed = (n == name)
-		# Yellow bounding box follows selected option
+		# Round pill faction chooser — 18 radius, soft shadow
 		if n == name:
 			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.18,0.18,0.22,1)
+			sb.bg_color = Color(0.18,0.18,0.26,1)
 			sb.border_color = Color(1,0.85,0.2,1)
 			sb.set_border_width_all(3)
-			sb.set_corner_radius_all(8)
-			sb.content_margin_left = 6
-			sb.content_margin_right = 6
-			sb.content_margin_top = 4
-			sb.content_margin_bottom = 4
+			sb.set_corner_radius_all(18)
+			sb.content_margin_left = 12
+			sb.content_margin_right = 12
+			sb.content_margin_top = 8
+			sb.content_margin_bottom = 8
+			sb.shadow_color = Color(0,0,0,0.35)
+			sb.shadow_size = 5
 			b.add_theme_stylebox_override("normal", sb)
 			var sb_hover := StyleBoxFlat.new()
-			sb_hover.bg_color = Color(0.22,0.22,0.28,1)
-			sb_hover.border_color = Color(1,0.9,0.4,1)
+			sb_hover.bg_color = Color(0.22,0.22,0.32,1)
+			sb_hover.border_color = Color(1,0.92,0.5,1)
 			sb_hover.set_border_width_all(3)
-			sb_hover.set_corner_radius_all(8)
+			sb_hover.set_corner_radius_all(18)
+			sb_hover.shadow_color = Color(0,0,0,0.4)
+			sb_hover.shadow_size = 6
 			b.add_theme_stylebox_override("hover", sb_hover)
 			b.add_theme_stylebox_override("pressed", sb)
 			b.add_theme_stylebox_override("focus", sb)
 		else:
 			var sb_off := StyleBoxFlat.new()
-			sb_off.bg_color = Color(0.12,0.12,0.16,1)
+			sb_off.bg_color = Color(0.12,0.12,0.18,1)
 			sb_off.border_color = Color(0,0,0,0)
 			sb_off.set_border_width_all(0)
-			sb_off.set_corner_radius_all(8)
-			sb_off.content_margin_left = 6
-			sb_off.content_margin_right = 6
-			sb_off.content_margin_top = 4
-			sb_off.content_margin_bottom = 4
+			sb_off.set_corner_radius_all(18)
+			sb_off.content_margin_left = 12
+			sb_off.content_margin_right = 12
+			sb_off.content_margin_top = 8
+			sb_off.content_margin_bottom = 8
+			sb_off.shadow_color = Color(0,0,0,0.25)
+			sb_off.shadow_size = 4
 			b.add_theme_stylebox_override("normal", sb_off)
 			b.add_theme_stylebox_override("hover", sb_off)
 			b.add_theme_stylebox_override("pressed", sb_off)
