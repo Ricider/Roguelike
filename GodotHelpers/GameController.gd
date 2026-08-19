@@ -1564,8 +1564,8 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var _card_prev: Card = card
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
 				btn.mouse_exited.connect(func(): _hide_card_preview())
-				# Hover for special effect — custom popup + native tooltip fallback, no inline spill
-				if card.SpecialEffect != "":
+				# Hover for special effect — skip Housing (preview already shows identical text)
+				if card.SpecialEffect != "" and card.card_name != "Housing":
 					btn.tooltip_text = card.SpecialEffect
 					var _eff_txt: String = card.SpecialEffect
 					btn.mouse_entered.connect(func(): _show_hover(_eff_txt))
@@ -1737,8 +1737,8 @@ func _refresh_hand():
 		var _hand_prev: Card = card
 		btn.mouse_entered.connect(func(): _show_card_preview(_hand_prev))
 		btn.mouse_exited.connect(func(): _hide_card_preview())
-		# Hover — custom popup + tooltip fallback, no inline label
-		if card.SpecialEffect != "":
+		# Hover — skip Housing (preview already shows identical text)
+		if card.SpecialEffect != "" and card.card_name != "Housing":
 			btn.tooltip_text = card.SpecialEffect
 			var _eff2_txt: String = card.SpecialEffect
 			btn.mouse_entered.connect(func(): _show_hover(_eff2_txt))
