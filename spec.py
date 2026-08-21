@@ -19,10 +19,16 @@ class Player(GameObject):
 
     Influence: int
 
+    Modifiers: Modifier[]
+
     DrawPile: Card[]
     DiscardPile: Card[]
     Hand: Card[]
     Graveyard: Card[]
+
+class Modifier(GameObject):
+    Effect: AIIntrepretedString (I put text, you write the ability)
+    InfluenceCost: int
 
 class CombatState(GameObject):
     Players: Player[2]
@@ -135,7 +141,7 @@ Card: Drone
 
 Card: Fighter Jet
     Hp: 14
-    Damage: 6
+    Damage: 4
     HasRange: true
     Flying: true
     
@@ -277,6 +283,36 @@ Player: Corporate Troops
     DiscardPile: []
     Hand: []
 
+### Modifiers ###
+
+Modifier: Conscription
+    Effect=Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply
+    InfluenceCost: 50
+
+Modifier: Guerilla Warfare
+    Effect=Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP
+    InfluenceCost: 70
+
+Modifier: State of emergency
+    Effect=You gain 3 HitPoints every turn
+    InfluenceCost: 90
+
+Modifier: Fanaticism
+    Effect=Your buildings have 50% less HP, but Units have 100% more
+    InfluenceCost: 40
+
+Modifier: Corruption
+    Effect=Your buildings have 50% less HP, but you gain +10 MoneySupply every turn
+    InfluenceCost: 40
+
+Modifier: Advanced Robotics
+    Effect=All units have HasRange set to true, but they cost +5 extra MoneySupply
+    InfluenceCost: 100
+
+Modifier: Aerial Supremacy
+    Effect=If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply
+    InfluenceCost: 80
+
 ### Rules ###
 
 ## Main Game Rules ##
@@ -285,11 +321,13 @@ Player: Corporate Troops
 - Player fights Enemies in battles starting with insurgents and if they can defeat them they face enemies with higer difficulty each turn (just sort from lowest diffculty to highest)
 - Between each Battle player gets to visit a shop
 - When a player defeats an enemy it gains their starting influence
+- Modifier effects are permanent, meaning that once the player buys them it stays with them until the game state is reset
 
 ## Shop Rules ##
 
 - Player starts with as many influence as specified in their influence field
 - Offer 5 Cards to the player to buy from and add to their deck using influence
+- On a separate row offer 3 Modifiers to the player to buy from and add to their deck using influence
 - Player can also use 25 influence to remove a card once per shop
 
 ## Battle Phases ##
