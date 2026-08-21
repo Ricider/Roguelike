@@ -34,7 +34,7 @@ func test_unit_flying_and_stats():
 	assert_eq(drone.InfluenceCost, 15, "Drone influence 15")
 	var fj := FighterJet.new()
 	assert_eq(fj.HitPoints, 14, "FighterJet 14")
-	assert_eq(fj.Damage, 6, "FighterJet 6")
+	assert_eq(fj.Damage, 4, "FighterJet 4")
 	assert_true(fj.HasRange, "FighterJet ranged")
 	assert_true(fj.Flying, "FighterJet flying")
 	assert_eq(fj.SpecialEffect, "Also damages tiles adjacent to where it hit", "FighterJet splash")

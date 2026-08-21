@@ -9,6 +9,7 @@ var run_enemies: Array = [] # Player[] remaining enemies sorted
 var run_enemy_index: int = 0
 var run_started: bool = false
 var shop_offer: Array = [] # Card[] 5 cards
+var shop_modifier_offer: Array = [] # Modifier[] 3 modifiers
 var shop_remove_used: bool = false
 
 func set_player(name: String):
@@ -72,6 +73,7 @@ func start_run(chosen_name: String):
 	run_enemy_index = 0
 	run_started = true
 	shop_offer.clear()
+	shop_modifier_offer.clear()
 	shop_remove_used = false
 
 func get_current_enemy() -> AIPlayer:
@@ -85,15 +87,22 @@ func advance_enemy():
 	run_enemy_index += 1
 	shop_remove_used = false
 	shop_offer = CardFactory.random_shop_offer()
+	shop_modifier_offer = CardFactory.random_modifier_offer()
 
 func reset_player_for_new_encounter():
 	if run_player == null:
 		return
 	var template: Player = make_player_by_name(selected_player_name, true)
-	# Preserve HitPoints, Influence, display_name, Difficulty, BackgroundImage
+	# Preserve HitPoints, Influence, display_name, Difficulty, BackgroundImage, Modifiers (permanent)
 	# Reset Bio/Mmoney to starting spec
 	run_player.BioSupply = template.BioSupply
 	run_player.MoneySupply = template.MoneySupply
+	# Apply starting board HP with modifiers (Fanaticism etc.) before placing
+	for r in range(template.Board.size()):
+		for c in range(template.Board[r].Squares.size()):
+			var card: Card = template.Board[r].Squares[c].Inhabitant
+			if card != null:
+				run_player.apply_hitpoints_modifier(card)
 	# Reset Board: clear current and copy starting placements (Horde damaged 5, etc.)
 	for row in run_player.Board:
 		for sq in row.Squares:
@@ -107,13 +116,14 @@ func reset_player_for_new_encounter():
 				run_player.Board[r].Squares[c].place(card)
 				# Clear template square so it doesn't double-free (not needed but keep clean)
 				template.Board[r].Squares[c].clear()
-	# Reset deck piles to starting deck (fresh shuffled). Shop modifications are intentionally discarded per encounter reset request.
+	# Reset deck piles to starting deck (fresh shuffled). Shop card purchases are discarded per encounter reset, but Modifiers persist.
 	# Duplicate array to avoid sharing reference with template
 	run_player.DrawPile = template.DrawPile.duplicate()
 	run_player.DrawPile.shuffle()
 	run_player.DiscardPile.clear()
 	run_player.Hand.clear()
 	run_player.Graveyard.clear()
+	# Do NOT clear Modifiers - they are permanent until game reset
 
 func is_run_complete() -> bool:
 	return run_enemy_index >= run_enemies.size()
@@ -124,6 +134,7 @@ func gain_influence(amount: int):
 
 func prepare_shop():
 	shop_offer = CardFactory.random_shop_offer()
+	shop_modifier_offer = CardFactory.random_modifier_offer()
 	shop_remove_used = false
 
 func buy_card(card: Card) -> bool:
@@ -136,6 +147,22 @@ func buy_card(card: Card) -> bool:
 	run_player.Influence -= card.InfluenceCost
 	run_player.DrawPile.append(card)
 	shop_offer.erase(card)
+	return true
+
+func buy_modifier(mod: Modifier) -> bool:
+	if run_player == null or mod == null:
+		return false
+	if run_player.Influence < mod.InfluenceCost:
+		return false
+	if not shop_modifier_offer.has(mod):
+		return false
+	# Prevent buying same modifier twice
+	for m in run_player.Modifiers:
+		if m is Modifier and (m as Modifier).modifier_name == mod.modifier_name:
+			return false
+	run_player.Influence -= mod.InfluenceCost
+	run_player.Modifiers.append(mod)
+	shop_modifier_offer.erase(mod)
 	return true
 
 func remove_card_from_deck(card: Card) -> bool:

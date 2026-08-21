@@ -35,7 +35,10 @@ func combat_phase() -> Array:
 			for a_idx in range(attacks):
 				if unit.HitPoints <= 0:
 					break
-				var target = _pick_target_manhattan(defender, attacker, sq, unit.HasRange, rng)
+				var effective_range: bool = unit.HasRange
+				if attacker.has_method("has_range_for"):
+					effective_range = attacker.has_range_for(unit)
+				var target = _pick_target_manhattan(defender, attacker, sq, effective_range, rng)
 				if target == null:
 					defender.HitPoints -= dmg
 					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)
@@ -44,8 +47,11 @@ func combat_phase() -> Array:
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
 				var actual_dmg: int = dmg
-				# Flying: half damage from non-ranged attackers
-				if target_card is Unit and (target_card as Unit).Flying and not unit.HasRange:
+				# Flying: half damage from non-ranged attackers (use effective range)
+				var att_has_range: bool = unit.HasRange
+				if attacker.has_method("has_range_for"):
+					att_has_range = attacker.has_range_for(unit)
+				if target_card is Unit and (target_card as Unit).Flying and not att_has_range:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1
@@ -107,6 +113,9 @@ func _find_square_pos(player: Player, sq: Square):
 	return null
 
 func _effective_damage(player: Player, unit: Unit, square: Square) -> int:
+	# Use Player helper so modifiers (Guerilla, Aerial Supremacy) apply
+	if player.has_method("effective_damage_for"):
+		return player.effective_damage_for(unit, square)
 	return unit.Damage + Barracks.bonus_if_adjacent(player, square)
 
 func _manhattan_distance(attacker: Player, attacker_sq: Square, defender: Player, target_sq: Square) -> int:

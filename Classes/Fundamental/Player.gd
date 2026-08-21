@@ -13,6 +13,7 @@ var DrawPile: Array = [] # Card[]
 var DiscardPile: Array = [] # Card[]
 var Hand: Array = [] # Card[]
 var Graveyard: Array = [] # Card[]
+var Modifiers: Array = [] # Modifier[]
 var display_name: String = ""
 
 func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = "", influence: int = 0):
@@ -32,6 +33,7 @@ func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, 
 	DiscardPile = []
 	Hand = []
 	Graveyard = []
+	Modifiers = []
 
 func total_money_income() -> int:
 	var income: int = 0
@@ -76,10 +78,23 @@ func economy_phase():
 	BioSupply = int(BioSupply * rate + 5 + 0.0001)
 	if BioSupply == 0:
 		BioSupply = 1
+	# Modifier: Conscription +15 Bio
+	if has_modifier("Conscription"):
+		BioSupply += 15
 	# Cap resources at their limits (Bio 200, Money 200, HP at player's max)
 	BioSupply = clamp(BioSupply, 0, 200)
-	MoneySupply += 10 + total_money_income()
+	var money_gain: int = 10 + total_money_income()
+	# Modifier: Conscription 50% less MoneySupply
+	if has_modifier("Conscription"):
+		money_gain = int(money_gain * 0.5)
+	# Modifier: Corruption +10 MoneySupply
+	if has_modifier("Corruption"):
+		money_gain += 10
+	MoneySupply += money_gain
 	MoneySupply = clamp(MoneySupply, 0, 200)
+	# Modifier: State of emergency +3 HP
+	if has_modifier("State of emergency"):
+		HitPoints = min(HitPoints + 3, MaxHitPoints)
 	HitPoints = clamp(HitPoints, 0, MaxHitPoints)
 	draw_cards()
 
@@ -93,11 +108,7 @@ func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
 		return false
 	if not Hand.has(card):
 		return false
-	var effective_money: int = card.MoneyCost
-	# Corporation reduces MoneyCost by 20% per Corporation on board (multiplicative)
-	if Corporation != null:
-		# Avoid hard dependency cycle if Corporation not loaded yet
-		effective_money = Corporation.discounted_money_cost(self, card.MoneyCost)
+	var effective_money: int = get_effective_money_cost(card)
 	if MoneySupply < effective_money:
 		return false
 	if BioSupply < card.BioCost:
@@ -107,11 +118,87 @@ func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
 		return false
 	MoneySupply -= effective_money
 	BioSupply -= card.BioCost
+	# Apply HP modifiers before placing (so building/unit starts with modified HP)
+	apply_hitpoints_modifier(card)
 	sq.place(card)
 	Hand.erase(card)
 	return true
 
 func get_effective_money_cost(card: Card) -> int:
+	var cost: int = card.MoneyCost
 	if Corporation != null:
-		return Corporation.discounted_money_cost(self, card.MoneyCost)
-	return card.MoneyCost
+		cost = Corporation.discounted_money_cost(self, cost)
+	# Modifiers: Advanced Robotics +5 for all units, Aerial Supremacy +5 for Flying
+	if has_modifier("Advanced Robotics") and card is Unit:
+		cost += 5
+	if has_modifier("Aerial Supremacy") and card is Unit and (card as Unit).Flying:
+		cost += 5
+	return cost
+
+func has_modifier(name: String) -> bool:
+	for m in Modifiers:
+		if m is Modifier and (m as Modifier).modifier_name == name:
+			return true
+		if m is String and m == name:
+			return true
+	return false
+
+func has_range_for(card: Card) -> bool:
+	if card is Unit and has_modifier("Advanced Robotics"):
+		return true
+	if card is Unit:
+		return (card as Unit).HasRange
+	return false
+
+func effective_damage_for(card: Card, square: Square) -> int:
+	var base: int = 0
+	if card is Unit:
+		base = (card as Unit).Damage + Barracks.bonus_if_adjacent(self, square)
+	else:
+		base = 0
+	# Modifier: Guerilla Warfare - BioCost > MoneyCost => +100% damage
+	if card is Unit or card is Building:
+		if has_modifier("Guerilla Warfare"):
+			if card.BioCost > card.MoneyCost:
+				base *= 2
+	# Modifier: Aerial Supremacy - Flying +2 damage
+	if card is Unit and has_modifier("Aerial Supremacy") and (card as Unit).Flying:
+		base += 2
+	return base
+
+func effective_hitpoints_for(card: Card) -> int:
+	var hp: int = 0
+	if card is Unit:
+		hp = (card as Unit).HitPoints
+	elif card is Building:
+		hp = (card as Building).HitPoints
+	else:
+		return hp
+	# Guerilla Warfare: BioCost < MoneyCost => 50% less HP
+	if has_modifier("Guerilla Warfare"):
+		if card.BioCost < card.MoneyCost:
+			hp = int(hp * 0.5)
+			if hp < 1:
+				hp = 1
+	# Fanaticism: buildings 50% less, units 100% more (double)
+	if has_modifier("Fanaticism"):
+		if card is Building:
+			hp = int(hp * 0.5)
+			if hp < 1:
+				hp = 1
+		elif card is Unit:
+			hp = hp * 2
+	# Corruption: buildings 50% less HP
+	if has_modifier("Corruption"):
+		if card is Building:
+			hp = int(hp * 0.5)
+			if hp < 1:
+				hp = 1
+	return hp
+
+func apply_hitpoints_modifier(card: Card):
+	var new_hp: int = effective_hitpoints_for(card)
+	if card is Unit:
+		(card as Unit).HitPoints = new_hp
+	elif card is Building:
+		(card as Building).HitPoints = new_hp

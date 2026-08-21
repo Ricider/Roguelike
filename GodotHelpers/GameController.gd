@@ -1093,7 +1093,7 @@ func _show_shop():
 	title.add_theme_color_override("font_color", Color(1,0.92,0.5))
 	title_row.add_child(title)
 	var hint := Label.new()
-	hint.text = "Buy 5 cards using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
+	hint.text = "Buy 5 cards + 3 modifiers using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 22)
 	hint.add_theme_color_override("font_color", Color(0.85,0.85,0.9))
@@ -1106,6 +1106,14 @@ func _show_shop():
 		if gs != null:
 			gs.shop_offer = offer
 			gs.shop_remove_used = false
+	# Modifiers offer: 3 modifiers on separate row (persistent)
+	var mod_offer: Array = []
+	if gs != null and not gs.shop_modifier_offer.is_empty():
+		mod_offer = gs.shop_modifier_offer
+	else:
+		mod_offer = CardFactory.random_modifier_offer()
+		if gs != null:
+			gs.shop_modifier_offer = mod_offer
 	var grid := HBoxContainer.new()
 	grid.alignment = BoxContainer.ALIGNMENT_CENTER
 	grid.add_theme_constant_override("separation", 12)
@@ -1169,6 +1177,69 @@ func _show_shop():
 		buy_btn.pressed.connect(func(): _buy_shop_card(_card_ref))
 		cell.add_child(buy_btn)
 		grid.add_child(cell)
+	# Modifiers row - separate row per spec
+	var mod_label := Label.new()
+	mod_label.text = "Modifiers (permanent until reset)"
+	mod_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mod_label.add_theme_font_size_override("font_size", 20)
+	mod_label.add_theme_color_override("font_color", Color(1,0.85,0.4))
+	vbox.add_child(mod_label)
+	var mod_grid := HBoxContainer.new()
+	mod_grid.alignment = BoxContainer.ALIGNMENT_CENTER
+	mod_grid.add_theme_constant_override("separation", 12)
+	vbox.add_child(mod_grid)
+	for mod in mod_offer:
+		var mcell := VBoxContainer.new()
+		mcell.alignment = BoxContainer.ALIGNMENT_CENTER
+		mcell.custom_minimum_size = Vector2(220, 140)
+		var mname := Label.new()
+		mname.text = (mod as Modifier).modifier_name
+		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mname.add_theme_font_size_override("font_size", 20)
+		mname.add_theme_color_override("font_color", Color(1,0.92,0.6))
+		mcell.add_child(mname)
+		var meff := Label.new()
+		meff.text = (mod as Modifier).Effect
+		meff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		meff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		meff.custom_minimum_size = Vector2(200, 60)
+		meff.add_theme_font_size_override("font_size", 14)
+		meff.add_theme_color_override("font_color", Color(0.85,0.85,1))
+		mcell.add_child(meff)
+		var mcost_row := HBoxContainer.new()
+		mcost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		mcost_row.add_theme_constant_override("separation", 4)
+		var mcost_icon := TextureRect.new()
+		mcost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
+		mcost_icon.custom_minimum_size = Vector2(18,18)
+		mcost_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mcost_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mcost_row.add_child(mcost_icon)
+		var mcost_lbl := Label.new()
+		mcost_lbl.text = "%d" % (mod as Modifier).InfluenceCost
+		mcost_lbl.add_theme_font_size_override("font_size", 18)
+		mcost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
+		mcost_row.add_child(mcost_lbl)
+		mcell.add_child(mcost_row)
+		var mbuy := Button.new()
+		mbuy.text = "Buy"
+		mbuy.custom_minimum_size = Vector2(80, 28)
+		_style_round_button(mbuy, true)
+		var already_owned: bool = false
+		if human != null:
+			for om in human.Modifiers:
+				if om is Modifier and (om as Modifier).modifier_name == (mod as Modifier).modifier_name:
+					already_owned = true
+					break
+		mbuy.disabled = already_owned or influence < (mod as Modifier).InfluenceCost
+		if mbuy.disabled:
+			mbuy.modulate = Color(0.6,0.6,0.6)
+			if already_owned:
+				mbuy.text = "Owned"
+		var _mod_ref: Modifier = mod as Modifier
+		mbuy.pressed.connect(func(): _buy_shop_modifier(_mod_ref))
+		mcell.add_child(mbuy)
+		mod_grid.add_child(mcell)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 12)
@@ -1203,6 +1274,15 @@ func _buy_shop_card(card: Card):
 	if gs == null:
 		return
 	if gs.buy_card(card):
+		human.Influence = gs.run_player.Influence
+		_show_shop()
+		_refresh_ui()
+
+func _buy_shop_modifier(mod: Modifier):
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null:
+		return
+	if gs.buy_modifier(mod):
 		human.Influence = gs.run_player.Influence
 		_show_shop()
 		_refresh_ui()
@@ -2045,7 +2125,10 @@ func _execute_combat_live() -> Array:
 			for a_idx in range(attacks):
 				if unit.HitPoints <= 0:
 					break
-				var target = state._pick_target_manhattan(defender, attacker, sq, unit.HasRange, rng)
+				var has_range: bool = unit.HasRange
+				if attacker.has_method("has_range_for"):
+					has_range = attacker.has_range_for(unit)
+				var target = state._pick_target_manhattan(defender, attacker, sq, has_range, rng)
 				if target == null:
 					defender.HitPoints -= dmg
 					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)
@@ -2059,7 +2142,10 @@ func _execute_combat_live() -> Array:
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
 				var actual_dmg: int = dmg
-				if target_card is Unit and (target_card as Unit).Flying and not unit.HasRange:
+				var att_has_range: bool = unit.HasRange
+				if attacker.has_method("has_range_for"):
+					att_has_range = attacker.has_range_for(unit)
+				if target_card is Unit and (target_card as Unit).Flying and not att_has_range:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1

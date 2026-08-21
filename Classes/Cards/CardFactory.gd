@@ -154,6 +154,14 @@ static func random_shop_offer() -> Array:
 		offer.append(pool[i])
 	return offer
 
+static func random_modifier_offer() -> Array:
+	var pool := Modifier.all_modifiers()
+	pool.shuffle()
+	var offer: Array = []
+	for i in range(min(3, pool.size())):
+		offer.append(pool[i])
+	return offer
+
 static func make_insurgents_player() -> AIPlayer:
 	var p := AIPlayer.new(120, 120, 10, 1, "Insurgents", "Sparse mountain village", 10)
 	p.DrawPile = make_insurgents_deck()
