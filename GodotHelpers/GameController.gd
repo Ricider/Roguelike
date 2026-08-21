@@ -2361,7 +2361,8 @@ func _execute_combat_live() -> Array:
 					await _animate_live_entry(entry)
 					# show player HP drop immediately
 					_refresh_gauges_only()
-					await get_tree().process_frame
+					if get_tree() != null:
+						await get_tree().process_frame
 					continue
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
@@ -2387,12 +2388,14 @@ func _execute_combat_live() -> Array:
 				# reflect HP bars, card HP/INC labels, and deaths immediately
 				_refresh_gauges_only()
 				_refresh_boards_only()
-				await get_tree().process_frame
+				if get_tree() != null:
+					await get_tree().process_frame
 				# if target died already handled, next iteration picks new alive target
 			state._resolve_deaths(defender)
 			_refresh_gauges_only()
 			_refresh_boards_only()
-			await get_tree().process_frame
+			if get_tree() != null:
+				await get_tree().process_frame
 	return log
 
 func _animate_live_entry(entry: Dictionary):

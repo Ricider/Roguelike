@@ -164,11 +164,23 @@ func create_animated_sprite(size: Vector2) -> Control:
 	asp.modulate = Color(1,1,1,0.18) # subtle overlay
 	container.add_child(asp)
 	asp.play("idle")
-	# Subtle scale pulse like cards
-	var tw := container.create_tween()
-	tw.set_loops()
-	tw.tween_property(container, "scale", Vector2(1.04, 1.04), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(container, "scale", Vector2(1.0, 1.0), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Subtle scale pulse like cards - only if inside tree (tests create sprites off-tree)
+	var do_pulse := func():
+		if not is_instance_valid(container) or not container.is_inside_tree():
+			return
+		var tree := container.get_tree()
+		if tree == null:
+			return
+		var tw := container.create_tween()
+		if tw == null:
+			return
+		tw.set_loops()
+		tw.tween_property(container, "scale", Vector2(1.04, 1.04), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(container, "scale", Vector2(1.0, 1.0), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if container.is_inside_tree():
+		do_pulse.call()
+	else:
+		container.tree_entered.connect(func(): do_pulse.call(), CONNECT_ONE_SHOT)
 	return container
 
 static func create_sprite_for(modifier_name: String, size: Vector2) -> Control:
