@@ -1355,7 +1355,7 @@ func _show_shop():
 	for mod in mod_offer:
 		var m2 := mod as Modifier
 		var mart_center := CenterContainer.new()
-		mart_center.custom_minimum_size = Vector2(220, 96)
+		mart_center.custom_minimum_size = Vector2(220, 128)
 		mart_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var mart_wrap := Control.new()
 		mart_wrap.custom_minimum_size = Vector2(96, 96)
