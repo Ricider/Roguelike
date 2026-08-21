@@ -1227,13 +1227,15 @@ func _show_shop():
 		mod_offer = CardFactory.random_modifier_offer()
 		if gs != null:
 			gs.shop_modifier_offer = mod_offer
-	# --- CARDS GRID: 4 rows (titles / art / description / buy) x 5 cols ---
+	# --- CARDS GRID: 5 rows (titles / art / bio+money / description / buy) x 5 cols - fixed to prevent shift on buy ---
 	var card_grid := GridContainer.new()
-	card_grid.columns = 5
+	var _card_cols: int = 5
+	card_grid.columns = _card_cols
 	card_grid.add_theme_constant_override("h_separation", 12)
 	card_grid.add_theme_constant_override("v_separation", 6)
 	card_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(card_grid)
+	var _offer_sz: int = offer.size()
 	# Row 1: titles
 	for card in offer:
 		var c := card as Card
@@ -1246,6 +1248,11 @@ func _show_shop():
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card_grid.add_child(name_lbl)
+	for i in range(_card_cols - _offer_sz):
+		var _pad := Control.new()
+		_pad.custom_minimum_size = Vector2(150, 28)
+		_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_grid.add_child(_pad)
 	# Row 2: art (96 centered in 150 col)
 	for card in offer:
 		var c2 := card as Card
@@ -1264,7 +1271,56 @@ func _show_shop():
 		art_wrap.add_child(art)
 		art_center.add_child(art_wrap)
 		card_grid.add_child(art_center)
-	# Row 3: descriptions (cost + stats + effect stacked, fixed height per col)
+	for i in range(_card_cols - _offer_sz):
+		var _pad2 := Control.new()
+		_pad2.custom_minimum_size = Vector2(150, 96)
+		_pad2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_grid.add_child(_pad2)
+	# Row 3: BioSupplyCost + MoneySupplyCost (new)
+	for card in offer:
+		var c_res := card as Card
+		var res_row := HBoxContainer.new()
+		res_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		res_row.add_theme_constant_override("separation", 8)
+		res_row.custom_minimum_size = Vector2(150, 22)
+		res_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var bio_ic := TextureRect.new()
+		bio_ic.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
+		bio_ic.custom_minimum_size = Vector2(18, 18)
+		bio_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bio_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bio_ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		res_row.add_child(bio_ic)
+		var bio_lbl := Label.new()
+		bio_lbl.text = "%d" % c_res.BioCost
+		bio_lbl.add_theme_font_size_override("font_size", 16)
+		bio_lbl.add_theme_color_override("font_color", Color(0.6, 1, 0.4))
+		res_row.add_child(bio_lbl)
+		var sep := Label.new()
+		sep.text = "|"
+		sep.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sep.add_theme_font_size_override("font_size", 16)
+		sep.add_theme_color_override("font_color", Color(0.6,0.6,0.6))
+		res_row.add_child(sep)
+		var mon_ic := TextureRect.new()
+		mon_ic.texture = load("res://Assets/UI/money_icon.png") as Texture2D
+		mon_ic.custom_minimum_size = Vector2(18, 18)
+		mon_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mon_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mon_ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		res_row.add_child(mon_ic)
+		var mon_lbl := Label.new()
+		mon_lbl.text = "%d" % c_res.MoneyCost
+		mon_lbl.add_theme_font_size_override("font_size", 16)
+		mon_lbl.add_theme_color_override("font_color", Color(0.85, 0.8, 0.35))
+		res_row.add_child(mon_lbl)
+		card_grid.add_child(res_row)
+	for i in range(_card_cols - _offer_sz):
+		var _pad3 := Control.new()
+		_pad3.custom_minimum_size = Vector2(150, 22)
+		_pad3.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_grid.add_child(_pad3)
+	# Row 4: descriptions (influence cost + stats + effect stacked, fixed height per col)
 	for card in offer:
 		var c3 := card as Card
 		var desc := VBoxContainer.new()
@@ -1309,7 +1365,12 @@ func _show_shop():
 		eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
 		desc.add_child(eff)
 		card_grid.add_child(desc)
-	# Row 4: buy buttons
+	for i in range(_card_cols - _offer_sz):
+		var _pad4 := Control.new()
+		_pad4.custom_minimum_size = Vector2(150, 92)
+		_pad4.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_grid.add_child(_pad4)
+	# Row 5: buy buttons
 	for card in offer:
 		var c4 := card as Card
 		var btn_center := CenterContainer.new()
@@ -1326,6 +1387,11 @@ func _show_shop():
 		buy_btn.pressed.connect(func(): _buy_shop_card(_card_ref))
 		btn_center.add_child(buy_btn)
 		card_grid.add_child(btn_center)
+	for i in range(_card_cols - _offer_sz):
+		var _pad5 := Control.new()
+		_pad5.custom_minimum_size = Vector2(150, 32)
+		_pad5.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_grid.add_child(_pad5)
 	# --- MODIFIERS GRID: same 4-row setup, 3 cols, right below cards ---
 	var mod_label := Label.new()
 	mod_label.text = "Modifiers (permanent until reset)"
@@ -1334,11 +1400,13 @@ func _show_shop():
 	mod_label.add_theme_color_override("font_color", Color(1,0.85,0.4))
 	vbox.add_child(mod_label)
 	var mod_grid := GridContainer.new()
-	mod_grid.columns = 3
+	var _mod_cols: int = 3
+	mod_grid.columns = _mod_cols
 	mod_grid.add_theme_constant_override("h_separation", 14)
 	mod_grid.add_theme_constant_override("v_separation", 6)
 	mod_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(mod_grid)
+	var _mod_sz: int = mod_offer.size()
 	# Row 1: modifier titles
 	for mod in mod_offer:
 		var m := mod as Modifier
@@ -1351,6 +1419,11 @@ func _show_shop():
 		mname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mname.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		mod_grid.add_child(mname)
+	for i in range(_mod_cols - _mod_sz):
+		var _mpad := Control.new()
+		_mpad.custom_minimum_size = Vector2(220, 28)
+		_mpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mod_grid.add_child(_mpad)
 	# Row 2: modifier art
 	for mod in mod_offer:
 		var m2 := mod as Modifier
@@ -1367,6 +1440,11 @@ func _show_shop():
 		mart_wrap.add_child(mart)
 		mart_center.add_child(mart_wrap)
 		mod_grid.add_child(mart_center)
+	for i in range(_mod_cols - _mod_sz):
+		var _mpad2 := Control.new()
+		_mpad2.custom_minimum_size = Vector2(220, 128)
+		_mpad2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mod_grid.add_child(_mpad2)
 	# Row 3: modifier descriptions (effect + cost)
 	for mod in mod_offer:
 		var m3 := mod as Modifier
@@ -1399,6 +1477,11 @@ func _show_shop():
 		mcost_row.add_child(mcost_lbl)
 		mdesc.add_child(mcost_row)
 		mod_grid.add_child(mdesc)
+	for i in range(_mod_cols - _mod_sz):
+		var _mpad3 := Control.new()
+		_mpad3.custom_minimum_size = Vector2(220, 88)
+		_mpad3.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mod_grid.add_child(_mpad3)
 	# Row 4: modifier buy buttons
 	for mod in mod_offer:
 		var m4 := mod as Modifier
@@ -1424,6 +1507,11 @@ func _show_shop():
 		mbuy.pressed.connect(func(): _buy_shop_modifier(_mod_ref))
 		mbtn_center.add_child(mbuy)
 		mod_grid.add_child(mbtn_center)
+	for i in range(_mod_cols - _mod_sz):
+		var _mpad4 := Control.new()
+		_mpad4.custom_minimum_size = Vector2(220, 32)
+		_mpad4.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mod_grid.add_child(_mpad4)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 12)
@@ -2831,12 +2919,30 @@ func _inspect_pile(title: String, pile: Array):
 			desc.add_theme_font_size_override("font_size", 14)
 			desc.add_theme_color_override("font_color", Color(0.8,0.8,1))
 			inspect_grid.add_child(desc)
-	# enlarge popup to fit grid and enable horizontal scroll
+	# enlarge popup to fit grid and enable horizontal scroll - opaque and on top to hide field cards
+	inspect_popup.z_index = 110
+	inspect_popup.z_as_relative = false
+	if inspect_popup.has_method("set_as_top_level"):
+		inspect_popup.top_level = true
+	# Opaque panel (alpha 1) so field cards don't show through
+	var _ip_sb := StyleBoxFlat.new()
+	_ip_sb.bg_color = Color(0.10, 0.10, 0.18, 1.0)
+	_ip_sb.border_color = Color(0.92, 0.84, 0.38, 1.0)
+	_ip_sb.set_border_width_all(2)
+	_ip_sb.set_corner_radius_all(10)
+	_ip_sb.content_margin_left = 12
+	_ip_sb.content_margin_right = 12
+	_ip_sb.content_margin_top = 10
+	_ip_sb.content_margin_bottom = 10
+	_ip_sb.shadow_color = Color(0,0,0,0.5)
+	_ip_sb.shadow_size = 8
+	inspect_popup.add_theme_stylebox_override("panel", _ip_sb)
 	inspect_popup.custom_minimum_size = Vector2(760, 360)
 	var vp: Vector2 = get_viewport_rect().size
 	inspect_popup.size = Vector2(760, 360)
 	inspect_popup.position = (vp - inspect_popup.size) / 2.0
 	inspect_popup.visible = true
+	inspect_popup.move_to_front()
 
 func _check_game_over() -> bool:
 	var gs = get_node_or_null("/root/GameState")
