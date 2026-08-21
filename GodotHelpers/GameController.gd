@@ -1139,7 +1139,7 @@ func _ensure_shop_popup():
 	sb.content_margin_top = 12
 	sb.content_margin_bottom = 12
 	shop_popup.add_theme_stylebox_override("panel", sb)
-	shop_popup.custom_minimum_size = Vector2(900, 320)
+	shop_popup.custom_minimum_size = Vector2(920, 620)
 	add_child(shop_popup)
 	shop_built = true
 
@@ -1197,22 +1197,36 @@ func _show_shop():
 	var grid := HBoxContainer.new()
 	grid.alignment = BoxContainer.ALIGNMENT_CENTER
 	grid.add_theme_constant_override("separation", 12)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(grid)
 	for card in offer:
 		var cell := VBoxContainer.new()
 		cell.alignment = BoxContainer.ALIGNMENT_CENTER
-		cell.custom_minimum_size = Vector2(150, 180)
+		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cell.size_flags_vertical = Control.SIZE_FILL
+		cell.custom_minimum_size = Vector2(150, 260)
+		# Art - fixed 96, centered horizontally
+		var art_wrap := Control.new()
+		art_wrap.custom_minimum_size = Vector2(96, 96)
+		art_wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		art_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var art := Card.create_sprite_for(card.card_name, Vector2(96,96))
 		art.clip_contents = true
-		cell.add_child(art)
+		art.custom_minimum_size = Vector2(96, 96)
+		art.position = Vector2.ZERO
+		art_wrap.add_child(art)
+		cell.add_child(art_wrap)
 		var name_lbl := Label.new()
 		name_lbl.text = card.card_name
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.add_theme_font_size_override("font_size", 24)
 		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		name_lbl.custom_minimum_size = Vector2(140, 28)
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell.add_child(name_lbl)
 		var cost_row := HBoxContainer.new()
 		cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cost_row.add_theme_constant_override("separation", 4)
 		var cost_icon := TextureRect.new()
 		cost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
@@ -1236,19 +1250,35 @@ func _show_shop():
 		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stats.add_theme_font_size_override("font_size", 20)
 		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
+		stats.custom_minimum_size = Vector2(140, 20)
+		stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell.add_child(stats)
+		var eff_wrap := Control.new()
+		eff_wrap.custom_minimum_size = Vector2(140, 36)
+		eff_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		eff_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if card.SpecialEffect != "":
 			var eff := Label.new()
 			eff.text = card.SpecialEffect
 			eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			eff.custom_minimum_size = Vector2(140, 28)
+			eff.custom_minimum_size = Vector2(140, 36)
+			eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			eff.add_theme_font_size_override("font_size", 16)
 			eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
-			cell.add_child(eff)
+			eff.position = Vector2.ZERO
+			eff_wrap.add_child(eff)
+		cell.add_child(eff_wrap)
+		# Spacer pushes buy button to bottom so buttons align horizontally
+		var spacer := Control.new()
+		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		spacer.custom_minimum_size = Vector2(0, 4)
+		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(spacer)
 		var buy_btn := Button.new()
 		buy_btn.text = "Buy"
 		buy_btn.custom_minimum_size = Vector2(80, 28)
+		buy_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_style_round_button(buy_btn, true)
 		buy_btn.disabled = influence < card.InfluenceCost
 		if buy_btn.disabled:
@@ -1267,31 +1297,50 @@ func _show_shop():
 	var mod_grid := HBoxContainer.new()
 	mod_grid.alignment = BoxContainer.ALIGNMENT_CENTER
 	mod_grid.add_theme_constant_override("separation", 12)
+	mod_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(mod_grid)
 	for mod in mod_offer:
 		var mcell := VBoxContainer.new()
 		mcell.alignment = BoxContainer.ALIGNMENT_CENTER
-		mcell.custom_minimum_size = Vector2(220, 220)
+		mcell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mcell.size_flags_vertical = Control.SIZE_FILL
+		mcell.custom_minimum_size = Vector2(220, 260)
+		var mart_wrap := Control.new()
+		mart_wrap.custom_minimum_size = Vector2(96, 96)
+		mart_wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		mart_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var mart := Modifier.create_sprite_for((mod as Modifier).modifier_name, Vector2(96, 96))
 		mart.custom_minimum_size = Vector2(96, 96)
 		mart.size = Vector2(96, 96)
-		mcell.add_child(mart)
+		mart.position = Vector2.ZERO
+		mart_wrap.add_child(mart)
+		mcell.add_child(mart_wrap)
 		var mname := Label.new()
 		mname.text = (mod as Modifier).modifier_name
 		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		mname.add_theme_font_size_override("font_size", 20)
 		mname.add_theme_color_override("font_color", Color(1,0.92,0.6))
+		mname.custom_minimum_size = Vector2(200, 28)
+		mname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mcell.add_child(mname)
+		var meff_wrap := Control.new()
+		meff_wrap.custom_minimum_size = Vector2(200, 64)
+		meff_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		meff_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var meff := Label.new()
 		meff.text = (mod as Modifier).Effect
 		meff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		meff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		meff.custom_minimum_size = Vector2(200, 60)
+		meff.custom_minimum_size = Vector2(200, 64)
+		meff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		meff.add_theme_font_size_override("font_size", 14)
 		meff.add_theme_color_override("font_color", Color(0.85,0.85,1))
-		mcell.add_child(meff)
+		meff.position = Vector2.ZERO
+		meff_wrap.add_child(meff)
+		mcell.add_child(meff_wrap)
 		var mcost_row := HBoxContainer.new()
 		mcost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		mcost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mcost_row.add_theme_constant_override("separation", 4)
 		var mcost_icon := TextureRect.new()
 		mcost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
@@ -1305,9 +1354,15 @@ func _show_shop():
 		mcost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		mcost_row.add_child(mcost_lbl)
 		mcell.add_child(mcost_row)
+		var mspacer := Control.new()
+		mspacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		mspacer.custom_minimum_size = Vector2(0, 4)
+		mspacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mcell.add_child(mspacer)
 		var mbuy := Button.new()
 		mbuy.text = "Buy"
 		mbuy.custom_minimum_size = Vector2(80, 28)
+		mbuy.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_style_round_button(mbuy, true)
 		var already_owned: bool = false
 		if human != null:
@@ -1805,7 +1860,8 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				hp_lbl.text = "%d" % hp
 				hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				hp_lbl.add_theme_font_size_override("font_size", 16)
-				hp_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+				var hp_col_c: Color = player.get_hp_color(card) if player != null and player.has_method("get_hp_color") else Color(1,1,1)
+				hp_lbl.add_theme_color_override("font_color", hp_col_c)
 				hp_lbl.clip_contents = false
 				hp_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 				hp_lbl.custom_minimum_size = Vector2(22, 16)
@@ -1826,10 +1882,13 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					sword_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 					dmg_col.add_child(sword_icon)
 					var dmg_lbl := Label.new()
-					dmg_lbl.text = "%d" % (card as Unit).Damage
+					# Show effective damage on field (with Barracks/Guerilla/Aerial) colored vs base
+					var eff_dmg_board: int = player.effective_damage_for(card as Unit, sq) if player != null and player.has_method("effective_damage_for") else (card as Unit).Damage
+					dmg_lbl.text = "%d" % eff_dmg_board
 					dmg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 					dmg_lbl.add_theme_font_size_override("font_size", 16)
-					dmg_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+					var dmg_col_c: Color = player.get_dmg_color(card, sq) if player != null and player.has_method("get_dmg_color") else Color(1,1,1)
+					dmg_lbl.add_theme_color_override("font_color", dmg_col_c)
 					dmg_lbl.clip_contents = false
 					dmg_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 					dmg_lbl.custom_minimum_size = Vector2(22, 16)

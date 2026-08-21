@@ -118,6 +118,15 @@ func play_card(card: Card, row_idx: int, col_idx: int) -> bool:
 		return false
 	MoneySupply -= effective_money
 	BioSupply -= card.BioCost
+	# Store base/effective for UI coloring (hand/board show eff vs base)
+	var base_hp: int = 0
+	if card is Unit:
+		base_hp = (card as Unit).HitPoints
+	elif card is Building:
+		base_hp = (card as Building).HitPoints
+	var eff_hp: int = effective_hitpoints_for(card)
+	card.set_meta("base_hp", base_hp)
+	card.set_meta("eff_hp", eff_hp)
 	# Apply HP modifiers before placing (so building/unit starts with modified HP)
 	apply_hitpoints_modifier(card)
 	sq.place(card)
@@ -202,3 +211,55 @@ func apply_hitpoints_modifier(card: Card):
 		(card as Unit).HitPoints = new_hp
 	elif card is Building:
 		(card as Building).HitPoints = new_hp
+
+func _base_card_by_name(name: String) -> Card:
+	match name:
+		"Wall": return Wall.new()
+		"Infantry": return Infantry.new()
+		"Tank": return Tank.new()
+		"Artilery": return Artilery.new()
+		"Rocket Launcher": return RocketLauncher.new()
+		"Drone": return Drone.new()
+		"Fighter Jet": return FighterJet.new()
+		"Factory": return Factory.new()
+		"Barracks": return Barracks.new()
+		"Housing": return Housing.new()
+		"Corporation": return Corporation.new()
+		"Howitzer": return Howitzer.new()
+		_: return null
+
+func base_hitpoints_for(card: Card) -> int:
+	var b: Card = _base_card_by_name(card.card_name)
+	if b == null:
+		return 0
+	if b is Unit:
+		return (b as Unit).HitPoints
+	elif b is Building:
+		return (b as Building).HitPoints
+	return 0
+
+func base_damage_for(card: Card) -> int:
+	var b: Card = _base_card_by_name(card.card_name)
+	if b is Unit and b is Unit:
+		return (b as Unit).Damage
+	return 0
+
+func get_hp_color(card: Card) -> Color:
+	var base: int = 0
+	var eff: int = 0
+	if card.has_meta("base_hp") and card.has_meta("eff_hp"):
+		base = card.get_meta("base_hp") as int
+		eff = card.get_meta("eff_hp") as int
+	else:
+		base = base_hitpoints_for(card)
+		eff = effective_hitpoints_for(card)
+	if eff == 0 or base == 0 or eff == base:
+		return Color(1,1,1)
+	return Color(0.35, 0.9, 0.35) if eff > base else Color(1, 0.35, 0.35)
+
+func get_dmg_color(card: Card, square: Square) -> Color:
+	var base: int = base_damage_for(card)
+	var eff: int = effective_damage_for(card, square)
+	if eff == base:
+		return Color(1,1,1)
+	return Color(0.35, 0.9, 0.35) if eff > base else Color(1, 0.35, 0.35)
