@@ -77,6 +77,7 @@ var influence_value_label: Label
 var influence_icon_rect: TextureRect
 var hover_arrow: Control = null
 var hover_arrow_target: Control = null
+var modifiers_stack: VBoxContainer = null
 
 func _style_round_button(btn: Button, primary: bool = true):
 	var sb := StyleBoxFlat.new()
@@ -205,6 +206,83 @@ func _move_player_piles_to_bottom():
 	var disc_lbl = right_gauges.get_node_or_null("DiscardLabel")
 	if disc_lbl != null:
 		disc_lbl.visible = false
+	_ensure_modifiers_stack()
+	_refresh_modifiers_stack()
+
+func _ensure_modifiers_stack():
+	# Top-right of screen, overlay (not inside RightGauges) — vertical stack
+	var existing = get_node_or_null("ModifiersTopRight")
+	if existing != null and existing is VBoxContainer:
+		modifiers_stack = existing as VBoxContainer
+		modifiers_stack.visible = true
+		return
+	# Remove old RightGauges stack if it exists (migration)
+	var right_gauges = get_node_or_null("VBox/MainHBox/RightGauges")
+	if right_gauges != null:
+		var old = right_gauges.get_node_or_null("ModifiersStack")
+		if old != null:
+			old.queue_free()
+	var stack := VBoxContainer.new()
+	stack.name = "ModifiersTopRight"
+	stack.alignment = BoxContainer.ALIGNMENT_BEGIN
+	stack.add_theme_constant_override("separation", 8)
+	stack.custom_minimum_size = Vector2(118, 0)
+	stack.size_flags_horizontal = Control.SIZE_SHRINK_END
+	stack.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.z_index = 50
+	stack.z_as_relative = false
+	if stack.has_method("set_as_top_level"):
+		stack.top_level = true
+	# Anchor to top-right of viewport
+	stack.anchor_left = 1.0
+	stack.anchor_top = 0.0
+	stack.anchor_right = 1.0
+	stack.anchor_bottom = 0.0
+	stack.offset_left = -118
+	stack.offset_top = 12
+	stack.offset_right = -12
+	stack.offset_bottom = 360
+	stack.grow_horizontal = 0
+	stack.grow_vertical = 0
+	add_child(stack)
+	stack.visible = true
+	modifiers_stack = stack
+
+func _refresh_modifiers_stack():
+	if modifiers_stack == null or not is_instance_valid(modifiers_stack):
+		_ensure_modifiers_stack()
+		if modifiers_stack == null:
+			return
+	for c in modifiers_stack.get_children():
+		c.queue_free()
+	var src: Player = human
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null and gs.run_player != null:
+		src = gs.run_player
+	if src == null or src.Modifiers.is_empty():
+		# hide when empty to not take space
+		modifiers_stack.visible = false
+		return
+	modifiers_stack.visible = true
+	for mod in src.Modifiers:
+		if mod == null:
+			continue
+		var m: Modifier = mod as Modifier
+		if m == null:
+			continue
+		var spr := Modifier.create_sprite_for(m.modifier_name, Vector2(102, 102))
+		spr.custom_minimum_size = Vector2(102, 102)
+		spr.size = Vector2(102, 102)
+		# hover shows Effect, click-through
+		spr.mouse_filter = Control.MOUSE_FILTER_STOP
+		var eff: String = m.Effect
+		spr.mouse_entered.connect(func(): _show_hover(eff))
+		spr.mouse_exited.connect(func(): _hide_hover())
+		for child in spr.get_children():
+			if child is Control:
+				(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		modifiers_stack.add_child(spr)
 
 func _hide_hand_label():
 	var hl = get_node_or_null("VBox/MainHBox/RightContent/HandLabel")
@@ -414,6 +492,8 @@ func _ready():
 	_add_debug_button()
 	_ensure_shop_popup()
 	_setup_gauge_and_influence_hovers()
+	_ensure_modifiers_stack()
+	_refresh_modifiers_stack()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
 	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
@@ -1191,7 +1271,11 @@ func _show_shop():
 	for mod in mod_offer:
 		var mcell := VBoxContainer.new()
 		mcell.alignment = BoxContainer.ALIGNMENT_CENTER
-		mcell.custom_minimum_size = Vector2(220, 140)
+		mcell.custom_minimum_size = Vector2(220, 220)
+		var mart := Modifier.create_sprite_for((mod as Modifier).modifier_name, Vector2(96, 96))
+		mart.custom_minimum_size = Vector2(96, 96)
+		mart.size = Vector2(96, 96)
+		mcell.add_child(mart)
 		var mname := Label.new()
 		mname.text = (mod as Modifier).modifier_name
 		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1481,6 +1565,7 @@ func _animate_opponent_builds():
 func _refresh_ui():
 	_hide_hover()
 	_hide_hand_label()
+	_refresh_modifiers_stack()
 	# Influence now at very bottom right of draw pile — hide old labels, update new symbol
 	var gs_run = get_node_or_null("/root/GameState")
 	if ai_info != null:

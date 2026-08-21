@@ -1,0 +1,6 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect x="12" y="12" width="488" height="488" rx="32" fill="#2E73C7" stroke="#000" stroke-width="12" />
+  <circle cx="256" cy="220" r="110" fill="white" opacity="0.12"/>
+  <text x="256" y="250" font-size="160" text-anchor="middle" dominant-baseline="central">⚙</text>
+  <text x="256" y="420" font-size="28" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">Advanced Robotics</text>
+</svg>

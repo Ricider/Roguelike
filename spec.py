@@ -221,6 +221,7 @@ Player: Insurgents
     DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack]
     DiscardPile: []
     Hand: []
+    Modifiers: [Guerilla Warfare]
 
 
 Player: State Troops
@@ -237,6 +238,7 @@ Player: State Troops
     DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack]
     DiscardPile: []
     Hand: []
+    Modifiers: [State of emergency]
 
 Player: Horde
     HitPoints=200
@@ -252,6 +254,7 @@ Player: Horde
     DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
     DiscardPile: []
     Hand: []
+    Modifiers: [Conscription]
 
 Player: Coalition Army
     HitPoints=60
@@ -266,7 +269,8 @@ Player: Coalition Army
 
     DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 1 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation]
     DiscardPile: []
-    Hand: []
+    Hand: [] 
+    Modifiers: [Aerial Supremacy]
 
 Player: Corporate Troops
     HitPoints=30
@@ -282,6 +286,7 @@ Player: Corporate Troops
     DrawPile: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher]
     DiscardPile: []
     Hand: []
+    Modifiers: [Advanced Robotics]
 
 ### Modifiers ###
 

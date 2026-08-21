@@ -165,6 +165,7 @@ static func random_modifier_offer() -> Array:
 static func make_insurgents_player() -> AIPlayer:
 	var p := AIPlayer.new(120, 120, 10, 1, "Insurgents", "Sparse mountain village", 10)
 	p.DrawPile = make_insurgents_deck()
+	p.Modifiers = [Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 70)]
 	return p
 
 static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
@@ -178,6 +179,7 @@ static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[0]].place(Housing.new())
 	p.Board[back_row].Squares[positions[1]].place(Infantry.new())
 	p.DrawPile = make_state_troops_deck()
+	p.Modifiers = [Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 90)]
 	return p
 
 static func make_horde_player(for_human: bool = false) -> AIPlayer:
@@ -197,6 +199,7 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 			(card as Building).HitPoints = 5
 		p.Board[back_row].Squares[positions[i]].place(card)
 	p.DrawPile = make_horde_deck()
+	p.Modifiers = [Modifier.new("Conscription", "Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply", 50)]
 	return p
 
 static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
@@ -211,6 +214,7 @@ static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[1]].place(Housing.new())
 	p.Board[back_row].Squares[positions[2]].place(Factory.new())
 	p.DrawPile = make_coalition_army_deck()
+	p.Modifiers = [Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 80)]
 	return p
 
 static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
@@ -238,6 +242,7 @@ static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[0]].place(Corporation.new())
 	p.Board[back_row].Squares[positions[1]].place(Corporation.new())
 	p.DrawPile = make_corporate_troops_deck()
+	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 100)]
 	return p
 
 static func all_enemy_players_sorted() -> Array:
