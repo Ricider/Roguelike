@@ -2760,41 +2760,79 @@ func _inspect_pile(title: String, pile: Array):
 	for child in inspect_grid.get_children():
 		inspect_grid.remove_child(child)
 		child.queue_free()
+	# configure grid for transposed 4-row layout
+	inspect_grid.add_theme_constant_override("h_separation", 10)
+	inspect_grid.add_theme_constant_override("v_separation", 6)
 	if pile.is_empty():
+		inspect_grid.columns = 1
 		var empty_lbl := Label.new()
 		empty_lbl.text = "(empty)"
 		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		inspect_grid.add_child(empty_lbl)
 	else:
+		var cols: int = pile.size()
+		# cap visible columns to avoid absurd width; ScrollContainer will scroll
+		inspect_grid.columns = cols
+		# Row 1: titles
 		for card in pile:
 			var cname: String = card.card_name if card is Card else str(card)
-			var cell := VBoxContainer.new()
-			cell.alignment = BoxContainer.ALIGNMENT_CENTER
-			cell.clip_contents = true
-			cell.custom_minimum_size = Vector2(64, 72)
-			# Card art (8-bit, same as board/hand)
-			var art := Card.create_sprite_for(cname, Vector2(56, 56))
-			art.clip_contents = true
-			cell.add_child(art)
 			var lbl := Label.new()
 			lbl.text = cname
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.add_theme_font_size_override("font_size", 20)
+			lbl.add_theme_font_size_override("font_size", 18)
 			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-			cell.add_child(lbl)
-			if card is Card and (card as Card).SpecialEffect != "":
-				var eff3 := Label.new()
-				eff3.text = (card as Card).SpecialEffect
-				eff3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				eff3.clip_contents = true
-				eff3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-				eff3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				eff3.custom_minimum_size = Vector2(0, 0)
-				eff3.add_theme_font_size_override("font_size", 16)
-				eff3.add_theme_color_override("font_color", Color(1, 1, 1))
-				cell.add_child(eff3)
-			inspect_grid.add_child(cell)
+			lbl.custom_minimum_size = Vector2(110, 22)
+			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			inspect_grid.add_child(lbl)
+		# Row 2: art
+		for card in pile:
+			var cname2: String = card.card_name if card is Card else str(card)
+			var art_center := CenterContainer.new()
+			art_center.custom_minimum_size = Vector2(110, 56)
+			art_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var art := Card.create_sprite_for(cname2, Vector2(56, 56))
+			art.clip_contents = true
+			art.custom_minimum_size = Vector2(56, 56)
+			art.size = Vector2(56, 56)
+			art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			art_center.add_child(art)
+			inspect_grid.add_child(art_center)
+		# Row 3: stats
+		for card in pile:
+			var c3: Card = card as Card if card is Card else null
+			var stats := Label.new()
+			if c3 is Unit:
+				stats.text = "HP:%d DMG:%d" % [(c3 as Unit).HitPoints, (c3 as Unit).Damage]
+			elif c3 is Building:
+				stats.text = "HP:%d INC:%d" % [(c3 as Building).HitPoints, (c3 as Building).Income]
+			else:
+				stats.text = ""
+			stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			stats.add_theme_font_size_override("font_size", 16)
+			stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
+			stats.custom_minimum_size = Vector2(110, 18)
+			stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			inspect_grid.add_child(stats)
+		# Row 4: desc (SpecialEffect)
+		for card in pile:
+			var c4: Card = card as Card if card is Card else null
+			var desc := Label.new()
+			desc.text = c4.SpecialEffect if c4 != null else ""
+			desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			desc.clip_contents = true
+			desc.custom_minimum_size = Vector2(110, 32)
+			desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			desc.add_theme_font_size_override("font_size", 14)
+			desc.add_theme_color_override("font_color", Color(0.8,0.8,1))
+			inspect_grid.add_child(desc)
+	# enlarge popup to fit grid and enable horizontal scroll
+	inspect_popup.custom_minimum_size = Vector2(760, 360)
+	var vp: Vector2 = get_viewport_rect().size
+	inspect_popup.size = Vector2(760, 360)
+	inspect_popup.position = (vp - inspect_popup.size) / 2.0
 	inspect_popup.visible = true
 
 func _check_game_over() -> bool:

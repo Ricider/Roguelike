@@ -662,12 +662,13 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -160.0
-offset_right = 200.0
-offset_bottom = 160.0
+offset_left = -380.0
+offset_top = -180.0
+offset_right = 380.0
+offset_bottom = 180.0
 grow_horizontal = 2
 grow_vertical = 2
+custom_minimum_size = Vector2(760, 360)
 
 [node name="VBox" type="VBoxContainer" parent="InspectPopup"]
 layout_mode = 2
@@ -681,16 +682,16 @@ theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="InspectScroll" type="ScrollContainer" parent="InspectPopup/VBox"]
-custom_minimum_size = Vector2(300, 200)
+custom_minimum_size = Vector2(720, 280)
 layout_mode = 2
 size_flags_vertical = 3
-horizontal_scroll_mode = 0
+size_flags_horizontal = 3
+horizontal_scroll_mode = 2
 vertical_scroll_mode = 2
 
 [node name="InspectGrid" type="GridContainer" parent="InspectPopup/VBox/InspectScroll"]
 layout_mode = 2
 columns = 4
-alignment = 1
 
 [node name="CloseBtn" type="Button" parent="InspectPopup/VBox"]
 custom_minimum_size = Vector2(0, 28)
