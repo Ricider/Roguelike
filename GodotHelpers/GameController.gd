@@ -689,51 +689,89 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	var tgt_btn: Button = _get_button_for_square(defender, best_sq)
 	if tgt_btn == null or not is_instance_valid(tgt_btn):
 		return
-	var arrow_text: String = "↑" if attacker == human else "↓"
-	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.z_index = 400
-	panel.z_as_relative = false
-	if panel.has_method("set_as_top_level"):
-		panel.top_level = true
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.85, 0.12, 0.12, 0.95)
-	sb.border_color = Color(1, 1, 1, 1)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 4
-	sb.content_margin_right = 4
-	sb.content_margin_top = 1
-	sb.content_margin_bottom = 1
-	panel.add_theme_stylebox_override("panel", sb)
-	var lbl := Label.new()
-	lbl.text = arrow_text
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 42)
-	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	lbl.add_theme_constant_override("outline_size", 8)
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(lbl)
-	add_child(panel)
+	var root := Control.new()
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 400
+	root.z_as_relative = false
+	if root.has_method("set_as_top_level"):
+		root.top_level = true
+	root.custom_minimum_size = Vector2(160, 160)
+	root.size = Vector2(160, 160)
+	root.modulate = Color(1, 1, 1, 0)
+	# Fully black crosshair - 4x (2x again)
+	var outer_circle := PanelContainer.new()
+	outer_circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	outer_circle.custom_minimum_size = Vector2(144, 144)
+	outer_circle.size = Vector2(144, 144)
+	outer_circle.position = Vector2(8, 8)
+	var osb := StyleBoxFlat.new()
+	osb.bg_color = Color(0, 0, 0, 0)
+	osb.border_color = Color(0, 0, 0, 1)
+	osb.set_border_width_all(6)
+	osb.set_corner_radius_all(72)
+	outer_circle.add_theme_stylebox_override("panel", osb)
+	root.add_child(outer_circle)
+	var circle := PanelContainer.new()
+	circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	circle.custom_minimum_size = Vector2(128, 128)
+	circle.size = Vector2(128, 128)
+	circle.position = Vector2(16, 16)
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(0, 0, 0, 0)
+	csb.border_color = Color(0, 0, 0, 1)
+	csb.set_border_width_all(6)
+	csb.set_corner_radius_all(64)
+	circle.add_theme_stylebox_override("panel", csb)
+	root.add_child(circle)
+	var h := ColorRect.new()
+	h.color = Color(0, 0, 0, 1)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.custom_minimum_size = Vector2(112, 6)
+	h.size = Vector2(112, 6)
+	h.position = Vector2(24, 77)
+	root.add_child(h)
+	var v := ColorRect.new()
+	v.color = Color(0, 0, 0, 1)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.custom_minimum_size = Vector2(6, 112)
+	v.size = Vector2(6, 112)
+	v.position = Vector2(77, 24)
+	root.add_child(v)
+	var dot := PanelContainer.new()
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.custom_minimum_size = Vector2(16, 16)
+	dot.size = Vector2(16, 16)
+	dot.position = Vector2(72, 72)
+	var dsb := StyleBoxFlat.new()
+	dsb.bg_color = Color(0, 0, 0, 1)
+	dsb.set_corner_radius_all(8)
+	dot.add_theme_stylebox_override("panel", dsb)
+	root.add_child(dot)
+	add_child(root)
 	var tgt_rect: Rect2 = tgt_btn.get_global_rect()
 	if tgt_rect.size.x < 4:
 		tgt_rect = Rect2(tgt_btn.get_global_position(), Vector2(78, 78))
-	var sz: Vector2 = Vector2(36, 36)
-	panel.size = sz
-	panel.custom_minimum_size = sz
+	var sz: Vector2 = Vector2(160, 160)
+	root.size = sz
+	root.custom_minimum_size = sz
 	var center: Vector2 = tgt_rect.get_center()
 	var pos: Vector2 = center - sz * 0.5
 	var vp: Vector2 = get_viewport_rect().size
 	pos.x = clamp(pos.x, 4.0, vp.x - sz.x - 4.0)
 	pos.y = clamp(pos.y, 4.0, vp.y - sz.y - 4.0)
-	panel.global_position = pos
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for c in panel.get_children():
+	root.global_position = pos
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in root.get_children():
 		if c is Control:
 			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hover_arrow = panel
+	# Fade in and looping fade in/out - half speed (was 0.35/0.55)
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(root, "modulate:a", 1.0, 0.70).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(root, "modulate:a", 0.25, 1.10).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Store tween so hide can kill it
+	root.set_meta("fade_tween", tw)
+	hover_arrow = root
 	hover_arrow_target = tgt_btn
 
 func _hide_attack_arrow():
@@ -742,7 +780,18 @@ func _hide_attack_arrow():
 			for p in hover_arrow.get_meta("extra_arrows") as Array:
 				if p != null and is_instance_valid(p as Control):
 					(p as Control).queue_free()
-		hover_arrow.queue_free()
+		# Stop looping fade and fade out smoothly before freeing
+		if hover_arrow.has_meta("fade_tween"):
+			var ft = hover_arrow.get_meta("fade_tween")
+			if ft != null and is_instance_valid(ft as Tween):
+				(ft as Tween).kill()
+		var to_free: Control = hover_arrow as Control
+		hover_arrow = null
+		hover_arrow_target = null
+		var tw2 := create_tween()
+		tw2.tween_property(to_free, "modulate:a", 0.0, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw2.tween_callback(func(): if is_instance_valid(to_free): to_free.queue_free())
+		return
 	hover_arrow = null
 	hover_arrow_target = null
 
