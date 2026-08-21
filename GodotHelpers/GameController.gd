@@ -938,7 +938,7 @@ func _ensure_debug_popup():
 	sb.content_margin_top = 10
 	sb.content_margin_bottom = 10
 	debug_popup.add_theme_stylebox_override("panel", sb)
-	debug_popup.custom_minimum_size = Vector2(420, 300)
+	debug_popup.custom_minimum_size = Vector2(420, 360)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
 	debug_popup.add_child(vbox)
@@ -1013,6 +1013,26 @@ func _ensure_debug_popup():
 		_debug_summon_card(cname2, target_is_ai)
 	)
 	summon_row.add_child(summon_btn)
+	# Debug: end battle in victory and go to shop
+	var victory_row := HBoxContainer.new()
+	victory_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	victory_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(victory_row)
+	var victory_btn := Button.new()
+	victory_btn.text = "Victory → Shop"
+	victory_btn.custom_minimum_size = Vector2(180, 36)
+	victory_btn.add_theme_font_size_override("font_size", 28)
+	_style_round_button(victory_btn, true)
+	victory_btn.pressed.connect(func():
+		_debug_victory_to_shop()
+		debug_popup.visible = false
+	)
+	victory_row.add_child(victory_btn)
+	var victory_hint := Label.new()
+	victory_hint.text = "(ends battle, grants Influence)"
+	victory_hint.add_theme_font_size_override("font_size", 18)
+	victory_hint.add_theme_color_override("font_color", Color(0.8,0.8,0.85))
+	victory_row.add_child(victory_hint)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 10)
@@ -1072,7 +1092,7 @@ func _center_debug_popup():
 	var vp: Vector2 = get_viewport_rect().size
 	var sz: Vector2 = debug_popup.size
 	if sz.x < 100:
-		sz = Vector2(420, 300)
+		sz = Vector2(420, 360)
 	debug_popup.position = (vp - sz) / 2.0
 
 func _create_card_by_name(cname: String) -> Card:
@@ -1115,6 +1135,19 @@ func _debug_summon_card(cname: String, to_ai: bool):
 				break
 		if found:
 			break
+
+func _debug_victory_to_shop():
+	if ai_player == null or human == null:
+		message_label.text = "Debug: no battle active"
+		return
+	if ai_player.HitPoints <= 0:
+		message_label.text = "Debug: battle already won"
+		# still ensure shop shows
+		_check_game_over()
+		return
+	ai_player.HitPoints = 0
+	message_label.text = "Debug: forced victory over %s" % ai_player.display_name
+	_check_game_over()
 
 func _restart_game():
 	var g = get_node_or_null("/root/GameState")
@@ -1194,153 +1227,164 @@ func _show_shop():
 		mod_offer = CardFactory.random_modifier_offer()
 		if gs != null:
 			gs.shop_modifier_offer = mod_offer
-	var grid := HBoxContainer.new()
-	grid.alignment = BoxContainer.ALIGNMENT_CENTER
-	grid.add_theme_constant_override("separation", 12)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(grid)
+	# --- CARDS GRID: 4 rows (titles / art / description / buy) x 5 cols ---
+	var card_grid := GridContainer.new()
+	card_grid.columns = 5
+	card_grid.add_theme_constant_override("h_separation", 12)
+	card_grid.add_theme_constant_override("v_separation", 6)
+	card_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(card_grid)
+	# Row 1: titles
 	for card in offer:
-		var cell := VBoxContainer.new()
-		cell.alignment = BoxContainer.ALIGNMENT_CENTER
-		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cell.size_flags_vertical = Control.SIZE_FILL
-		cell.custom_minimum_size = Vector2(150, 260)
-		# Art - fixed 96, centered horizontally
+		var c := card as Card
+		var name_lbl := Label.new()
+		name_lbl.text = c.card_name
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", 22)
+		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		name_lbl.custom_minimum_size = Vector2(150, 28)
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card_grid.add_child(name_lbl)
+	# Row 2: art (96 centered in 150 col)
+	for card in offer:
+		var c2 := card as Card
+		var art_center := CenterContainer.new()
+		art_center.custom_minimum_size = Vector2(150, 96)
+		art_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var art_wrap := Control.new()
 		art_wrap.custom_minimum_size = Vector2(96, 96)
-		art_wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		art_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var art := Card.create_sprite_for(card.card_name, Vector2(96,96))
+		var art := Card.create_sprite_for(c2.card_name, Vector2(96,96))
 		art.clip_contents = true
 		art.custom_minimum_size = Vector2(96, 96)
+		art.size = Vector2(96, 96)
 		art.position = Vector2.ZERO
+		art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		art_wrap.add_child(art)
-		cell.add_child(art_wrap)
-		var name_lbl := Label.new()
-		name_lbl.text = card.card_name
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.add_theme_font_size_override("font_size", 24)
-		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
-		name_lbl.custom_minimum_size = Vector2(140, 28)
-		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cell.add_child(name_lbl)
+		art_center.add_child(art_wrap)
+		card_grid.add_child(art_center)
+	# Row 3: descriptions (cost + stats + effect stacked, fixed height per col)
+	for card in offer:
+		var c3 := card as Card
+		var desc := VBoxContainer.new()
+		desc.alignment = BoxContainer.ALIGNMENT_CENTER
+		desc.add_theme_constant_override("separation", 2)
+		desc.custom_minimum_size = Vector2(150, 92)
+		desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var cost_row := HBoxContainer.new()
 		cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cost_row.add_theme_constant_override("separation", 4)
 		var cost_icon := TextureRect.new()
 		cost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
-		cost_icon.custom_minimum_size = Vector2(20,20)
+		cost_icon.custom_minimum_size = Vector2(18,18)
 		cost_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		cost_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cost_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		cost_row.add_child(cost_icon)
 		var cost_lbl := Label.new()
-		cost_lbl.text = "%d" % card.InfluenceCost
+		cost_lbl.text = "%d" % c3.InfluenceCost
 		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cost_lbl.add_theme_font_size_override("font_size", 22)
+		cost_lbl.add_theme_font_size_override("font_size", 20)
 		cost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		cost_row.add_child(cost_lbl)
-		cell.add_child(cost_row)
+		desc.add_child(cost_row)
 		var stats := Label.new()
-		if card is Unit:
-			stats.text = "HP:%d DMG:%d" % [(card as Unit).HitPoints, (card as Unit).Damage]
-		elif card is Building:
-			stats.text = "HP:%d INC:%d" % [(card as Building).HitPoints, (card as Building).Income]
+		if c3 is Unit:
+			stats.text = "HP:%d DMG:%d" % [(c3 as Unit).HitPoints, (c3 as Unit).Damage]
+		elif c3 is Building:
+			stats.text = "HP:%d INC:%d" % [(c3 as Building).HitPoints, (c3 as Building).Income]
 		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stats.add_theme_font_size_override("font_size", 20)
+		stats.add_theme_font_size_override("font_size", 18)
 		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
-		stats.custom_minimum_size = Vector2(140, 20)
-		stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cell.add_child(stats)
-		var eff_wrap := Control.new()
-		eff_wrap.custom_minimum_size = Vector2(140, 36)
-		eff_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		eff_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if card.SpecialEffect != "":
-			var eff := Label.new()
-			eff.text = card.SpecialEffect
-			eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			eff.custom_minimum_size = Vector2(140, 36)
-			eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			eff.add_theme_font_size_override("font_size", 16)
-			eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
-			eff.position = Vector2.ZERO
-			eff_wrap.add_child(eff)
-		cell.add_child(eff_wrap)
-		# Spacer pushes buy button to bottom so buttons align horizontally
-		var spacer := Control.new()
-		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		spacer.custom_minimum_size = Vector2(0, 4)
-		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cell.add_child(spacer)
+		stats.custom_minimum_size = Vector2(150, 18)
+		desc.add_child(stats)
+		var eff := Label.new()
+		eff.text = c3.SpecialEffect
+		eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		eff.custom_minimum_size = Vector2(150, 36)
+		eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		eff.add_theme_font_size_override("font_size", 14)
+		eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
+		desc.add_child(eff)
+		card_grid.add_child(desc)
+	# Row 4: buy buttons
+	for card in offer:
+		var c4 := card as Card
+		var btn_center := CenterContainer.new()
+		btn_center.custom_minimum_size = Vector2(150, 32)
+		btn_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var buy_btn := Button.new()
 		buy_btn.text = "Buy"
 		buy_btn.custom_minimum_size = Vector2(80, 28)
-		buy_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_style_round_button(buy_btn, true)
-		buy_btn.disabled = influence < card.InfluenceCost
+		buy_btn.disabled = influence < c4.InfluenceCost
 		if buy_btn.disabled:
 			buy_btn.modulate = Color(0.6,0.6,0.6)
-		var _card_ref: Card = card
+		var _card_ref: Card = c4
 		buy_btn.pressed.connect(func(): _buy_shop_card(_card_ref))
-		cell.add_child(buy_btn)
-		grid.add_child(cell)
-	# Modifiers row - separate row per spec
+		btn_center.add_child(buy_btn)
+		card_grid.add_child(btn_center)
+	# --- MODIFIERS GRID: same 4-row setup, 3 cols, right below cards ---
 	var mod_label := Label.new()
 	mod_label.text = "Modifiers (permanent until reset)"
 	mod_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mod_label.add_theme_font_size_override("font_size", 20)
 	mod_label.add_theme_color_override("font_color", Color(1,0.85,0.4))
 	vbox.add_child(mod_label)
-	var mod_grid := HBoxContainer.new()
-	mod_grid.alignment = BoxContainer.ALIGNMENT_CENTER
-	mod_grid.add_theme_constant_override("separation", 12)
+	var mod_grid := GridContainer.new()
+	mod_grid.columns = 3
+	mod_grid.add_theme_constant_override("h_separation", 14)
+	mod_grid.add_theme_constant_override("v_separation", 6)
 	mod_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(mod_grid)
+	# Row 1: modifier titles
 	for mod in mod_offer:
-		var mcell := VBoxContainer.new()
-		mcell.alignment = BoxContainer.ALIGNMENT_CENTER
-		mcell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mcell.size_flags_vertical = Control.SIZE_FILL
-		mcell.custom_minimum_size = Vector2(220, 260)
+		var m := mod as Modifier
+		var mname := Label.new()
+		mname.text = m.modifier_name
+		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mname.add_theme_font_size_override("font_size", 20)
+		mname.add_theme_color_override("font_color", Color(1,0.92,0.6))
+		mname.custom_minimum_size = Vector2(220, 28)
+		mname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mname.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		mod_grid.add_child(mname)
+	# Row 2: modifier art
+	for mod in mod_offer:
+		var m2 := mod as Modifier
+		var mart_center := CenterContainer.new()
+		mart_center.custom_minimum_size = Vector2(220, 96)
+		mart_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var mart_wrap := Control.new()
 		mart_wrap.custom_minimum_size = Vector2(96, 96)
-		mart_wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		mart_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var mart := Modifier.create_sprite_for((mod as Modifier).modifier_name, Vector2(96, 96))
+		var mart := Modifier.create_sprite_for(m2.modifier_name, Vector2(96, 96))
 		mart.custom_minimum_size = Vector2(96, 96)
 		mart.size = Vector2(96, 96)
 		mart.position = Vector2.ZERO
 		mart_wrap.add_child(mart)
-		mcell.add_child(mart_wrap)
-		var mname := Label.new()
-		mname.text = (mod as Modifier).modifier_name
-		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		mname.add_theme_font_size_override("font_size", 20)
-		mname.add_theme_color_override("font_color", Color(1,0.92,0.6))
-		mname.custom_minimum_size = Vector2(200, 28)
-		mname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mcell.add_child(mname)
-		var meff_wrap := Control.new()
-		meff_wrap.custom_minimum_size = Vector2(200, 64)
-		meff_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		meff_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mart_center.add_child(mart_wrap)
+		mod_grid.add_child(mart_center)
+	# Row 3: modifier descriptions (effect + cost)
+	for mod in mod_offer:
+		var m3 := mod as Modifier
+		var mdesc := VBoxContainer.new()
+		mdesc.alignment = BoxContainer.ALIGNMENT_CENTER
+		mdesc.add_theme_constant_override("separation", 3)
+		mdesc.custom_minimum_size = Vector2(220, 88)
+		mdesc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var meff := Label.new()
-		meff.text = (mod as Modifier).Effect
+		meff.text = m3.Effect
 		meff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		meff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		meff.custom_minimum_size = Vector2(200, 64)
-		meff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		meff.custom_minimum_size = Vector2(220, 64)
 		meff.add_theme_font_size_override("font_size", 14)
 		meff.add_theme_color_override("font_color", Color(0.85,0.85,1))
-		meff.position = Vector2.ZERO
-		meff_wrap.add_child(meff)
-		mcell.add_child(meff_wrap)
+		mdesc.add_child(meff)
 		var mcost_row := HBoxContainer.new()
 		mcost_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		mcost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mcost_row.add_theme_constant_override("separation", 4)
 		var mcost_icon := TextureRect.new()
 		mcost_icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
@@ -1349,36 +1393,37 @@ func _show_shop():
 		mcost_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		mcost_row.add_child(mcost_icon)
 		var mcost_lbl := Label.new()
-		mcost_lbl.text = "%d" % (mod as Modifier).InfluenceCost
+		mcost_lbl.text = "%d" % m3.InfluenceCost
 		mcost_lbl.add_theme_font_size_override("font_size", 18)
 		mcost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		mcost_row.add_child(mcost_lbl)
-		mcell.add_child(mcost_row)
-		var mspacer := Control.new()
-		mspacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		mspacer.custom_minimum_size = Vector2(0, 4)
-		mspacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		mcell.add_child(mspacer)
+		mdesc.add_child(mcost_row)
+		mod_grid.add_child(mdesc)
+	# Row 4: modifier buy buttons
+	for mod in mod_offer:
+		var m4 := mod as Modifier
+		var mbtn_center := CenterContainer.new()
+		mbtn_center.custom_minimum_size = Vector2(220, 32)
+		mbtn_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var mbuy := Button.new()
 		mbuy.text = "Buy"
 		mbuy.custom_minimum_size = Vector2(80, 28)
-		mbuy.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_style_round_button(mbuy, true)
 		var already_owned: bool = false
 		if human != null:
 			for om in human.Modifiers:
-				if om is Modifier and (om as Modifier).modifier_name == (mod as Modifier).modifier_name:
+				if om is Modifier and (om as Modifier).modifier_name == m4.modifier_name:
 					already_owned = true
 					break
-		mbuy.disabled = already_owned or influence < (mod as Modifier).InfluenceCost
+		mbuy.disabled = already_owned or influence < m4.InfluenceCost
 		if mbuy.disabled:
 			mbuy.modulate = Color(0.6,0.6,0.6)
 			if already_owned:
 				mbuy.text = "Owned"
-		var _mod_ref: Modifier = mod as Modifier
+		var _mod_ref: Modifier = m4
 		mbuy.pressed.connect(func(): _buy_shop_modifier(_mod_ref))
-		mcell.add_child(mbuy)
-		mod_grid.add_child(mcell)
+		mbtn_center.add_child(mbuy)
+		mod_grid.add_child(mbtn_center)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 12)
