@@ -1893,13 +1893,36 @@ func _refresh_hand():
 		btn.custom_minimum_size = Vector2(108, 68)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var hp: int = 0
+		# Determine effective vs base for coloring (green increased, red decreased)
+		var base_hp: int = 0
+		var base_dmg: int = 0
+		var base_money: int = card.MoneyCost
+		var base_bio: int = card.BioCost
+		var eff_hp: int = 0
+		var eff_dmg: int = 0
+		var eff_money: int = human.get_effective_money_cost(card)
+		var eff_bio: int = card.BioCost
+		if card is Unit:
+			base_hp = (card as Unit).HitPoints
+			base_dmg = (card as Unit).Damage
+			eff_hp = human.effective_hitpoints_for(card)
+			# Effective dmg in hand: base + Guerilla/Aerial (no Barracks adjacency)
+			var dmg: int = base_dmg
+			if human.has_modifier("Guerilla Warfare") and card.BioCost > card.MoneyCost:
+				dmg *= 2
+			if human.has_modifier("Aerial Supremacy") and (card as Unit).Flying:
+				dmg += 2
+			eff_dmg = dmg
+		elif card is Building:
+			base_hp = (card as Building).HitPoints
+			eff_hp = human.effective_hitpoints_for(card)
+		var hp: int = base_hp
 		var extra: String = ""
 		if card is Unit:
-			hp = (card as Unit).HitPoints
-			extra = "DMG %d" % (card as Unit).Damage
+			hp = base_hp
+			extra = "DMG %d" % base_dmg
 		elif card is Building:
-			hp = (card as Building).HitPoints
+			hp = base_hp
 			extra = "INC %d" % (card as Building).Income
 		btn.text = ""
 		# Right-side layout: sprite left | details right - income always visible
@@ -1950,9 +1973,12 @@ func _refresh_hand():
 		h_heart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_stats.add_child(h_heart)
 		var h_hp := Label.new()
-		h_hp.text = "%d" % hp
+		h_hp.text = "%d" % eff_hp if eff_hp != 0 else "%d" % hp
 		h_hp.add_theme_font_size_override("font_size", 16)
-		h_hp.add_theme_color_override("font_color", Color(1, 1, 1))
+		var hp_col: Color = Color(1,1,1)
+		if eff_hp != 0 and eff_hp != base_hp:
+			hp_col = Color(0.35, 0.9, 0.35) if eff_hp > base_hp else Color(1, 0.35, 0.35)
+		h_hp.add_theme_color_override("font_color", hp_col)
 		h_hp.clip_contents = false
 		h_hp.autowrap_mode = TextServer.AUTOWRAP_OFF
 		h_hp.custom_minimum_size = Vector2(0, 16)
@@ -1967,9 +1993,12 @@ func _refresh_hand():
 			h_sword.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			hand_stats.add_child(h_sword)
 			var h_dmg := Label.new()
-			h_dmg.text = "%d" % (card as Unit).Damage
+			h_dmg.text = "%d" % eff_dmg
 			h_dmg.add_theme_font_size_override("font_size", 16)
-			h_dmg.add_theme_color_override("font_color", Color(1, 1, 1))
+			var dmg_col: Color = Color(1,1,1)
+			if eff_dmg != base_dmg:
+				dmg_col = Color(0.35, 0.9, 0.35) if eff_dmg > base_dmg else Color(1, 0.35, 0.35)
+			h_dmg.add_theme_color_override("font_color", dmg_col)
 			h_dmg.clip_contents = false
 			h_dmg.autowrap_mode = TextServer.AUTOWRAP_OFF
 			h_dmg.custom_minimum_size = Vector2(0, 16)
@@ -2013,9 +2042,12 @@ func _refresh_hand():
 		m_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_costs.add_child(m_icon)
 		var m_lbl := Label.new()
-		m_lbl.text = "%d" % card.MoneyCost
+		m_lbl.text = "%d" % eff_money
 		m_lbl.add_theme_font_size_override("font_size", 16)
-		m_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		var money_col: Color = Color(1,1,1)
+		if eff_money != base_money:
+			money_col = Color(1, 0.35, 0.35) if eff_money > base_money else Color(0.35, 0.9, 0.35)
+		m_lbl.add_theme_color_override("font_color", money_col)
 		m_lbl.clip_contents = false
 		m_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		m_lbl.custom_minimum_size = Vector2(0, 16)
@@ -2029,9 +2061,12 @@ func _refresh_hand():
 		b_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_costs.add_child(b_icon)
 		var b_lbl := Label.new()
-		b_lbl.text = "%d" % card.BioCost
+		b_lbl.text = "%d" % eff_bio
 		b_lbl.add_theme_font_size_override("font_size", 16)
-		b_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		var bio_col: Color = Color(1,1,1)
+		if eff_bio != base_bio:
+			bio_col = Color(1, 0.35, 0.35) if eff_bio > base_bio else Color(0.35, 0.9, 0.35)
+		b_lbl.add_theme_color_override("font_color", bio_col)
 		b_lbl.clip_contents = false
 		b_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		b_lbl.custom_minimum_size = Vector2(0, 16)
