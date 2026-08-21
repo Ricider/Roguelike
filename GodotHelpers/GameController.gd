@@ -681,14 +681,14 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	var cs := CombatState.new(human, ai_player)
 	if cs.Players.size() < 2 or cs.Players[0] == null:
 		cs.Players = [attacker, defender]
+	# Use same Manhattan logic as combat (deterministic first to match combat)
 	var pred: Dictionary = cs.predict_target(attacker, attacker_sq, defender)
-	var target_sq: Square = pred.get("square", null) as Square
-	if target_sq == null:
+	var best_sq: Square = pred.get("square", null) as Square
+	if best_sq == null:
 		return
-	var tgt_btn: Button = _get_button_for_square(defender, target_sq)
+	var tgt_btn: Button = _get_button_for_square(defender, best_sq)
 	if tgt_btn == null or not is_instance_valid(tgt_btn):
 		return
-	# Red arrow, top-level overlay centered on target — always on top, inside window, click-through
 	var arrow_text: String = "↑" if attacker == human else "↓"
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -697,31 +697,30 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	if panel.has_method("set_as_top_level"):
 		panel.top_level = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.65, 0.05, 0.05, 0.92)
-	sb.border_color = Color(1, 0.95, 0.95, 1)
+	sb.bg_color = Color(0.85, 0.12, 0.12, 0.95)
+	sb.border_color = Color(1, 1, 1, 1)
 	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(12)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 6
-	sb.content_margin_top = 2
-	sb.content_margin_bottom = 2
+	sb.set_corner_radius_all(10)
+	sb.content_margin_left = 4
+	sb.content_margin_right = 4
+	sb.content_margin_top = 1
+	sb.content_margin_bottom = 1
 	panel.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
 	lbl.text = arrow_text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 52)
+	lbl.add_theme_font_size_override("font_size", 42)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	lbl.add_theme_constant_override("outline_size", 10)
+	lbl.add_theme_constant_override("outline_size", 8)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(lbl)
 	add_child(panel)
-	# Position centered over target button, clamped inside viewport
 	var tgt_rect: Rect2 = tgt_btn.get_global_rect()
 	if tgt_rect.size.x < 4:
 		tgt_rect = Rect2(tgt_btn.get_global_position(), Vector2(78, 78))
-	var sz: Vector2 = Vector2(48, 48)
+	var sz: Vector2 = Vector2(36, 36)
 	panel.size = sz
 	panel.custom_minimum_size = sz
 	var center: Vector2 = tgt_rect.get_center()
@@ -739,6 +738,10 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 
 func _hide_attack_arrow():
 	if hover_arrow != null and is_instance_valid(hover_arrow):
+		if hover_arrow.has_meta("extra_arrows"):
+			for p in hover_arrow.get_meta("extra_arrows") as Array:
+				if p != null and is_instance_valid(p as Control):
+					(p as Control).queue_free()
 		hover_arrow.queue_free()
 	hover_arrow = null
 	hover_arrow_target = null
@@ -1993,7 +1996,7 @@ func _execute_combat_live() -> Array:
 			for a_idx in range(attacks):
 				if unit.HitPoints <= 0:
 					break
-				var target = state._pick_target(defender, unit.HasRange, rng)
+				var target = state._pick_target_manhattan(defender, attacker, sq, unit.HasRange, rng)
 				if target == null:
 					defender.HitPoints -= dmg
 					defender.HitPoints = clamp(defender.HitPoints, 0, defender.MaxHitPoints)

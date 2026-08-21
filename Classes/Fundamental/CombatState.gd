@@ -152,6 +152,7 @@ func _pick_target_manhattan(defender: Player, attacker: Player, attacker_sq: Squ
 		if all.is_empty():
 			return null
 		return all[rng.randi_range(0, all.size() - 1)]
+	# Deterministic Manhattan closest to match arrow (arrow shows first minimal)
 	var best: int = 9999
 	var candidates: Array = []
 	for row in defender.Board:
@@ -170,7 +171,8 @@ func _pick_target_manhattan(defender: Player, attacker: Player, attacker_sq: Squ
 				candidates.append({"card": c2, "square": sq})
 	if candidates.is_empty():
 		return null
-	return candidates[rng.randi_range(0, candidates.size() - 1)]
+	# Deterministic first to match arrow (was random among ties, now first for consistency)
+	return candidates[0]
 
 func predict_target(attacker: Player, attacker_sq: Square, defender: Player) -> Dictionary:
 	if attacker_sq == null:
