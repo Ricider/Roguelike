@@ -22,7 +22,7 @@ static func make_starting_deck() -> Array:
 	return deck
 
 static func make_insurgents_deck() -> Array:
-	# Insurgents: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack] =31
+	# Insurgents: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack, 2 Anti Aircraft] =33
 	var deck: Array = []
 	for i in range(5):
 		deck.append(Wall.new())
@@ -38,14 +38,21 @@ static func make_insurgents_deck() -> Array:
 		deck.append(Housing.new())
 	for i in range(2):
 		deck.append(Barracks.new())
+	for i in range(2):
+		deck.append(AntiAircraft.new())
 	deck.shuffle()
 	return deck
 
 static func make_state_troops_deck() -> Array:
-	return make_starting_deck()
+	# State Troops: [10 wall, 10 Infantry, 3 Tank, 3 Artilery, 2 Factory, 2 Housing, 1 Barrack, 3 Anti Aircraft] =34
+	var deck: Array = make_starting_deck()
+	for i in range(3):
+		deck.append(AntiAircraft.new())
+	deck.shuffle()
+	return deck
 
 static func make_horde_deck() -> Array:
-	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack] =48? per spec sum
+	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Anti Aircraft, 3 Special Ops] =52
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -65,11 +72,15 @@ static func make_horde_deck() -> Array:
 		deck.append(Housing.new())
 	for i in range(2):
 		deck.append(Barracks.new())
+	for i in range(1):
+		deck.append(AntiAircraft.new())
+	for i in range(3):
+		deck.append(SpecialOps.new())
 	deck.shuffle()
 	return deck
 
 static func make_coalition_army_deck() -> Array:
-	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 1 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation] =43
+	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops] =46
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -81,7 +92,7 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(Tank.new())
 	for i in range(2):
 		deck.append(Artilery.new())
-	for i in range(1):
+	for i in range(2):
 		deck.append(RocketLauncher.new())
 	for i in range(4):
 		deck.append(FighterJet.new())
@@ -93,6 +104,8 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(Barracks.new())
 	for i in range(1):
 		deck.append(Corporation.new())
+	for i in range(3):
+		deck.append(SpecialOps.new())
 	deck.shuffle()
 	return deck
 
@@ -144,7 +157,7 @@ static func make_corporate_troops_deck() -> Array:
 
 # --- Shop pool helper ---
 static func all_card_types() -> Array:
-	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new()]
+	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new(), AntiAircraft.new(), SpecialOps.new()]
 
 static func random_shop_offer() -> Array:
 	var pool := all_card_types()
@@ -165,7 +178,7 @@ static func random_modifier_offer() -> Array:
 static func make_insurgents_player() -> AIPlayer:
 	var p := AIPlayer.new(120, 120, 10, 1, "Insurgents", "Sparse mountain village", 10)
 	p.DrawPile = make_insurgents_deck()
-	p.Modifiers = [Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 70)]
+	p.Modifiers = [Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 25)]
 	return p
 
 static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
@@ -179,7 +192,7 @@ static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[0]].place(Housing.new())
 	p.Board[back_row].Squares[positions[1]].place(Infantry.new())
 	p.DrawPile = make_state_troops_deck()
-	p.Modifiers = [Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 90)]
+	p.Modifiers = [Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 20)]
 	return p
 
 static func make_horde_player(for_human: bool = false) -> AIPlayer:
@@ -189,8 +202,8 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	# 2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp
-	var to_place: Array = [Housing.new(), Housing.new(), Artilery.new(), Tank.new(), Tank.new()]
+	# 2 Factory, 2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp (7 cards)
+	var to_place: Array = [Factory.new(), Factory.new(), Housing.new(), Housing.new(), Artilery.new(), Tank.new(), Tank.new()]
 	for i in range(to_place.size()):
 		var card: Card = to_place[i]
 		if card is Unit:
@@ -199,7 +212,7 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 			(card as Building).HitPoints = 5
 		p.Board[back_row].Squares[positions[i]].place(card)
 	p.DrawPile = make_horde_deck()
-	p.Modifiers = [Modifier.new("Conscription", "Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply", 50)]
+	p.Modifiers = [Modifier.new("Conscription", "Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply", 35)]
 	return p
 
 static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
@@ -214,7 +227,7 @@ static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[1]].place(Housing.new())
 	p.Board[back_row].Squares[positions[2]].place(Factory.new())
 	p.DrawPile = make_coalition_army_deck()
-	p.Modifiers = [Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 80)]
+	p.Modifiers = [Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 50)]
 	return p
 
 static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
@@ -242,7 +255,7 @@ static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[0]].place(Corporation.new())
 	p.Board[back_row].Squares[positions[1]].place(Corporation.new())
 	p.DrawPile = make_corporate_troops_deck()
-	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 100)]
+	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60)]
 	return p
 
 static func all_enemy_players_sorted() -> Array:

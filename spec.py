@@ -93,6 +93,30 @@ Card: Infantry
 
     InfluenceCost: 10
 
+Card: Special Ops
+    Hp: 10
+    Damage: 7
+    HasRange: false
+    Flying: false
+    
+    MoneyCost: 15
+    BioCost: 20
+
+    InfluenceCost: 25
+    SpecialEffect: Deals +100% damage to cards with Flying set to false
+
+Card: Anti Aircraft
+    Hp: 10
+    Damage: 3
+    HasRange: false
+    Flying: false
+    
+    MoneyCost: 10
+    BioCost: 5
+
+    InfluenceCost: 15
+    SpecialEffect: Deals +200% damage to cards with Flying set to true
+
 Card: Tank
     Hp: 25
     Damage: 8
@@ -113,7 +137,7 @@ Card: Artilery
     MoneyCost: 20
     BioCost: 8
 
-    InfluenceCost: 20
+    InfluenceCost: 15
 
 Card: Rocket Launcher
     Hp: 12
@@ -126,7 +150,7 @@ Card: Rocket Launcher
 
     SpecialEffect: attacks 4 times every Combat Phase
 
-    InfluenceCost: 30
+    InfluenceCost: 20
 
 Card: Drone
     Hp: 6
@@ -137,7 +161,7 @@ Card: Drone
     MoneyCost: 5
     BioCost: 0
 
-    InfluenceCost: 15
+    InfluenceCost: 10
 
 Card: Fighter Jet
     Hp: 14
@@ -150,7 +174,7 @@ Card: Fighter Jet
 
     SpecialEffect: Also damages tiles adjacent to where it hit
 
-    InfluenceCost: 40
+    InfluenceCost: 25
 
 ### Building Cards ###
 
@@ -172,7 +196,7 @@ Card: Barracks
 
     SpecialEffect: Friendly units in adjacent squares have +2 damage
 
-    InfluenceCost: 30
+    InfluenceCost: 20
 
 Card: Housing
     Hp: 50
@@ -203,7 +227,7 @@ Card: Corporation
 
     SpecialEffect: Reduce MoneyCost of playing all cards by 20%
 
-    InfluenceCost: 60
+    InfluenceCost: 25
 
 ### Players ###
 
@@ -218,7 +242,7 @@ Player: Insurgents
 
     Influence=10
 
-    DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack]
+    DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack, 2 Anti Aircraft]
     DiscardPile: []
     Hand: []
     Modifiers: [Guerilla Warfare]
@@ -235,14 +259,14 @@ Player: State Troops
 
     Influence=20
 
-    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack]
+    DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack, 3 Anti Aircraft]
     DiscardPile: []
     Hand: []
     Modifiers: [State of emergency]
 
 Player: Horde
     HitPoints=200
-    Board=2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp
+    Board=2 Factory, 2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp
     Difficulty=4
     BackgroundImage=Russian style city, snowy, add few trees
 
@@ -251,7 +275,7 @@ Player: Horde
 
     Influence=25
 
-    DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack]
+    DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Anti Aircraft, 3 Special Ops]
     DiscardPile: []
     Hand: []
     Modifiers: [Conscription]
@@ -267,7 +291,7 @@ Player: Coalition Army
 
     Influence=50
 
-    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 1 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation]
+    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops]
     DiscardPile: []
     Hand: [] 
     Modifiers: [Aerial Supremacy]
@@ -292,31 +316,31 @@ Player: Corporate Troops
 
 Modifier: Conscription
     Effect=Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply
-    InfluenceCost: 50
+    InfluenceCost: 35
 
 Modifier: Guerilla Warfare
     Effect=Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP
-    InfluenceCost: 70
+    InfluenceCost: 25
 
 Modifier: State of emergency
     Effect=You gain 3 HitPoints every turn
-    InfluenceCost: 90
+    InfluenceCost: 20
 
 Modifier: Fanaticism
     Effect=Your buildings have 50% less HP, but Units have 100% more
-    InfluenceCost: 40
+    InfluenceCost: 30
 
 Modifier: Corruption
     Effect=Your buildings have 50% less HP, but you gain +10 MoneySupply every turn
-    InfluenceCost: 40
+    InfluenceCost: 30
 
 Modifier: Advanced Robotics
     Effect=All units have HasRange set to true, but they cost +5 extra MoneySupply
-    InfluenceCost: 100
+    InfluenceCost: 60
 
 Modifier: Aerial Supremacy
     Effect=If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply
-    InfluenceCost: 80
+    InfluenceCost: 50
 
 ### Rules ###
 

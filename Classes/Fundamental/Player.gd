@@ -226,6 +226,8 @@ func _base_card_by_name(name: String) -> Card:
 		"Housing": return Housing.new()
 		"Corporation": return Corporation.new()
 		"Howitzer": return Howitzer.new()
+		"Special Ops": return SpecialOps.new()
+		"Anti Aircraft": return AntiAircraft.new()
 		_: return null
 
 func base_hitpoints_for(card: Card) -> int:

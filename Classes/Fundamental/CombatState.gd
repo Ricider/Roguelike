@@ -55,6 +55,11 @@ func combat_phase() -> Array:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1
+				# New unit special effects: Special Ops vs non-flying, Anti Aircraft vs flying
+				if unit is SpecialOps and target_card is Unit and not (target_card as Unit).Flying:
+					actual_dmg *= 2
+				elif unit is AntiAircraft and target_card is Unit and (target_card as Unit).Flying:
+					actual_dmg *= 3
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:

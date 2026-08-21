@@ -2,7 +2,7 @@ extends Building
 class_name Corporation
 
 func _init():
-	super._init(25, 12, 70, 20, "Corporation", 60)
+	super._init(25, 12, 70, 20, "Corporation", 25)
 	SpecialEffect = "Reduce MoneyCost of playing all cards by 20%"
 
 static func money_cost_reduction(player: Player) -> float:
