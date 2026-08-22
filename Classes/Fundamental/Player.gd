@@ -100,6 +100,34 @@ func economy_phase():
 	HitPoints = clamp(HitPoints, 0, MaxHitPoints)
 	draw_cards()
 
+func predicted_bio_gain() -> int:
+	# Mirrors economy_phase Bio calculation without mutating, for gauge preview
+	var rate: float = Housing.bio_rate(self)
+	var base: int = int(BioSupply * rate + 5 + 0.0001)
+	var gain: int = base - BioSupply
+	gain += Housing.extra_bio(self)
+	if BioSupply + gain == 0:
+		gain += 1
+	if has_modifier("Conscription"):
+		gain += 15
+	# Clamp preview to not exceed 200
+	var after: int = clamp(BioSupply + gain, 0, 200)
+	return after - BioSupply
+
+func predicted_money_gain() -> int:
+	var gain: int = 10 + total_money_income()
+	if has_modifier("Conscription"):
+		gain = int(gain * 0.5)
+	if has_modifier("Corruption"):
+		gain += 10
+	var after: int = clamp(MoneySupply + gain, 0, 200)
+	return after - MoneySupply
+
+func predicted_hp_gain() -> int:
+	if has_modifier("State of emergency"):
+		return clamp(HitPoints + 3, 0, MaxHitPoints) - HitPoints
+	return 0
+
 func discard_hand():
 	for c in Hand:
 		DiscardPile.append(c)

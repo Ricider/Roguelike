@@ -111,16 +111,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="AIHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("7_heart")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -140,6 +132,14 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+[node name="AIHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("7_heart")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
+
 [node name="AIGaugeBio" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/AIGauges"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -153,16 +153,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="AIBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("8_bioicon")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -182,6 +174,14 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+[node name="AIBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("8_bioicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
+
 [node name="AIGaugeMoney" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/AIGauges"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -195,16 +195,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="AIMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("9_moneyicon")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -223,6 +215,14 @@ text = "20/200"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="AIMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("9_moneyicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
 
 [node name="AIDeck" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges"]
 layout_mode = 2
@@ -297,16 +297,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="PlayerHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("7_heart")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -326,6 +318,14 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+[node name="PlayerHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("7_heart")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
+
 [node name="PlayerGaugeBio" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/PlayerGauges"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -339,16 +339,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="PlayerBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("8_bioicon")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -368,6 +360,14 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+[node name="PlayerBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("8_bioicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
+
 [node name="PlayerGaugeMoney" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges/PlayerGauges"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -381,16 +381,8 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-[node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(44, 44)
-layout_mode = 2
-texture = ExtResource("9_moneyicon")
-expand_mode = 1
-stretch_mode = 5
-texture_filter = 2
-
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(32, 180)
 layout_mode = 2
 size_flags_vertical = 3
 fill_mode = 3
@@ -410,6 +402,14 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
+
+[node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+texture = ExtResource("9_moneyicon")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 2
 
 [node name="PlayerDeck" type="VBoxContainer" parent="VBox/MainHBox/LeftGauges"]
 layout_mode = 2

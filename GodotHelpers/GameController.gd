@@ -365,10 +365,22 @@ func _find_influence_label(node: Node) -> Label:
 			return r
 	return null
 
+func _enforce_uniform_gauge_width():
+	var w: float = 32
+	var h: float = 180
+	for bar in [ai_hp_bar, ai_bio_bar, ai_money_bar, player_hp_bar, player_bio_bar, player_money_bar]:
+		if bar != null:
+			bar.custom_minimum_size = Vector2(w, h)
+			bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for hbar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
+		if hbar != null:
+			hbar.custom_minimum_size = Vector2(32, 6)
+
 func _setup_gauge_and_influence_hovers():
+	_enforce_uniform_gauge_width()
 	# Gauge + influence tooltips: click-through, inside window, always on top via _show_hover
 	var hp_tip: String = "Hit Points — when a card dies its owner loses HP equal to its BioSupply cost; at 0 you lose"
-	var bio_tip: String = "BioSupply — pay BioCost to play cards; grows 10% +5 each Economy phase (+4% per Housing)"
+	var bio_tip: String = "BioSupply — pay BioCost to play cards; grows 10% +5 each Economy phase"
 	var money_tip: String = "MoneySupply — pay MoneyCost to play cards; grows +10 + building Income each turn"
 	var inf_tip: String = "Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"
 	# Helper to bind hover to any Control without duplicating connections
@@ -1885,10 +1897,10 @@ func _refresh_ui():
 		elif ResourceLoader.exists("res://Assets/Players/State Troops/flag.png"):
 			player_flag.texture = load("res://Assets/Players/State Troops/flag.png") as Texture2D
 	# Vertical gauges: HP at player's max, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
-	var ai_income: int = ai_player.total_money_income()
-	var p_income: int = human.total_money_income()
-	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply
-	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply
+	var ai_bio_inc: int = ai_player.predicted_bio_gain() if ai_player != null else 0
+	var p_bio_inc: int = human.predicted_bio_gain() if human != null else 0
+	var ai_income: int = ai_player.predicted_money_gain() if ai_player != null else 0
+	var p_income: int = human.predicted_money_gain() if human != null else 0
 	# AI gauges — HP max is player's MaxHitPoints
 	var ai_max_hp: int = ai_player.MaxHitPoints if ai_player != null else 100
 	var p_max_hp: int = human.MaxHitPoints if human != null else 100
@@ -1910,11 +1922,11 @@ func _refresh_ui():
 	player_hp_value.text = "%d/%d" % [max(human.HitPoints, 0), p_max_hp]
 	player_bio_value.text = "%d/%d" % [max(human.BioSupply, 0), 200]
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0), 200]
-	# Income shown right on top of symbol (white) — Money +10+buildings, Bio 10%+5+4% per Housing
+	# Income shown on top — now includes Housing +8, building Income, Conscription/Corruption modifiers (mirrors economy_phase)
 	ai_bio_income.text = "+%d" % ai_bio_inc
 	player_bio_income.text = "+%d" % p_bio_inc
-	ai_money_income.text = "+%d" % (10 + ai_income)
-	player_money_income.text = "+%d" % (10 + p_income)
+	ai_money_income.text = "+%d" % ai_income
+	player_money_income.text = "+%d" % p_income
 	# Deck / Discard / Graveyard gauges (33 max per updated spec, sprites under gauges / other side)
 	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
 		bar.max_value = 33
@@ -2509,10 +2521,10 @@ func _refresh_gauges_only():
 	_hide_hand_label()
 	_refresh_influence_display()
 	# Vertical gauges: HP at player's max, Bio 0-200, Money 0-200 (clamped), white text, income on Money+Bio
-	var ai_income: int = ai_player.total_money_income() if ai_player != null else 0
-	var p_income: int = human.total_money_income() if human != null else 0
-	var ai_bio_inc: int = int(ai_player.BioSupply * Housing.bio_rate(ai_player) + 5 + 0.0001) - ai_player.BioSupply if ai_player != null else 0
-	var p_bio_inc: int = int(human.BioSupply * Housing.bio_rate(human) + 5 + 0.0001) - human.BioSupply if human != null else 0
+	var ai_bio_inc: int = ai_player.predicted_bio_gain() if ai_player != null else 0
+	var p_bio_inc: int = human.predicted_bio_gain() if human != null else 0
+	var ai_income: int = ai_player.predicted_money_gain() if ai_player != null else 0
+	var p_income: int = human.predicted_money_gain() if human != null else 0
 	var ai_max_hp: int = ai_player.MaxHitPoints if ai_player != null else 100
 	var p_max_hp: int = human.MaxHitPoints if human != null else 100
 	ai_hp_bar.max_value = ai_max_hp
@@ -2535,8 +2547,8 @@ func _refresh_gauges_only():
 	player_money_value.text = "%d/%d" % [max(human.MoneySupply, 0) if human != null else 0, 200]
 	ai_bio_income.text = "+%d" % ai_bio_inc
 	player_bio_income.text = "+%d" % p_bio_inc
-	ai_money_income.text = "+%d" % (10 + ai_income)
-	player_money_income.text = "+%d" % (10 + p_income)
+	ai_money_income.text = "+%d" % ai_income
+	player_money_income.text = "+%d" % p_income
 	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
 		bar.max_value = 33
 	ai_deck_bar.value = clamp(ai_player.DrawPile.size(), 0, 33) if ai_player != null else 0
