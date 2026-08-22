@@ -37,9 +37,12 @@ static func find_adjacent_interceptors(defender: Player, target_sq: Square) -> A
 
 # Try to apply interceptor reduction. Returns reduced damage if applied, else original.
 # Also applies side-effects: interceptor -2 HP, defender -6 MoneySupply per trigger (first interceptor only per hit)
+# Skips entirely if owner has <6 MoneySupply (requested)
 static func apply_interception(defender: Player, target_sq: Square, target_card: Card, attacker: Unit, attacker_player: Player, damage: int) -> int:
 	# Protects both Units and Buildings (requested: buildings as well as units)
 	if not (target_card is Unit or target_card is Building):
+		return damage
+	if defender.MoneySupply < 6:
 		return damage
 	var has_range: bool = attacker.HasRange
 	if attacker_player != null and attacker_player.has_method("has_range_for"):

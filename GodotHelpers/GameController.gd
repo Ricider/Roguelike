@@ -2153,7 +2153,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				# High-detail Barracks + Interceptor circular auras — cover full card art (128x128 anim), not top-left corner
 				# Use circular PanelContainers centered over the 128 art, sized to fully cover it, with pulsing + rotation
 				var is_barracks_adj: bool = card is Unit and Barracks.bonus_if_adjacent(player, sq) > 0
-				var is_intercepted_idle: bool = not Interceptor.find_adjacent_interceptors(player, sq).is_empty()
+				var is_intercepted_idle: bool = player.MoneySupply >= 6 and not Interceptor.find_adjacent_interceptors(player, sq).is_empty()
 				if is_barracks_adj or is_intercepted_idle:
 					var aura_size: Vector2 = Vector2(148,148) # covers 128 art + spill, circular
 					var aura := PanelContainer.new()
