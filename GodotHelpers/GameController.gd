@@ -1699,7 +1699,7 @@ func _animate_opponent_economy(ai_bio_before: int, ai_money_before: int, _human_
 	await get_tree().create_timer(0.35).timeout
 
 func _animate_opponent_builds():
-	var placed: Array = ai_player.take_build_turn()
+	var placed: Array = ai_player.take_build_turn(human)
 	if placed.is_empty():
 		message_label.text = "Opponent passes"
 		_refresh_ui()

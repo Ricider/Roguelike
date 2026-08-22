@@ -383,3 +383,11 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 - If a card has a special effect defined it is applied during the combat phase after the damage is calculated
 - Whenever a card is destroyed the original BioSupply that was paid to play it gets deduced from the owning players hp
 - When a card dies it goes into the graveyard, where it can only be brought back by card effects
+
+## Enemy AI Rules ##
+
+- If you have less than 10 of either BioSupply or MoneySupply then prioritize playing buildings over units
+- When placing a unit if there is space available behind a vall vertically then place them there
+- Place walls only on the row closest to the opponent
+- When placing barracks chose the square with most neighbors
+- If you have any units that deal extra damage to any of the players units then prioritize playing them
