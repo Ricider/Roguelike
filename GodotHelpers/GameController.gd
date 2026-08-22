@@ -928,37 +928,65 @@ func _ensure_debug_popup():
 	debug_popup.name = "DebugPopup"
 	debug_popup.visible = false
 	debug_popup.z_index = 102
+	debug_popup.z_as_relative = false
+	if debug_popup.has_method("set_as_top_level"):
+		debug_popup.top_level = true
+	debug_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.08, 0.14, 0.97)
 	sb.border_color = Color(0.9, 0.85, 0.4, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(10)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
 	debug_popup.add_theme_stylebox_override("panel", sb)
-	debug_popup.custom_minimum_size = Vector2(420, 360)
+	# Responsive: cap to 90% of viewport, ScrollContainer for overflow
+	var vp: Vector2 = get_viewport_rect().size
+	if vp.x < 100:
+		vp = Vector2(1920, 1080)
+	var max_w: float = min(520.0, vp.x - 40.0)
+	var max_h: float = min(560.0, vp.y - 40.0)
+	max_w = max(max_w, 360.0)
+	max_h = max(max_h, 320.0)
+	debug_popup.custom_minimum_size = Vector2(max_w, 0)
+	debug_popup.size = Vector2(max_w, 0)
+	var scroll := ScrollContainer.new()
+	scroll.name = "DebugScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(max_w - 20, min(520.0, max_h - 20))
+	debug_popup.add_child(scroll)
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	debug_popup.add_child(vbox)
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	scroll.add_child(vbox)
 	var title := Label.new()
 	title.text = "Debug Menu"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color(1,1,0.7))
 	vbox.add_child(title)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 6)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(row)
 	var lbl := Label.new()
 	lbl.text = "Enemy:"
-	lbl.add_theme_font_size_override("font_size", 28)
+	lbl.add_theme_font_size_override("font_size", 20)
 	lbl.add_theme_color_override("font_color", Color(1,1,1))
+	lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(lbl)
 	debug_enemy_option = OptionButton.new()
-	debug_enemy_option.custom_minimum_size = Vector2(180, 32)
+	debug_enemy_option.custom_minimum_size = Vector2(150, 28)
+	debug_enemy_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	debug_enemy_option.add_theme_font_size_override("font_size", 16)
 	debug_enemy_option.add_item("Coalition Army", 0)
 	debug_enemy_option.add_item("Corporate Troops", 1)
 	debug_enemy_option.add_item("Euro Army", 2)
@@ -985,27 +1013,33 @@ func _ensure_debug_popup():
 	var summon_title := Label.new()
 	summon_title.text = "Summon Card to Battlefield:"
 	summon_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	summon_title.add_theme_font_size_override("font_size", 28)
+	summon_title.add_theme_font_size_override("font_size", 20)
 	summon_title.add_theme_color_override("font_color", Color(1,1,1))
+	summon_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(summon_title)
 	var summon_row := HBoxContainer.new()
 	summon_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	summon_row.add_theme_constant_override("separation", 8)
+	summon_row.add_theme_constant_override("separation", 6)
+	summon_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(summon_row)
 	debug_summon_card_option = OptionButton.new()
-	debug_summon_card_option.custom_minimum_size = Vector2(180, 32)
+	debug_summon_card_option.custom_minimum_size = Vector2(150, 28)
+	debug_summon_card_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	debug_summon_card_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	debug_summon_card_option.add_theme_font_size_override("font_size", 16)
 	for cname in ["Wall", "Infantry", "Tank", "Artilery", "Rocket Launcher", "Drone", "Fighter Jet", "Factory", "Barracks", "Housing", "Corporation", "Howitzer", "Special Ops", "Anti Aircraft"]:
 		debug_summon_card_option.add_item(cname)
 	summon_row.add_child(debug_summon_card_option)
 	debug_summon_target_option = OptionButton.new()
-	debug_summon_target_option.custom_minimum_size = Vector2(110, 32)
+	debug_summon_target_option.custom_minimum_size = Vector2(90, 28)
+	debug_summon_target_option.add_theme_font_size_override("font_size", 16)
 	debug_summon_target_option.add_item("Player", 0)
 	debug_summon_target_option.add_item("AI", 1)
 	summon_row.add_child(debug_summon_target_option)
 	var summon_btn := Button.new()
 	summon_btn.text = "Summon"
-	summon_btn.custom_minimum_size = Vector2(90, 32)
-	summon_btn.add_theme_font_size_override("font_size", 28)
+	summon_btn.custom_minimum_size = Vector2(80, 28)
+	summon_btn.add_theme_font_size_override("font_size", 18)
 	_style_round_button(summon_btn, true)
 	summon_btn.pressed.connect(func():
 		var cname2: String = debug_summon_card_option.get_item_text(debug_summon_card_option.selected)
@@ -1016,12 +1050,13 @@ func _ensure_debug_popup():
 	# Debug: end battle in victory and go to shop
 	var victory_row := HBoxContainer.new()
 	victory_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	victory_row.add_theme_constant_override("separation", 8)
+	victory_row.add_theme_constant_override("separation", 6)
+	victory_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(victory_row)
 	var victory_btn := Button.new()
 	victory_btn.text = "Victory → Shop"
-	victory_btn.custom_minimum_size = Vector2(180, 36)
-	victory_btn.add_theme_font_size_override("font_size", 28)
+	victory_btn.custom_minimum_size = Vector2(140, 30)
+	victory_btn.add_theme_font_size_override("font_size", 18)
 	_style_round_button(victory_btn, true)
 	victory_btn.pressed.connect(func():
 		_debug_victory_to_shop()
@@ -1030,35 +1065,41 @@ func _ensure_debug_popup():
 	victory_row.add_child(victory_btn)
 	var victory_hint := Label.new()
 	victory_hint.text = "(ends battle, grants Influence)"
-	victory_hint.add_theme_font_size_override("font_size", 18)
+	victory_hint.add_theme_font_size_override("font_size", 14)
 	victory_hint.add_theme_color_override("font_color", Color(0.8,0.8,0.85))
+	victory_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	victory_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	victory_row.add_child(victory_hint)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 10)
+	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(btn_row)
 	var restart_btn := Button.new()
 	restart_btn.text = "Switch & Restart"
-	restart_btn.custom_minimum_size = Vector2(150, 36)
-	restart_btn.add_theme_font_size_override("font_size", 30)
+	restart_btn.custom_minimum_size = Vector2(130, 30)
+	restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	restart_btn.add_theme_font_size_override("font_size", 18)
 	_style_round_button(restart_btn, true)
 	restart_btn.pressed.connect(_restart_game)
 	btn_row.add_child(restart_btn)
 	var close_dbtn := Button.new()
 	close_dbtn.text = "Close"
-	close_dbtn.custom_minimum_size = Vector2(80, 36)
+	close_dbtn.custom_minimum_size = Vector2(70, 30)
+	close_dbtn.add_theme_font_size_override("font_size", 18)
 	_style_round_button(close_dbtn, false)
 	close_dbtn.pressed.connect(func(): debug_popup.visible = false)
 	btn_row.add_child(close_dbtn)
 	var info := Label.new()
 	info.text = "Background: " + (ai_player.BackgroundImage if ai_player.BackgroundImage != "" else ai_player.display_name)
-	info.add_theme_font_size_override("font_size", 22)
+	info.add_theme_font_size_override("font_size", 14)
 	info.add_theme_color_override("font_color", Color(0.8,0.8,0.85))
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(info)
 	add_child(debug_popup)
-	# center popup
-	debug_popup.position = Vector2.ZERO
+	# center popup clamped to viewport
+	_center_debug_popup()
 	debug_built = true
 
 func _add_debug_button():
@@ -1090,10 +1131,24 @@ func _center_debug_popup():
 	if debug_popup == null:
 		return
 	var vp: Vector2 = get_viewport_rect().size
+	if vp.x < 100:
+		vp = Vector2(1920, 1080)
 	var sz: Vector2 = debug_popup.size
-	if sz.x < 100:
-		sz = Vector2(420, 360)
+	if sz.x < 100 or sz.y < 100:
+		sz = debug_popup.custom_minimum_size
+		if sz.x < 100:
+			sz = Vector2(520, 360)
+	# Clamp to viewport with margin so it always fits
+	sz.x = min(sz.x, vp.x - 40.0)
+	sz.y = min(sz.y, vp.y - 40.0)
+	debug_popup.size = sz
+	var scroll := debug_popup.get_node_or_null("DebugScroll") as ScrollContainer
+	if scroll != null:
+		scroll.custom_minimum_size = Vector2(sz.x - 20, min(520.0, vp.y - 60.0))
 	debug_popup.position = (vp - sz) / 2.0
+	# Final clamp to keep inside screen
+	debug_popup.position.x = clamp(debug_popup.position.x, 10.0, vp.x - sz.x - 10.0)
+	debug_popup.position.y = clamp(debug_popup.position.y, 10.0, vp.y - sz.y - 10.0)
 
 func _create_card_by_name(cname: String) -> Card:
 	match cname:
@@ -2460,14 +2515,14 @@ func _execute_combat_live() -> Array:
 				var att_has_range: bool = unit.HasRange
 				if attacker.has_method("has_range_for"):
 					att_has_range = attacker.has_range_for(unit)
-				if target_card is Unit and (target_card as Unit).Flying and not att_has_range:
-					actual_dmg = int(actual_dmg / 2)
-					if actual_dmg < 1:
-						actual_dmg = 1
 				if unit is SpecialOps and target_card is Unit and not (target_card as Unit).Flying:
 					actual_dmg *= 2
 				elif unit is AntiAircraft and target_card is Unit and (target_card as Unit).Flying:
 					actual_dmg *= 3
+				if target_card is Unit and (target_card as Unit).Flying and not att_has_range and not (unit is AntiAircraft and (target_card as Unit).Flying):
+					actual_dmg = int(actual_dmg / 2)
+					if actual_dmg < 1:
+						actual_dmg = 1
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:

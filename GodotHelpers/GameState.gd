@@ -116,9 +116,29 @@ func reset_player_for_new_encounter():
 				run_player.Board[r].Squares[c].place(card)
 				# Clear template square so it doesn't double-free (not needed but keep clean)
 				template.Board[r].Squares[c].clear()
-	# Reset deck piles to starting deck (fresh shuffled). Shop card purchases are discarded per encounter reset, but Modifiers persist.
+	# Reset deck piles to starting deck (fresh shuffled) but preserve shop-bought cards so they appear next turn.
 	# Duplicate array to avoid sharing reference with template
+	# Count starter cards by name to detect purchased extras (e.g. extra Wall beyond starter 10)
+	var starter_counts: Dictionary = {}
+	for sc in template.DrawPile:
+		var sn: String = (sc as Card).card_name if sc is Card else str(sc)
+		starter_counts[sn] = (starter_counts.get(sn, 0) as int) + 1
+	var preserved: Array = []
+	var seen_extra: Dictionary = {}
+	# Scan all piles that may contain shop cards bought in previous shop (Draw/Discard/Hand/Graveyard)
+	for pile in [run_player.DrawPile, run_player.DiscardPile, run_player.Hand, run_player.Graveyard]:
+		for c in pile:
+			if c is Card:
+				var cn: String = (c as Card).card_name
+				var already: int = seen_extra.get(cn, 0) as int
+				var allowed: int = starter_counts.get(cn, 0) as int
+				# Keep only copies beyond starter counts -> those are shop purchases
+				if already >= allowed:
+					preserved.append(c)
+				seen_extra[cn] = already + 1
 	run_player.DrawPile = template.DrawPile.duplicate()
+	for c in preserved:
+		run_player.DrawPile.append(c)
 	run_player.DrawPile.shuffle()
 	run_player.DiscardPile.clear()
 	run_player.Hand.clear()

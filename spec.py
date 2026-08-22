@@ -249,7 +249,7 @@ Player: Insurgents
 
 
 Player: State Troops
-    HitPoints=100
+    HitPoints=180
     Board=1 Housing and 1 Infantry randomly placed at back row
     Difficulty=2
     BackgroundImage=Middle Eastern town, add some mosques around, don't make the entire thing a desert
@@ -281,7 +281,7 @@ Player: Horde
     Modifiers: [Conscription]
 
 Player: Coalition Army
-    HitPoints=60
+    HitPoints=120
     Board=2 Housing and 1 Factory randomly placed at back row
     Difficulty=5
     BackgroundImage=City with european style towers
@@ -297,7 +297,7 @@ Player: Coalition Army
     Modifiers: [Aerial Supremacy]
 
 Player: Corporate Troops
-    HitPoints=30
+    HitPoints=90
     Board=2 Corporation randomly placed at back row
     Difficulty=6
     BackgroundImage=Cyberpunk Skyrises

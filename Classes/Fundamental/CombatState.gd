@@ -47,19 +47,20 @@ func combat_phase() -> Array:
 				var target_card: Card = target["card"]
 				var target_sq: Square = target["square"]
 				var actual_dmg: int = dmg
-				# Flying: half damage from non-ranged attackers (use effective range)
 				var att_has_range: bool = unit.HasRange
 				if attacker.has_method("has_range_for"):
 					att_has_range = attacker.has_range_for(unit)
-				if target_card is Unit and (target_card as Unit).Flying and not att_has_range:
-					actual_dmg = int(actual_dmg / 2)
-					if actual_dmg < 1:
-						actual_dmg = 1
-				# New unit special effects: Special Ops vs non-flying, Anti Aircraft vs flying
+				# New unit special effects: Special Ops vs non-flying (+100% => ×2), Anti Aircraft vs flying (+200% => ×3)
+				# Apply bonus before flying half, and Anti Aircraft bypasses flying half vs flying (it's specialized)
 				if unit is SpecialOps and target_card is Unit and not (target_card as Unit).Flying:
 					actual_dmg *= 2
 				elif unit is AntiAircraft and target_card is Unit and (target_card as Unit).Flying:
 					actual_dmg *= 3
+				# Flying: half damage from non-ranged attackers (use effective range) — not for Anti Aircraft vs flying
+				if target_card is Unit and (target_card as Unit).Flying and not att_has_range and not (unit is AntiAircraft and (target_card as Unit).Flying):
+					actual_dmg = int(actual_dmg / 2)
+					if actual_dmg < 1:
+						actual_dmg = 1
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:
