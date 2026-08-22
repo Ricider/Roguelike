@@ -2714,10 +2714,7 @@ func _animate_live_entry(entry: Dictionary):
 	var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
-	# High-detail Barracks aura before attack — keep only particle effect, no rectangle
-	if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
-		if atk_btn != null and is_instance_valid(atk_btn):
-			_spawn_special_effect(atk_btn, "barracks_aura")
+	# Barracks buff has no special attack animation (removed per request)
 	# Attacker punch: scale+modulate in parallel, pivot-centered
 	if atk_btn != null and is_instance_valid(atk_btn):
 		atk_btn.pivot_offset = atk_btn.size * 0.5
@@ -2853,10 +2850,7 @@ func _animate_combat(log: Array):
 		var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 		var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 		var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
-		# Barracks aura: show +2 buff on attacker if adjacent to Barracks
-		if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
-			if atk_btn != null:
-				_spawn_special_effect(atk_btn, "barracks_aura")
+		# Barracks buff has no special attack animation (removed per request)
 		# Highlight attacker: scale pulse + yellow tint (pivot-centered, parallel)
 		if atk_btn != null and is_instance_valid(atk_btn):
 			atk_btn.pivot_offset = atk_btn.size * 0.5
