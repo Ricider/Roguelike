@@ -368,10 +368,21 @@ func _find_influence_label(node: Node) -> Label:
 func _enforce_uniform_gauge_width():
 	var w: float = 32
 	var h: float = 180
+	var gw: float = 80
+	for gauge in [get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney")]:
+		if gauge != null:
+			gauge.custom_minimum_size = Vector2(gw, 0)
+			gauge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	for bar in [ai_hp_bar, ai_bio_bar, ai_money_bar, player_hp_bar, player_bio_bar, player_money_bar]:
 		if bar != null:
 			bar.custom_minimum_size = Vector2(w, h)
+			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for lbl in [ai_hp_value, ai_bio_value, ai_money_value, player_hp_value, player_bio_value, player_money_value, ai_bio_income, ai_money_income, player_bio_income, player_money_income, get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHPIncome"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPIncome")]:
+		if lbl != null:
+			lbl.custom_minimum_size = Vector2(gw, 12)
+			lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for hbar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
 		if hbar != null:
 			hbar.custom_minimum_size = Vector2(32, 6)
