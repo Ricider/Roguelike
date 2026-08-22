@@ -279,7 +279,7 @@ Player: Fundamentalists
     HitPoints=150
     Board=2 Housing randomly placed at back row
     Difficulty=3
-    BackgroundImage=Cyberpunk Skyrises
+    BackgroundImage=Medieval village
 
     BioSupply=60
     MoneySupply=60

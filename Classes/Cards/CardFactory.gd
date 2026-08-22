@@ -261,8 +261,12 @@ static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Housing.new())
-	p.Board[back_row].Squares[positions[1]].place(Infantry.new())
+	var h1 := Housing.new()
+	p.Board[back_row].Squares[positions[0]].place(h1)
+	p.apply_hitpoints_modifier(h1)
+	var inf1 := Infantry.new()
+	p.Board[back_row].Squares[positions[1]].place(inf1)
+	p.apply_hitpoints_modifier(inf1)
 	p.DrawPile = make_state_troops_deck()
 	p.Modifiers = [Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 20)]
 	return p
@@ -274,8 +278,12 @@ static func make_fundamentalists_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Housing.new())
-	p.Board[back_row].Squares[positions[1]].place(Housing.new())
+	var h1 := Housing.new()
+	p.Board[back_row].Squares[positions[0]].place(h1)
+	p.apply_hitpoints_modifier(h1)
+	var h2 := Housing.new()
+	p.Board[back_row].Squares[positions[1]].place(h2)
+	p.apply_hitpoints_modifier(h2)
 	p.DrawPile = make_fundamentalists_deck()
 	p.Modifiers = [Modifier.new("Fanaticism", "Your buildings have 50% less HP, but Units have 100% more", 30)]
 	return p
@@ -287,8 +295,12 @@ static func make_mercenaries_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Barracks.new())
-	p.Board[back_row].Squares[positions[1]].place(Barracks.new())
+	var b1 := Barracks.new()
+	p.Board[back_row].Squares[positions[0]].place(b1)
+	p.apply_hitpoints_modifier(b1)
+	var b2 := Barracks.new()
+	p.Board[back_row].Squares[positions[1]].place(b2)
+	p.apply_hitpoints_modifier(b2)
 	p.DrawPile = make_mercenaries_deck()
 	p.Modifiers = [Modifier.new("Corruption", "Your buildings have 50% less HP, but you gain +10 MoneySupply every turn", 30)]
 	return p
@@ -300,9 +312,15 @@ static func make_peace_keepers_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Interceptor.new())
-	p.Board[back_row].Squares[positions[1]].place(Interceptor.new())
-	p.Board[back_row].Squares[positions[2]].place(Barracks.new())
+	var i1 := Interceptor.new()
+	p.Board[back_row].Squares[positions[0]].place(i1)
+	p.apply_hitpoints_modifier(i1)
+	var i2 := Interceptor.new()
+	p.Board[back_row].Squares[positions[1]].place(i2)
+	p.apply_hitpoints_modifier(i2)
+	var b1 := Barracks.new()
+	p.Board[back_row].Squares[positions[2]].place(b1)
+	p.apply_hitpoints_modifier(b1)
 	p.DrawPile = make_peace_keepers_deck()
 	p.Modifiers = [Modifier.new("Defensive Doctrine", "Your cards have +10 hp, but they deal -1 damage", 40)]
 	return p
@@ -335,9 +353,15 @@ static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Housing.new())
-	p.Board[back_row].Squares[positions[1]].place(Housing.new())
-	p.Board[back_row].Squares[positions[2]].place(Factory.new())
+	var h1 := Housing.new()
+	p.Board[back_row].Squares[positions[0]].place(h1)
+	p.apply_hitpoints_modifier(h1)
+	var h2 := Housing.new()
+	p.Board[back_row].Squares[positions[1]].place(h2)
+	p.apply_hitpoints_modifier(h2)
+	var f1 := Factory.new()
+	p.Board[back_row].Squares[positions[2]].place(f1)
+	p.apply_hitpoints_modifier(f1)
 	p.DrawPile = make_coalition_army_deck()
 	p.Modifiers = [Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 50)]
 	return p
@@ -350,9 +374,15 @@ static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Housing.new())
-	p.Board[back_row].Squares[positions[1]].place(Housing.new())
-	p.Board[back_row].Squares[positions[2]].place(Factory.new())
+	var h1 := Housing.new()
+	p.Board[back_row].Squares[positions[0]].place(h1)
+	p.apply_hitpoints_modifier(h1)
+	var h2 := Housing.new()
+	p.Board[back_row].Squares[positions[1]].place(h2)
+	p.apply_hitpoints_modifier(h2)
+	var f1 := Factory.new()
+	p.Board[back_row].Squares[positions[2]].place(f1)
+	p.apply_hitpoints_modifier(f1)
 	p.DrawPile = make_euro_army_deck()
 	return p
 
@@ -364,8 +394,12 @@ static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 	for c in range(10):
 		positions.append(c)
 	positions.shuffle()
-	p.Board[back_row].Squares[positions[0]].place(Corporation.new())
-	p.Board[back_row].Squares[positions[1]].place(Corporation.new())
+	var c1 := Corporation.new()
+	p.Board[back_row].Squares[positions[0]].place(c1)
+	p.apply_hitpoints_modifier(c1)
+	var c2 := Corporation.new()
+	p.Board[back_row].Squares[positions[1]].place(c2)
+	p.apply_hitpoints_modifier(c2)
 	p.DrawPile = make_corporate_troops_deck()
 	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60)]
 	return p

@@ -191,7 +191,14 @@ func take_build_turn(opponent: Player = null) -> Array:
 			sq = empty[rng.randi_range(0, empty.size() - 1)]
 		MoneySupply -= eff_money
 		BioSupply -= (card as Card).BioCost
-		sq.place(card as Card)
+		# Apply HP modifiers (Fanaticism, Corruption, Guerilla, Defensive Doctrine) before placing — mirrors Player.play_card
+		var c_card: Card = card as Card
+		var base_hp: int = (c_card as Unit).HitPoints if c_card is Unit else (c_card as Building).HitPoints if c_card is Building else 0
+		var eff_hp: int = effective_hitpoints_for(c_card)
+		c_card.set_meta("base_hp", base_hp)
+		c_card.set_meta("eff_hp", eff_hp)
+		apply_hitpoints_modifier(c_card)
+		sq.place(c_card)
 		Hand.erase(card)
 		placed.append({"card": card, "square": sq})
 		if rng.randf() < 0.3:

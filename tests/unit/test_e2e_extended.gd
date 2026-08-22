@@ -207,10 +207,10 @@ func test_e2e_shop_full_flow_with_modifiers_and_remove():
 	assert_eq(gs.shop_offer.size(), 5, "new shop 5 cards")
 
 func test_e2e_full_run_victory_to_shop_loop():
-	# Simulate entire roguelike run (4 enemies) with economy→build→combat→discard each turn, victory→shop→continue
+	# Simulate entire roguelike run (7 enemies with 8 players) with economy→build→combat→discard each turn, victory→shop→continue
 	var gs = _make_gs()
 	gs.start_run("State Troops")
-	assert_eq(gs.run_enemies.size(), 4, "4 enemies")
+	assert_eq(gs.run_enemies.size(), 7, "7 enemies excludes self with 8 players")
 	var total_inf: int = 0
 	for idx in range(gs.run_enemies.size()):
 		var enemy: Player = gs.get_current_enemy()

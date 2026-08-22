@@ -232,11 +232,11 @@ func test_interceptor_art_and_combat_halving_with_buildings_via_combatstate():
 	var def := Player.new(100, 200, 200, 0, "Def")
 	def.MoneySupply = 20
 	var inter := Interceptor.new()
-	def.Board[2].Squares[2].place(inter)
 	var house := Housing.new()
 	house.HitPoints = 20
-	def.Board[2].Squares[3].place(house) # adjacent to interceptor
-	atk.Board[0].Squares[0].place(Artilery.new()) # HasRange 8 dmg
+	def.Board[3].Squares[0].place(house) # front row closest to attacker at 0,0
+	def.Board[2].Squares[1].place(inter) # diagonal adjacent to Housing, farther than Housing
+	atk.Board[0].Squares[0].place(Artilery.new()) # HasRange 8 dmg, will target Housing at 3,0 as closest and get halved
 	var cs := CombatState.new(atk, def)
 	var before_hp: int = house.HitPoints
 	var before_money: int = def.MoneySupply

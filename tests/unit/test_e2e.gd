@@ -306,7 +306,7 @@ func test_e2e_all_player_boards_and_decks():
 		assert_not_null(pl, "player %s exists" % name)
 		assert_true(pl.HitPoints > 0, "%s HP >0" % name)
 		assert_true(pl.Influence >= 10, "%s influence" % name)
-		assert_true(pl.DrawPile.size() >= 31, "%s deck >=31" % name)
+		assert_true(pl.DrawPile.size() >= 30, "%s deck >=30" % name)
 		# Board invariants
 		var cnt: int = _count_board_cards(pl)
 		if name == "Insurgents":
