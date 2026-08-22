@@ -1713,10 +1713,12 @@ func _start_new_round():
 	var human_money_before: int = human.MoneySupply
 	var ai_bio_before: int = ai_player.BioSupply
 	var ai_money_before: int = ai_player.MoneySupply
+	var human_hp_before: int = human.HitPoints
+	var ai_hp_before: int = ai_player.HitPoints
 	human.economy_phase()
 	ai_player.economy_phase()
 	_refresh_ui()
-	await _animate_opponent_economy(ai_bio_before, ai_money_before, human_bio_before, human_money_before)
+	await _animate_economy_gain(human_bio_before, human_money_before, human_hp_before, ai_bio_before, ai_money_before, ai_hp_before)
 	# AI builds with animation
 	end_turn_btn.disabled = true
 	message_label.text = "Opponent's turn..."
@@ -1729,9 +1731,19 @@ func _start_new_round():
 	_check_game_over()
 
 func _animate_opponent_economy(ai_bio_before: int, ai_money_before: int, _human_bio_before: int, _human_money_before: int):
-	# Flash opponent gauges when income ticks
-	var bars: Array = [ai_bio_bar, ai_money_bar]
-	for bar in bars:
+	# Legacy shim — redirects to new combined economy animation
+	await _animate_economy_gain(_human_bio_before, _human_money_before, human.HitPoints, ai_bio_before, ai_money_before, ai_player.HitPoints)
+
+func _animate_economy_gain(human_bio_before: int, human_money_before: int, human_hp_before: int, ai_bio_before: int, ai_money_before: int, ai_hp_before: int):
+	# Human + AI income gain high-detail animations every turn
+	var human_bio_gain: int = human.BioSupply - human_bio_before
+	var human_money_gain: int = human.MoneySupply - human_money_before
+	var ai_bio_gain: int = ai_player.BioSupply - ai_bio_before
+	var ai_money_gain: int = ai_player.MoneySupply - ai_money_before
+	var human_hp_gain: int = human.HitPoints - human_hp_before
+	var ai_hp_gain: int = ai_player.HitPoints - ai_hp_before
+	# Flash gauges
+	for bar in [player_bio_bar, ai_bio_bar, player_money_bar, ai_money_bar, player_hp_bar, ai_hp_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.pivot_offset = bar.size * 0.5
 			var tw := create_tween()
@@ -1741,18 +1753,43 @@ func _animate_opponent_economy(ai_bio_before: int, ai_money_before: int, _human_
 			tw.set_parallel(false)
 			tw.tween_property(bar, "scale", Vector2(1.0, 1.0), 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tw.parallel().tween_property(bar, "modulate", Color(1,1,1), 0.16)
-	var delta_bio: int = ai_player.BioSupply - ai_bio_before
-	var delta_money: int = ai_player.MoneySupply - ai_money_before
-	if delta_bio > 0:
-		_spawn_damage_number(ai_bio_bar, delta_bio)
-		var m1 := ai_bio_bar as Control
-		if m1 != null:
-			m1.modulate = Color(0.6, 1, 0.6)
-			var f := create_tween()
-			f.tween_property(m1, "modulate", Color(1,1,1), 0.4)
-	if delta_money > 0:
-		_spawn_damage_number(ai_money_bar, delta_money)
-	await get_tree().create_timer(0.35).timeout
+	# Human Bio/Money/HP
+	if human_bio_gain > 0:
+		_spawn_income_effect(player_bio_bar, "bio", human_bio_gain)
+	if human_money_gain > 0:
+		_spawn_income_effect(player_money_bar, "money", human_money_gain)
+	if human_hp_gain > 0:
+		_spawn_heal_number(player_hp_bar, human_hp_gain)
+		_spawn_special_effect(player_hp_bar, "income_bio")
+	# AI Bio/Money/HP
+	if ai_bio_gain > 0:
+		_spawn_income_effect(ai_bio_bar, "bio", ai_bio_gain)
+	if ai_money_gain > 0:
+		_spawn_income_effect(ai_money_bar, "money", ai_money_gain)
+	if ai_hp_gain > 0:
+		_spawn_heal_number(ai_hp_bar, ai_hp_gain)
+		_spawn_special_effect(ai_hp_bar, "income_bio")
+	# Per-building income pulses — high detail: each building with Income>0 spawns +Income over its tile
+	for player_entry in [[human, player_board_container], [ai_player, ai_board_container]]:
+		var pl: Player = player_entry[0] as Player
+		var cont: GridContainer = player_entry[1] as GridContainer
+		if pl == null or cont == null:
+			continue
+		for r in range(pl.Board.size()):
+			for c in range(pl.Board[r].Squares.size()):
+				var sq: Square = pl.Board[r].Squares[c] as Square
+				if sq.Inhabitant != null and sq.Inhabitant is Building:
+					var inc: int = (sq.Inhabitant as Building).Income
+					if inc > 0:
+						var btn: Button = _get_button_for_square(pl, sq)
+						if btn != null and is_instance_valid(btn):
+							_spawn_income_effect(btn, "money", inc)
+							btn.pivot_offset = btn.size*0.5
+							var btw := create_tween()
+							btw.tween_property(btn, "scale", Vector2(1.06,1.06), 0.08).set_trans(Tween.TRANS_BACK)
+							btw.tween_property(btn, "scale", Vector2(1.0,1.0), 0.12).set_trans(Tween.TRANS_BACK)
+							await get_tree().create_timer(0.04).timeout
+	await get_tree().create_timer(0.45).timeout
 
 func _animate_opponent_builds():
 	var placed: Array = ai_player.take_build_turn(human)
@@ -2113,6 +2150,98 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					right_vbox.add_child(inc_col)
 				outer_hbox.add_child(right_vbox)
 				btn.add_child(outer_hbox)
+				# High-detail Barracks + Interceptor circular auras — cover full card art (128x128 anim), not top-left corner
+				# Use circular PanelContainers centered over the 128 art, sized to fully cover it, with pulsing + rotation
+				var is_barracks_adj: bool = card is Unit and Barracks.bonus_if_adjacent(player, sq) > 0
+				var is_intercepted_idle: bool = not Interceptor.find_adjacent_interceptors(player, sq).is_empty()
+				if is_barracks_adj or is_intercepted_idle:
+					var aura_size: Vector2 = Vector2(148,148) # covers 128 art + spill, circular
+					var aura := PanelContainer.new()
+					aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					aura.custom_minimum_size = aura_size
+					aura.size = aura_size
+					aura.clip_contents = false
+					# Circular via half-radius
+					var aura_sb := StyleBoxFlat.new()
+					if is_barracks_adj and is_intercepted_idle:
+						# Both effects: amber outer + blue inner via mixed color (blend)
+						aura_sb.bg_color = Color(0.65,0.72,0.55,0.09)
+						aura_sb.border_color = Color(0.75,0.80,0.60,0.65)
+					elif is_barracks_adj:
+						aura_sb.bg_color = Color(1,0.72,0.15,0.10)
+						aura_sb.border_color = Color(1,0.78,0.25,0.70)
+					else:
+						aura_sb.bg_color = Color(0.35,0.75,1.0,0.09)
+						aura_sb.border_color = Color(0.45,0.85,1.0,0.60)
+					aura_sb.set_border_width_all(3)
+					aura_sb.set_corner_radius_all(74) # fully circular (half of 148)
+					if is_barracks_adj:
+						aura_sb.shadow_color = Color(1,0.6,0.1,0.28)
+					else:
+						aura_sb.shadow_color = Color(0.2,0.5,1.0,0.32)
+					aura_sb.shadow_size = 10
+					aura.add_theme_stylebox_override("panel", aura_sb)
+					aura.z_index = 2
+					# Centered on square — use anchor-center so it stays centered even when button stretches via SIZE_EXPAND_FILL
+					# Aura 148 covers full 128 art spill, circular
+					btn.add_child(aura)
+					aura.set_anchors_preset(Control.PRESET_CENTER)
+					aura.offset_left = -aura_size.x * 0.5
+					aura.offset_top = -aura_size.y * 0.5
+					aura.offset_right = aura_size.x * 0.5
+					aura.offset_bottom = aura_size.y * 0.5
+					aura.pivot_offset = aura_size * 0.5
+					# Circular animate: pulse scale + gentle rotation + modulate
+					var atw := create_tween()
+					atw.set_loops()
+					atw.set_trans(Tween.TRANS_SINE)
+					atw.set_ease(Tween.EASE_IN_OUT)
+					atw.tween_property(aura, "scale", Vector2(1.06,1.06), 0.85)
+					atw.tween_property(aura, "scale", Vector2(0.96,0.96), 0.85)
+					var atw2 := create_tween()
+					atw2.set_loops()
+					atw2.tween_property(aura, "rotation", 0.18, 2.2).set_trans(Tween.TRANS_SINE)
+					atw2.tween_property(aura, "rotation", -0.18, 2.2)
+					var atw3 := create_tween()
+					atw3.set_loops()
+					atw3.set_trans(Tween.TRANS_SINE)
+					atw3.tween_property(aura, "modulate", Color(1,1,1,0.85), 0.9)
+					atw3.tween_property(aura, "modulate", Color(1,1,1,1), 0.9)
+					if is_barracks_adj:
+						# Add inner amber ring TextureRect for extra detail — circular via same radius + animated spin
+						var inner := PanelContainer.new()
+						inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+						inner.custom_minimum_size = Vector2(118,118)
+						inner.size = Vector2(118,118)
+						var inner_sb := StyleBoxFlat.new()
+						inner_sb.bg_color = Color(1,0.72,0.15,0.0)
+						inner_sb.border_color = Color(1,0.85,0.45,0.45)
+						inner_sb.set_border_width_all(2)
+						inner_sb.set_corner_radius_all(59)
+						inner.add_theme_stylebox_override("panel", inner_sb)
+						aura.add_child(inner)
+						inner.position = (aura_size - Vector2(118,118))*0.5
+						inner.pivot_offset = Vector2(59,59)
+						var itw := create_tween()
+						itw.set_loops()
+						itw.tween_property(inner, "rotation", 6.28, 3.0).set_trans(Tween.TRANS_LINEAR)
+					if is_intercepted_idle:
+						var inner2 := PanelContainer.new()
+						inner2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+						inner2.custom_minimum_size = Vector2(126,126)
+						inner2.size = Vector2(126,126)
+						var inner2_sb := StyleBoxFlat.new()
+						inner2_sb.bg_color = Color(0.35,0.75,1.0,0.0)
+						inner2_sb.border_color = Color(0.45,0.85,1.0,0.30)
+						inner2_sb.set_border_width_all(2)
+						inner2_sb.set_corner_radius_all(63)
+						inner2.add_theme_stylebox_override("panel", inner2_sb)
+						aura.add_child(inner2)
+						inner2.position = (aura_size - Vector2(126,126))*0.5
+						inner2.pivot_offset = Vector2(63,63)
+						var i2tw := create_tween()
+						i2tw.set_loops()
+						i2tw.tween_property(inner2, "rotation", -6.28, 3.5).set_trans(Tween.TRANS_LINEAR)
 				# Magnified preview on hover — art + symbols + text enlarged
 				var _card_prev: Card = card
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
@@ -2524,8 +2653,17 @@ func _execute_combat_live() -> Array:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1
-				if target_card is Unit:
+				var dmg_before_intercept: int = actual_dmg
+				var intercepted: bool = false
+				var intercept_src_sq: Square = null
+				if target_card is Unit or target_card is Building:
+					var before: int = actual_dmg
 					actual_dmg = Interceptor.apply_interception(defender, target_sq, target_card, unit, attacker, actual_dmg)
+					if actual_dmg < before:
+						intercepted = true
+						var srcs: Array = Interceptor.find_adjacent_interceptors(defender, target_sq)
+						if not srcs.is_empty():
+							intercept_src_sq = srcs[0] as Square
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:
@@ -2533,9 +2671,22 @@ func _execute_combat_live() -> Array:
 				if unit is FighterJet:
 					state._apply_fighter_splash(defender, target_sq, actual_dmg)
 				state._apply_special_effect(unit, target_card)
-				var entry2: Dictionary = {"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": actual_dmg, "is_direct": false}
+				var entry2: Dictionary = {"attacker": unit, "attacker_sq": sq, "attacker_player": attacker, "defender": defender, "target": target_card, "target_sq": target_sq, "damage": actual_dmg, "is_direct": false, "intercepted": intercepted, "intercept_src_sq": intercept_src_sq, "dmg_before_intercept": dmg_before_intercept}
 				log.append(entry2)
 				await _animate_live_entry(entry2)
+				# apply interceptor HP/Money drift immediately if it survived
+				if intercepted:
+					if intercept_src_sq != null:
+						var ib: Button = _get_button_for_square(defender, intercept_src_sq)
+						if ib != null and is_instance_valid(ib):
+							_spawn_special_effect(ib, "interceptor_intercept")
+							_spawn_damage_number(ib, 2)
+					# money flicker on interceptor owner bar
+					var bar: TextureProgressBar = ai_money_bar if defender == ai_player else player_money_bar
+					if bar != null and is_instance_valid(bar):
+						bar.modulate = Color(1, 0.4, 0.4)
+						var ft := create_tween()
+						ft.tween_property(bar, "modulate", Color(1,1,1), 0.4)
 				state._resolve_deaths(defender)
 				# reflect HP bars, card HP/INC labels, and deaths immediately
 				_refresh_gauges_only()
@@ -2563,10 +2714,39 @@ func _animate_live_entry(entry: Dictionary):
 	var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
-	# Barracks aura before attack
+	# High-detail Barracks aura before attack + persistent aura hint
 	if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
 		if atk_btn != null and is_instance_valid(atk_btn):
 			_spawn_special_effect(atk_btn, "barracks_aura")
+			# extra ring pulse for high-detail aura
+			var aura := PanelContainer.new()
+			aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			aura.z_index = 200
+			aura.custom_minimum_size = Vector2(92,92)
+			aura.size = Vector2(92,92)
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(1, 0.72, 0.15, 0.0)
+			sb.border_color = Color(1, 0.78, 0.2, 0.85)
+			sb.set_border_width_all(2)
+			sb.set_corner_radius_all(14)
+			sb.shadow_color = Color(1,0.6,0.1,0.35)
+			sb.shadow_size = 8
+			aura.add_theme_stylebox_override("panel", sb)
+			add_child(aura)
+			var ar: Rect2 = atk_btn.get_global_rect()
+			if ar.size == Vector2.ZERO:
+				ar = Rect2(atk_btn.get_global_position(), Vector2(80,80))
+			var c: Vector2 = ar.get_center() - get_global_rect().position
+			aura.position = c - aura.size*0.5
+			aura.pivot_offset = aura.size*0.5
+			aura.scale = Vector2(0.6,0.6)
+			aura.modulate = Color(1,1,1,0.9)
+			var atw := create_tween()
+			atw.set_parallel(true)
+			atw.tween_property(aura, "scale", Vector2(1.25,1.25), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			atw.tween_property(aura, "modulate", Color(1,1,1,0), 0.22)
+			atw.set_parallel(false)
+			atw.tween_callback(func(): if is_instance_valid(aura): aura.queue_free())
 	# Attacker punch: scale+modulate in parallel, pivot-centered
 	if atk_btn != null and is_instance_valid(atk_btn):
 		atk_btn.pivot_offset = atk_btn.size * 0.5
@@ -2609,7 +2789,45 @@ func _animate_live_entry(entry: Dictionary):
 			punch.tween_property(tgt_btn, "scale", Vector2(0.92, 0.92), 0.06)
 			punch.set_parallel(false)
 			punch.tween_property(tgt_btn, "scale", Vector2(1.0, 1.0), 0.10).set_trans(Tween.TRANS_BACK)
-			_spawn_damage_number(tgt_btn, dmg)
+			# High-detail interceptor shield if this hit was intercepted
+			var was_intercepted: bool = entry.get("intercepted", false)
+			if was_intercepted:
+				_spawn_special_effect(tgt_btn, "interceptor_intercept")
+				# shield ring overlay on protected target
+				var shield := PanelContainer.new()
+				shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				shield.z_index = 210
+				shield.custom_minimum_size = Vector2(96,96)
+				shield.size = Vector2(96,96)
+				var sbs := StyleBoxFlat.new()
+				sbs.bg_color = Color(0.35,0.75,1.0,0.0)
+				sbs.border_color = Color(0.45,0.85,1.0,0.92)
+				sbs.set_border_width_all(3)
+				sbs.set_corner_radius_all(18)
+				sbs.shadow_color = Color(0.2,0.5,1.0,0.55)
+				sbs.shadow_size = 10
+				shield.add_theme_stylebox_override("panel", sbs)
+				add_child(shield)
+				var sr: Rect2 = tgt_btn.get_global_rect()
+				if sr.size == Vector2.ZERO:
+					sr = Rect2(tgt_btn.get_global_position(), Vector2(80,80))
+				var sc: Vector2 = sr.get_center() - get_global_rect().position
+				shield.position = sc - shield.size*0.5
+				shield.pivot_offset = shield.size*0.5
+				shield.scale = Vector2(0.45,0.45)
+				var stw := create_tween()
+				stw.set_parallel(true)
+				stw.tween_property(shield, "scale", Vector2(1.15,1.15), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				stw.tween_property(shield, "modulate", Color(1,1,1,0), 0.22).set_delay(0.08)
+				stw.set_parallel(false)
+				stw.tween_callback(func(): if is_instance_valid(shield): shield.queue_free())
+				_spawn_damage_number(tgt_btn, dmg)
+				# also show blocked amount as green +number
+				var blocked: int = entry.get("dmg_before_intercept", dmg) - dmg
+				if blocked > 0:
+					_spawn_heal_number(tgt_btn, blocked)
+			else:
+				_spawn_damage_number(tgt_btn, dmg)
 			if attacker_card is FighterJet:
 				var adj_sqs: Array = _get_adjacent_squares(defender, target_sq)
 				for adj_sq in adj_sqs:
@@ -2908,6 +3126,76 @@ func _spawn_damage_number(anchor: Control, dmg: int):
 	tw.tween_property(lbl, "modulate", Color(1, 0.16, 0.16, 0), 0.48).set_delay(0.20)
 	tw.set_parallel(false)
 	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
+
+func _spawn_heal_number(anchor: Control, amt: int):
+	if anchor == null or not is_instance_valid(anchor):
+		return
+	if amt <= 0:
+		return
+	var lbl := Label.new()
+	lbl.text = "+%d" % amt
+	lbl.add_theme_font_size_override("font_size", 46)
+	lbl.add_theme_color_override("font_color", Color(0.2, 1, 0.4))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	lbl.add_theme_constant_override("outline_size", 7)
+	lbl.z_index = 301
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.modulate = Color(0.2, 1, 0.4, 1)
+	add_child(lbl)
+	var anchor_rect: Rect2 = anchor.get_global_rect()
+	if anchor_rect.size == Vector2.ZERO:
+		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80, 80))
+	var center: Vector2 = anchor_rect.get_center()
+	var local_center: Vector2 = center - get_global_rect().position
+	lbl.position = local_center + Vector2(14, -10)
+	lbl.scale = Vector2(0.7, 0.7)
+	lbl.pivot_offset = lbl.size * 0.5
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "scale", Vector2(1.05, 1.05), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "position", local_center + Vector2(14, -36), 0.48).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate", Color(0.2, 1, 0.4, 0), 0.48).set_delay(0.22)
+	tw.set_parallel(false)
+	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
+
+func _spawn_income_effect(anchor: Control, kind: String, amount: int):
+	if anchor == null or not is_instance_valid(anchor):
+		return
+	if amount <= 0:
+		return
+	# particle effect from Assets/Effects/income_*
+	var eff_kind: String = "income_money" if kind == "money" else "income_bio"
+	_spawn_special_effect(anchor, eff_kind)
+	var col: Color = Color(1, 0.85, 0.15) if kind == "money" else Color(0.3, 1, 0.5)
+	var lbl := Label.new()
+	lbl.text = "+%d" % amount
+	lbl.add_theme_font_size_override("font_size", 42)
+	lbl.add_theme_color_override("font_color", col)
+	lbl.add_theme_color_override("font_outline_color", Color(0,0,0,1))
+	lbl.add_theme_constant_override("outline_size", 7)
+	lbl.z_index = 305
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.modulate = col
+	add_child(lbl)
+	var anchor_rect: Rect2 = anchor.get_global_rect()
+	if anchor_rect.size == Vector2.ZERO:
+		anchor_rect = Rect2(anchor.get_global_position(), Vector2(80,80))
+	var center: Vector2 = anchor_rect.get_center()
+	var local_center: Vector2 = center - get_global_rect().position
+	lbl.position = local_center + Vector2(-14, -8)
+	lbl.scale = Vector2(0.6,0.6)
+	lbl.pivot_offset = lbl.size*0.5
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "scale", Vector2(1.08,1.08), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "position", local_center + Vector2(-14, -38), 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate", Color(col.r, col.g, col.b, 0), 0.55).set_delay(0.2)
+	tw.set_parallel(false)
+	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
+	# anchor bounce
+	var atw := create_tween()
+	atw.tween_property(anchor, "scale", Vector2(1.08,1.08), 0.08).set_trans(Tween.TRANS_BACK)
+	atw.tween_property(anchor, "scale", Vector2(1.0,1.0), 0.14).set_trans(Tween.TRANS_BACK)
 
 func _inspect_pile(title: String, pile: Array):
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
