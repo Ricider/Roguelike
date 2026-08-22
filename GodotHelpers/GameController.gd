@@ -2852,6 +2852,8 @@ func _animate_live_entry(entry: Dictionary):
 	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
 	# Barracks buff has no special attack animation (removed per request)
+	# Projectile: unique per-card 20-frame high-rectangle derived from regular sprite
+	_spawn_attack_projectile(attacker_card, atk_btn, tgt_btn if not is_direct else tgt_hp_bar)
 	# Attacker punch: scale+modulate in parallel, pivot-centered
 	if atk_btn != null and is_instance_valid(atk_btn):
 		atk_btn.pivot_offset = atk_btn.size * 0.5
@@ -2988,6 +2990,8 @@ func _animate_combat(log: Array):
 		var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 		var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
 		# Barracks buff has no special attack animation (removed per request)
+		# Projectile: unique per-card 20-frame high-rectangle derived from regular sprite
+		_spawn_attack_projectile(attacker_card, atk_btn, tgt_btn if not is_direct else tgt_hp_bar)
 		# Highlight attacker: scale pulse + yellow tint (pivot-centered, parallel)
 		if atk_btn != null and is_instance_valid(atk_btn):
 			atk_btn.pivot_offset = atk_btn.size * 0.5
@@ -3069,6 +3073,124 @@ func _get_adjacent_squares(player: Player, center: Square) -> Array:
 				continue
 			res.append((player.Board[nr] as Row).Squares[nc])
 	return res
+
+func _get_projectile_frames(card_name: String) -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.add_animation("fly")
+	sf.set_animation_loop("fly", true)
+	sf.set_animation_speed("fly", 10.0)
+	for i in range(20):
+		var fpath: String = "res://Assets/Projectiles/%s/sprite_%d.png" % [card_name, i]
+		if ResourceLoader.exists(fpath):
+			var tex := load(fpath) as Texture2D
+			if tex != null:
+				sf.add_frame("fly", tex)
+	# Fallback: try card attack frames if projectile not found (e.g., for buildings)
+	if sf.get_frame_count("fly") == 0:
+		for i in range(20):
+			var f2: String = "res://Assets/Cards/%s/attack/sprite_%d.png" % [card_name, i]
+			if ResourceLoader.exists(f2):
+				var tex2 := load(f2) as Texture2D
+				if tex2 != null:
+					sf.add_frame("fly", tex2)
+	return sf
+
+func _spawn_attack_projectile(attacker_card: Card, attacker_btn: Button, target_btn: Control):
+	if attacker_card == null or attacker_btn == null or target_btn == null or not is_instance_valid(attacker_btn) or not is_instance_valid(target_btn):
+		return
+	var sf := _get_projectile_frames(attacker_card.card_name)
+	if sf.get_frame_count("fly") == 0:
+		return
+	var start_rect: Rect2 = attacker_btn.get_global_rect()
+	var end_rect: Rect2 = target_btn.get_global_rect()
+	if start_rect.size == Vector2.ZERO:
+		start_rect = Rect2(attacker_btn.get_global_position(), Vector2(78,78))
+	if end_rect.size == Vector2.ZERO:
+		end_rect = Rect2(target_btn.get_global_position(), Vector2(78,78))
+	var start_pos: Vector2 = start_rect.get_center()
+	var end_pos: Vector2 = end_rect.get_center()
+	# Unique per-card projectile count and trajectory
+	var burst: int = 1
+	if attacker_card.card_name == "Interceptor":
+		burst = 2
+	elif attacker_card.card_name == "Howitzer" or attacker_card.card_name == "Anti Aircraft":
+		burst = 2
+	elif attacker_card.card_name == "Rocket Launcher":
+		burst = 3
+	# Spawn burst projectiles with slight stagger
+	for b in range(burst):
+		var proj := Control.new()
+		proj.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		proj.z_index = 160
+		proj.z_as_relative = false
+		if proj.has_method("set_as_top_level"):
+			proj.top_level = true
+		proj.clip_contents = false
+		var asp := AnimatedSprite2D.new()
+		asp.sprite_frames = sf
+		asp.animation = "fly"
+		asp.centered = true
+		asp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		# Scale projectile to be visible but not too large: 128 base -> 28-36 on board
+		var base: float = 128.0
+		if sf.get_frame_count("fly") > 0:
+			var tex: Texture2D = sf.get_frame_texture("fly", 0)
+			if tex != null:
+				base = float(tex.get_width())
+		var scale_f: float = 32.0 / base
+		if attacker_card.card_name == "Tank":
+			scale_f = 42.0 / base
+		elif attacker_card.card_name == "Interceptor":
+			scale_f = 28.0 / base
+		elif attacker_card.card_name == "Fighter Jet":
+			scale_f = 36.0 / base
+		asp.scale = Vector2(scale_f, scale_f)
+		proj.add_child(asp)
+		asp.position = Vector2.ZERO
+		asp.play("fly")
+		# Position projectile at start
+		var offset: Vector2 = Vector2.ZERO
+		if burst > 1:
+			offset = Vector2(0, (b - (burst-1)*0.5)*14)
+		proj.position = start_pos + offset
+		add_child(proj)
+		# Animate to target: linear for bullets, arc for artillery
+		var duration: float = 0.35
+		if attacker_card.card_name == "Infantry":
+			duration = 0.22
+		elif attacker_card.card_name == "Tank":
+			duration = 0.40
+		elif attacker_card.card_name == "Artilery" or attacker_card.card_name == "Howitzer":
+			duration = 0.45
+		elif attacker_card.card_name == "Rocket Launcher":
+			duration = 0.50
+		elif attacker_card.card_name == "Interceptor":
+			duration = 0.32
+		# Stagger burst
+		duration += b * 0.06
+		var tw := create_tween()
+		tw.set_trans(Tween.TRANS_SINE)
+		tw.set_ease(Tween.EASE_IN_OUT)
+		# For arc projectiles, add height via parallel y offset
+		if attacker_card.card_name == "Artilery" or attacker_card.card_name == "Howitzer" or attacker_card.card_name == "Tank":
+			var mid: Vector2 = (start_pos + end_pos) * 0.5 + Vector2(0, -60) + offset
+			tw.tween_property(proj, "position", mid, duration*0.5)
+			tw.tween_property(proj, "position", end_pos + offset, duration*0.5)
+		else:
+			tw.tween_property(proj, "position", end_pos + offset, duration)
+		# Rotate to face target
+		var dir: Vector2 = (end_pos - start_pos).normalized()
+		asp.rotation = dir.angle()
+		# Cleanup after
+		var proj_ref: Control = proj
+		if get_tree() != null:
+			get_tree().create_timer(duration + 0.15).timeout.connect(func():
+				if is_instance_valid(proj_ref):
+					proj_ref.queue_free()
+			)
+		# Small delay between burst projectiles
+		if burst > 1 and b < burst-1:
+			await get_tree().create_timer(0.07).timeout
 
 func _spawn_special_effect(anchor: Control, kind: String):
 	if anchor == null or not is_instance_valid(anchor):
