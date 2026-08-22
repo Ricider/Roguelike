@@ -2164,22 +2164,22 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					# Circular via half-radius
 					var aura_sb := StyleBoxFlat.new()
 					if is_barracks_adj and is_intercepted_idle:
-						# Both effects: amber outer + blue inner via mixed color (blend)
-						aura_sb.bg_color = Color(0.65,0.72,0.55,0.09)
-						aura_sb.border_color = Color(0.75,0.80,0.60,0.65)
+						# Both effects: slightly more transparent as requested
+						aura_sb.bg_color = Color(0.65,0.72,0.55,0.05)
+						aura_sb.border_color = Color(0.75,0.80,0.60,0.42)
 					elif is_barracks_adj:
-						aura_sb.bg_color = Color(1,0.72,0.15,0.10)
-						aura_sb.border_color = Color(1,0.78,0.25,0.70)
+						aura_sb.bg_color = Color(1,0.72,0.15,0.05)
+						aura_sb.border_color = Color(1,0.78,0.25,0.48)
 					else:
-						aura_sb.bg_color = Color(0.35,0.75,1.0,0.09)
-						aura_sb.border_color = Color(0.45,0.85,1.0,0.60)
+						aura_sb.bg_color = Color(0.35,0.75,1.0,0.05)
+						aura_sb.border_color = Color(0.45,0.85,1.0,0.38)
 					aura_sb.set_border_width_all(3)
 					aura_sb.set_corner_radius_all(74) # fully circular (half of 148)
 					if is_barracks_adj:
-						aura_sb.shadow_color = Color(1,0.6,0.1,0.28)
+						aura_sb.shadow_color = Color(1,0.6,0.1,0.16)
 					else:
-						aura_sb.shadow_color = Color(0.2,0.5,1.0,0.32)
-					aura_sb.shadow_size = 10
+						aura_sb.shadow_color = Color(0.2,0.5,1.0,0.18)
+					aura_sb.shadow_size = 8
 					aura.add_theme_stylebox_override("panel", aura_sb)
 					aura.z_index = 2
 					# Centered on square — use anchor-center so it stays centered even when button stretches via SIZE_EXPAND_FILL
@@ -2208,14 +2208,14 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					atw3.tween_property(aura, "modulate", Color(1,1,1,0.85), 0.9)
 					atw3.tween_property(aura, "modulate", Color(1,1,1,1), 0.9)
 					if is_barracks_adj:
-						# Add inner amber ring TextureRect for extra detail — circular via same radius + animated spin
+						# Add inner amber ring — slightly more transparent
 						var inner := PanelContainer.new()
 						inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 						inner.custom_minimum_size = Vector2(118,118)
 						inner.size = Vector2(118,118)
 						var inner_sb := StyleBoxFlat.new()
 						inner_sb.bg_color = Color(1,0.72,0.15,0.0)
-						inner_sb.border_color = Color(1,0.85,0.45,0.45)
+						inner_sb.border_color = Color(1,0.85,0.45,0.28)
 						inner_sb.set_border_width_all(2)
 						inner_sb.set_corner_radius_all(59)
 						inner.add_theme_stylebox_override("panel", inner_sb)
@@ -2232,7 +2232,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 						inner2.size = Vector2(126,126)
 						var inner2_sb := StyleBoxFlat.new()
 						inner2_sb.bg_color = Color(0.35,0.75,1.0,0.0)
-						inner2_sb.border_color = Color(0.45,0.85,1.0,0.30)
+						inner2_sb.border_color = Color(0.45,0.85,1.0,0.18)
 						inner2_sb.set_border_width_all(2)
 						inner2_sb.set_corner_radius_all(63)
 						inner2.add_theme_stylebox_override("panel", inner2_sb)
@@ -2714,39 +2714,10 @@ func _animate_live_entry(entry: Dictionary):
 	var atk_btn: Button = _get_button_for_square(attacker_player, attacker_sq)
 	var tgt_btn: Button = null if is_direct else _get_button_for_square(defender, target_sq)
 	var tgt_hp_bar: TextureProgressBar = ai_hp_bar if defender == ai_player else player_hp_bar
-	# High-detail Barracks aura before attack + persistent aura hint
+	# High-detail Barracks aura before attack — keep only particle effect, no rectangle
 	if attacker_card is Unit and Barracks.bonus_if_adjacent(attacker_player, attacker_sq) > 0:
 		if atk_btn != null and is_instance_valid(atk_btn):
 			_spawn_special_effect(atk_btn, "barracks_aura")
-			# extra ring pulse for high-detail aura
-			var aura := PanelContainer.new()
-			aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			aura.z_index = 200
-			aura.custom_minimum_size = Vector2(92,92)
-			aura.size = Vector2(92,92)
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(1, 0.72, 0.15, 0.0)
-			sb.border_color = Color(1, 0.78, 0.2, 0.85)
-			sb.set_border_width_all(2)
-			sb.set_corner_radius_all(14)
-			sb.shadow_color = Color(1,0.6,0.1,0.35)
-			sb.shadow_size = 8
-			aura.add_theme_stylebox_override("panel", sb)
-			add_child(aura)
-			var ar: Rect2 = atk_btn.get_global_rect()
-			if ar.size == Vector2.ZERO:
-				ar = Rect2(atk_btn.get_global_position(), Vector2(80,80))
-			var c: Vector2 = ar.get_center() - get_global_rect().position
-			aura.position = c - aura.size*0.5
-			aura.pivot_offset = aura.size*0.5
-			aura.scale = Vector2(0.6,0.6)
-			aura.modulate = Color(1,1,1,0.9)
-			var atw := create_tween()
-			atw.set_parallel(true)
-			atw.tween_property(aura, "scale", Vector2(1.25,1.25), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-			atw.tween_property(aura, "modulate", Color(1,1,1,0), 0.22)
-			atw.set_parallel(false)
-			atw.tween_callback(func(): if is_instance_valid(aura): aura.queue_free())
 	# Attacker punch: scale+modulate in parallel, pivot-centered
 	if atk_btn != null and is_instance_valid(atk_btn):
 		atk_btn.pivot_offset = atk_btn.size * 0.5
