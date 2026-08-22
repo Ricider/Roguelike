@@ -59,6 +59,24 @@ func get_empty_squares() -> Array:
 				out.append(sq)
 	return out
 
+
+func get_full_deck_for_inspection() -> Array:
+	# Full deck = all cards that belong to deck (Draw + Hand + Discard + Graveyard + Board)
+	# For AI inspection we combine all piles so remaining size cannot be used to guess hand.
+	# Board cards are visible anyway but included for completeness; hand is hidden.
+	var out: Array = []
+	out.append_array(DrawPile)
+	out.append_array(Hand)
+	out.append_array(DiscardPile)
+	out.append_array(Graveyard)
+	for sc in get_all_board_cards():
+		out.append(sc)
+	return out
+
+func get_full_deck_sorted() -> Array:
+	var arr: Array = get_full_deck_for_inspection()
+	arr.sort_custom(func(a,b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
+	return arr
 func draw_cards():
 	while Hand.size() < 10:
 		if DrawPile.is_empty():

@@ -632,7 +632,7 @@ func _ready():
 	_ensure_modifiers_stack()
 	_refresh_modifiers_stack()
 	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
-	ai_deck_icon.pressed.connect(func(): _inspect_pile("AI Draw Pile", ai_player.DrawPile))
+	ai_deck_icon.pressed.connect(func(): _inspect_ai_full_deck())
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
 	ai_discard_icon.pressed.connect(func(): _inspect_pile("AI Discard Pile", ai_player.DiscardPile))
 	player_graveyard_icon.pressed.connect(func(): _inspect_pile("Your Graveyard", human.Graveyard))
@@ -3299,6 +3299,15 @@ func _spawn_income_effect(anchor: Control, kind: String, amount: int):
 	atw.tween_property(anchor, "scale", Vector2(1.08,1.08), 0.08).set_trans(Tween.TRANS_BACK)
 	atw.tween_property(anchor, "scale", Vector2(1.0,1.0), 0.14).set_trans(Tween.TRANS_BACK)
 
+
+func _inspect_ai_full_deck():
+	# Show full deck composition, not remaining DrawPile, so hand cannot be guessed
+	if ai_player == null:
+		return
+	var full: Array = ai_player.get_full_deck_for_inspection() if ai_player.has_method("get_full_deck_for_inspection") else ai_player.DrawPile
+	# Sort for stable view and to hide hand/draw order
+	full.sort_custom(func(a,b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
+	_inspect_pile("AI Deck (Full)", full)
 func _inspect_pile(title: String, pile: Array):
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
 	# Clear previous grid
