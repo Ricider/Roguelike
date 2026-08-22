@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="2" fill="#2d2a24"/>
+  <rect x="6" y="24" width="12" height="4" fill="#3a3e36"/>
+  <rect x="9" y="20" width="6" height="4" fill="#4c5244"/>
+  <rect x="10" y="12" width="2" height="8" fill="#d2d7dc"/>
+  <rect x="13" y="12" width="2" height="8" fill="#d2d7dc"/>
+  <rect x="19" y="22" width="6" height="6" fill="#3a3e36"/>
+  <rect x="19" y="16" width="6" height="2" fill="#b4b9c3"/>
+  <text x="16" y="30" font-family="monospace" font-size="3" fill="white" text-anchor="middle">Interceptor</text>
+</svg>

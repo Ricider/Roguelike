@@ -61,6 +61,9 @@ func combat_phase() -> Array:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1
+				# Interceptor: adjacent friendly Units take 50% less vs HasRange/Flying; costs 2 HP to interceptor + 6 Money
+				if target_card is Unit:
+					actual_dmg = Interceptor.apply_interception(defender, target_sq, target_card, unit, attacker, actual_dmg)
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:

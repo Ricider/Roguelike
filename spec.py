@@ -229,6 +229,17 @@ Card: Corporation
 
     InfluenceCost: 25
 
+Card: Interceptor
+    Hp: 20
+    MoneyIncome: 0
+
+    MoneyCost: 50
+    BioCost: 5
+
+    SpecialEffect: Friendly units in adjacent squares take 50% less damage from enemies that have HasRange or Flying set to True, every time this damage reduction effect kicks in the interceptor loses 2 HP and its owner loses 6 MoneySupply
+
+    InfluenceCost: 30
+
 ### Players ###
 
 Player: Insurgents
@@ -291,7 +302,7 @@ Player: Coalition Army
 
     Influence=50
 
-    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops]
+    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops, 1 Interceptor]
     DiscardPile: []
     Hand: [] 
     Modifiers: [Aerial Supremacy]
@@ -307,7 +318,7 @@ Player: Corporate Troops
 
     Influence=50
 
-    DrawPile: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher]
+    DrawPile: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher, 2 Interceptor]
     DiscardPile: []
     Hand: []
     Modifiers: [Advanced Robotics]

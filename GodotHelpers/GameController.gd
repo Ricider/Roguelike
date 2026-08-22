@@ -1027,7 +1027,7 @@ func _ensure_debug_popup():
 	debug_summon_card_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	debug_summon_card_option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	debug_summon_card_option.add_theme_font_size_override("font_size", 16)
-	for cname in ["Wall", "Infantry", "Tank", "Artilery", "Rocket Launcher", "Drone", "Fighter Jet", "Factory", "Barracks", "Housing", "Corporation", "Howitzer", "Special Ops", "Anti Aircraft"]:
+	for cname in ["Wall", "Infantry", "Tank", "Artilery", "Rocket Launcher", "Drone", "Fighter Jet", "Factory", "Barracks", "Housing", "Corporation", "Howitzer", "Special Ops", "Anti Aircraft", "Interceptor"]:
 		debug_summon_card_option.add_item(cname)
 	summon_row.add_child(debug_summon_card_option)
 	debug_summon_target_option = OptionButton.new()
@@ -1166,6 +1166,7 @@ func _create_card_by_name(cname: String) -> Card:
 		"Howitzer": return Howitzer.new()
 		"Special Ops": return SpecialOps.new()
 		"Anti Aircraft": return AntiAircraft.new()
+		"Interceptor": return Interceptor.new()
 		_: return Wall.new()
 
 func _debug_summon_card(cname: String, to_ai: bool):
@@ -2523,6 +2524,8 @@ func _execute_combat_live() -> Array:
 					actual_dmg = int(actual_dmg / 2)
 					if actual_dmg < 1:
 						actual_dmg = 1
+				if target_card is Unit:
+					actual_dmg = Interceptor.apply_interception(defender, target_sq, target_card, unit, attacker, actual_dmg)
 				if target_card is Unit:
 					(target_card as Unit).HitPoints -= actual_dmg
 				elif target_card is Building:

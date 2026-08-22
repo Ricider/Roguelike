@@ -80,7 +80,7 @@ static func make_horde_deck() -> Array:
 	return deck
 
 static func make_coalition_army_deck() -> Array:
-	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops] =46
+	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops, 1 Interceptor] =47
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -106,6 +106,8 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(Corporation.new())
 	for i in range(3):
 		deck.append(SpecialOps.new())
+	for i in range(1):
+		deck.append(Interceptor.new())
 	deck.shuffle()
 	return deck
 
@@ -134,7 +136,7 @@ static func make_euro_army_deck() -> Array:
 	return deck
 
 static func make_corporate_troops_deck() -> Array:
-	# Corporate Troops: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher] =42
+	# Corporate Troops: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher, 2 Interceptor] =44
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -152,12 +154,14 @@ static func make_corporate_troops_deck() -> Array:
 		deck.append(Barracks.new())
 	for i in range(3):
 		deck.append(RocketLauncher.new())
+	for i in range(2):
+		deck.append(Interceptor.new())
 	deck.shuffle()
 	return deck
 
 # --- Shop pool helper ---
 static func all_card_types() -> Array:
-	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new(), AntiAircraft.new(), SpecialOps.new()]
+	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new(), AntiAircraft.new(), SpecialOps.new(), Interceptor.new()]
 
 static func random_shop_offer() -> Array:
 	var pool := all_card_types()
