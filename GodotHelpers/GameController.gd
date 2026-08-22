@@ -3137,12 +3137,14 @@ func _spawn_attack_projectile(attacker_card: Card, attacker_btn: Button, target_
 			var tex: Texture2D = sf.get_frame_texture("fly", 0)
 			if tex != null:
 				base = float(tex.get_width())
-		var scale_f: float = 32.0 / base
+		var scale_f: float = 38.0 / base
 		if attacker_card.card_name == "Tank":
-			scale_f = 42.0 / base
+			scale_f = 50.0 / base
 		elif attacker_card.card_name == "Interceptor":
-			scale_f = 28.0 / base
+			scale_f = 34.0 / base
 		elif attacker_card.card_name == "Fighter Jet":
+			scale_f = 42.0 / base
+		elif attacker_card.card_name == "Infantry":
 			scale_f = 36.0 / base
 		asp.scale = Vector2(scale_f, scale_f)
 		proj.add_child(asp)
