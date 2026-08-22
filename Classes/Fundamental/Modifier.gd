@@ -22,6 +22,7 @@ static func all_modifiers() -> Array:
 		Modifier.new("Corruption", "Your buildings have 50% less HP, but you gain +10 MoneySupply every turn", 30),
 		Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60),
 		Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 50),
+		Modifier.new("Defensive Doctrine", "Your cards have +10 hp, but they deal -1 damage", 40),
 	]
 
 static func by_name(name: String) -> Modifier:
@@ -42,6 +43,7 @@ func _modifier_base_color() -> Color:
 		"Corruption": return Color(0.42, 0.16, 0.64, 1) # rich purple
 		"Advanced Robotics": return Color(0.18, 0.45, 0.78, 1) # electric blue
 		"Aerial Supremacy": return Color(0.22, 0.72, 0.88, 1) # cyan sky
+		"Defensive Doctrine": return Color(0.35, 0.45, 0.65, 1) # steel blue-gray
 		_: return Color(0.2, 0.2, 0.25, 1)
 
 func _modifier_border_color() -> Color:
@@ -57,6 +59,7 @@ func _modifier_icon() -> String:
 		"Corruption": return "◆"
 		"Advanced Robotics": return "⚙"
 		"Aerial Supremacy": return "✈"
+		"Defensive Doctrine": return "🛡"
 		_: return "◈"
 
 func get_static_sprite() -> Texture2D:

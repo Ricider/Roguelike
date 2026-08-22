@@ -25,7 +25,7 @@ func test_unit_flying_and_stats():
 	var rl := RocketLauncher.new()
 	assert_eq(rl.HitPoints, 12, "Rocket 12")
 	assert_eq(rl.BioCost, 5, "Rocket bio 5")
-	assert_eq(rl.InfluenceCost, 30, "Rocket influence 30")
+	assert_eq(rl.InfluenceCost, 20, "Rocket influence 20 per spec")
 	assert_eq(rl.SpecialEffect, "attacks 4 times every Combat Phase", "Rocket 4x")
 	var drone := Drone.new()
 	assert_eq(drone.HitPoints, 6, "Drone 6")
@@ -38,7 +38,7 @@ func test_unit_flying_and_stats():
 	assert_true(fj.HasRange, "FighterJet ranged")
 	assert_true(fj.Flying, "FighterJet flying")
 	assert_eq(fj.SpecialEffect, "Also damages tiles adjacent to where it hit", "FighterJet splash")
-	assert_eq(fj.InfluenceCost, 40, "FighterJet influence 40")
+	assert_eq(fj.InfluenceCost, 25, "FighterJet influence 25 per spec")
 	var fac := Factory.new()
 	assert_eq(fac.InfluenceCost, 20, "Factory influence 20")
 	var barr := Barracks.new()
@@ -52,7 +52,7 @@ func test_unit_flying_and_stats():
 	assert_eq(corp.Income, 12, "Corporation 12 Income")
 	assert_eq(corp.MoneyCost, 70, "Corporation money 70")
 	assert_eq(corp.BioCost, 20, "Corporation bio 20")
-	assert_eq(corp.InfluenceCost, 60, "Corporation influence 60")
+	assert_eq(corp.InfluenceCost, 25, "Corporation influence 25 per spec")
 	assert_eq(corp.SpecialEffect, "Reduce MoneyCost of playing all cards by 20%", "Corp effect")
 
 func test_decks_johndoe_insurgents_euro():
@@ -70,7 +70,7 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(cjd.get("Housing",0),2, "JD Housing 2")
 	assert_eq(cjd.get("Barracks",0),1, "JD Barracks 1")
 	var ins := CardFactory.make_insurgents_deck()
-	assert_eq(ins.size(),31, "Insurgents 31")
+	assert_eq(ins.size(),33, "Insurgents 33 per spec (5+10+8+2+1+3+2+2)")
 	var ci := {}
 	for card in ins:
 		ci[card.card_name]=ci.get(card.card_name,0)+1
@@ -84,7 +84,7 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(ce.get("Fighter Jet",0),4, "Euro Fighter Jet 4")
 	assert_eq(ce.get("Drone",0),8, "Euro Drone 8")
 	var euro := CardFactory.make_euro_army_player()
-	assert_eq(euro.HitPoints,60, "Euro 60 HP")
+	assert_eq(euro.HitPoints,120, "Euro 120 HP per latest spec (was 60)")
 	assert_eq(euro.BioSupply,80, "Euro 80 bio")
 	assert_eq(euro.MoneySupply,50, "Euro 50 money")
 	assert_eq(euro.Difficulty,5, "Euro diff 5 per new spec")
@@ -105,7 +105,7 @@ func test_decks_johndoe_insurgents_euro():
 	# New players: State Troops and Horde
 	var st := CardFactory.make_state_troops_player()
 	assert_eq(st.display_name, "State Troops", "State Troops name")
-	assert_eq(st.HitPoints, 100, "State Troops HP 100")
+	assert_eq(st.HitPoints, 180, "State Troops HP 180 per latest spec")
 	assert_eq(st.Influence, 20, "State Troops influence 20")
 	assert_eq(st.Difficulty, 2, "State Troops diff 2")
 	assert_eq(st.BackgroundImage, "Middle Eastern town, add some mosques around, don't make the entire thing a desert", "ST background")
@@ -123,7 +123,7 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(horde.display_name, "Horde", "Horde name")
 	assert_eq(horde.HitPoints, 200, "Horde HP 200")
 	assert_eq(horde.Influence, 25, "Horde influence 25")
-	assert_eq(horde.Difficulty, 4, "Horde diff 4")
+	assert_eq(horde.Difficulty, 6, "Horde diff 6 per latest spec")
 	assert_eq(horde.BackgroundImage, "Russian style city, snowy, add few trees", "Horde background")
 	var h_back = horde.Board[0]
 	var h_hous = 0
@@ -146,9 +146,25 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(insurg.HitPoints, 120, "Insurgents HP 120 per new spec")
 	assert_eq(insurg.Influence, 10, "Insurgents influence 10")
 	assert_eq(insurg.Difficulty, 1, "Insurgents diff 1")
-	# Horde deck size 48 per spec sum
+	# Horde deck size 52 per latest spec (10+15+8+2+2+3+3+1+2+3+3)
 	var horde_deck := CardFactory.make_horde_deck()
-	assert_eq(horde_deck.size(), 48, "Horde deck 48")
+	assert_eq(horde_deck.size(), 52, "Horde deck 52 per latest spec")
+	# Also verify new players
+	var fund := CardFactory.make_fundamentalists_player()
+	assert_eq(fund.display_name, "Fundamentalists", "Fund name")
+	assert_eq(fund.Difficulty, 3, "Fund diff 3")
+	assert_eq(fund.HitPoints, 150, "Fund 150 HP")
+	var merc := CardFactory.make_mercenaries_player()
+	assert_eq(merc.Difficulty, 4, "Merc diff 4")
+	assert_eq(merc.HitPoints, 130, "Merc 130")
+	var pk := CardFactory.make_peace_keepers_player()
+	assert_eq(pk.Difficulty, 5, "Peace Keepers diff 5")
+	assert_eq(pk.HitPoints, 90, "PK 90")
+	var coa := CardFactory.make_coalition_army_player()
+	assert_eq(coa.Difficulty, 7, "Coalition diff 7")
+	var corp := CardFactory.make_corporate_troops_player()
+	assert_eq(corp.Difficulty, 8, "Corporate diff 8")
+	assert_eq(corp.HitPoints, 70, "Corporate 70 HP")
 
 func test_player_difficulty_and_enemy_is_euro():
 	var p := Player.new(100,100,20,1,"Test")
@@ -205,7 +221,7 @@ func test_special_effect_sprites_exist():
 	var gc_txt := FileAccess.get_file_as_string("res://GodotHelpers/GameController.gd")
 	assert_true(gc_txt.contains("_spawn_special_effect"), "spawn effect")
 	assert_true(gc_txt.contains("fighter_jet_splash"), "fighter effect")
-	assert_true(gc_txt.contains("barracks_aura"), "barracks effect")
+	assert_true(gc_txt.contains("Barracks.bonus_if_adjacent") or gc_txt.contains("barracks_aura"), "barracks effect (idle circular aura)")
 
 func test_combat_flying_half_and_splash_and_overkill():
 	# Flying half damage
@@ -323,12 +339,12 @@ func test_player_chooser_state_troops_recommended():
 	var seq := CardFactory.enemy_sequence_for_player("State Troops")
 	assert_eq(seq[0].display_name, "Insurgents", "first enemy insurgents")
 	assert_true(seq[0].Difficulty < seq[1].Difficulty, "sorted ascending")
-	assert_eq(seq.size(), 4, "4 enemies when player is State Troops (excludes self) per new spec with Corporate Troops")
-	# All difficulties 1,4,5,6 for State Troops chooser (Insurgents 1, Horde 4, Coalition 5, Corporate 6)
+	assert_eq(seq.size(), 7, "7 enemies when player is State Troops (excludes self) per latest spec with 8 players")
+	# All difficulties 1,3,4,5,6,7,8 for State Troops chooser (Insurgents 1, Fundamentalists 3, Mercenaries 4, Peace Keepers 5, Horde 6, Coalition 7, Corporate 8)
 	var diffs: Array = []
 	for e in seq:
 		diffs.append(e.Difficulty)
-	assert_true(diffs.has(1) and diffs.has(4) and diffs.has(5) and diffs.has(6), "difficulties 1,4,5,6")
+	assert_true(diffs.has(1) and diffs.has(3) and diffs.has(4) and diffs.has(5) and diffs.has(6) and diffs.has(7) and diffs.has(8), "difficulties 1,3,4,5,6,7,8")
 
 func test_shop_rules_and_influence_gain():
 	var gs = load("res://GodotHelpers/GameState.gd").new()

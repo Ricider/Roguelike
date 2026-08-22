@@ -43,7 +43,7 @@ func test_player_economy_housing_bonus():
 	p1.DrawPile = CardFactory.make_starting_deck()
 	p1.Hand.clear()
 	p1.economy_phase()
-	assert_eq(p1.BioSupply, 119, "Bio 10%+5+4% with 1 Housing 100->119 per updated spec (100*1.14+5)")
+	assert_eq(p1.BioSupply, 123, "Bio 10%+5+8 flat with 1 Housing 100->123 per updated spec (100*1.10+5+8)")
 
 	var p2 := Player.new(100, 100, 20)
 	p2.Board[0].Squares[0].place(Housing.new())
@@ -51,7 +51,7 @@ func test_player_economy_housing_bonus():
 	p2.DrawPile = CardFactory.make_starting_deck()
 	p2.Hand.clear()
 	p2.economy_phase()
-	assert_eq(p2.BioSupply, 123, "Bio 10%+5+8% with 2 Housing 100->123 per updated spec (100*1.18+5)")
+	assert_eq(p2.BioSupply, 131, "Bio 10%+5+16 flat with 2 Housing 100->131 per updated spec (100*1.10+5+16)")
 
 func test_player_draw_shuffle_and_discard():
 	var p := Player.new(100, 100, 20)
@@ -112,9 +112,12 @@ func test_barracks_housing_helpers():
 
 	var p4 := Player.new(100, 100, 20)
 	assert_almost_eq(Housing.extra_bio_rate(p4), 0.0, 0.0001, "0% none")
+	assert_eq(Housing.extra_bio(p4), 0, "0 flat none")
 	p4.Board[0].Squares[0].place(Housing.new())
-	assert_almost_eq(Housing.extra_bio_rate(p4), 0.04, 0.0001, "+4% with 1 per updated spec")
-	assert_almost_eq(Housing.bio_rate(p4), 1.14, 0.0001, "1.14 (1.10+0.04) with 1")
+	assert_almost_eq(Housing.extra_bio_rate(p4), 0.04, 0.0001, "+4% compat with 1")
+	assert_eq(Housing.extra_bio(p4), 8, "+8 flat with 1")
+	assert_almost_eq(Housing.bio_rate(p4), 1.10, 0.0001, "1.10 base rate (housing now flat +8 not %)")
+	assert_eq(Housing.count_housing(p4), 1, "count 1")
 
 func test_combat_damage_and_barracks_bonus():
 	var atk := Player.new(100, 100, 20)

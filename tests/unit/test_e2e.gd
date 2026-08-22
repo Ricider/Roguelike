@@ -69,7 +69,7 @@ func test_e2e_full_run_state_troops():
 	gs.start_run("State Troops")
 	assert_eq(gs.run_player.display_name, "State Troops", "run player State Troops")
 	assert_eq(gs.run_player.Influence, 20, "starts with 20 influence")
-	assert_eq(gs.run_enemies.size(), 4, "4 enemies excludes self per new spec")
+	assert_eq(gs.run_enemies.size(), 7, "7 enemies excludes self per latest spec with 8 players")
 	assert_eq(gs.run_enemies[0].display_name, "Insurgents", "first is Insurgents")
 	# Simulate sequential battles
 	var total_influence_gained := 0
@@ -85,7 +85,24 @@ func test_e2e_full_run_state_troops():
 		if idx > 0:
 			_clear_board(gs.run_player)
 		# Ensure enemy has its starting board (already), and draw
-		gs.run_player.DrawPile = CardFactory.make_state_troops_deck() if idx==0 else CardFactory.make_horde_deck() if enemy.display_name=="Horde" else CardFactory.make_coalition_army_deck() if enemy.display_name=="Coalition Army" else CardFactory.make_corporate_troops_deck() if enemy.display_name=="Corporate Troops" else CardFactory.make_euro_army_deck() if enemy.display_name=="Euro Army" else CardFactory.make_insurgents_deck()
+		if enemy.display_name=="Fundamentalists":
+			gs.run_player.DrawPile = CardFactory.make_fundamentalists_deck()
+		elif enemy.display_name=="Mercenaries":
+			gs.run_player.DrawPile = CardFactory.make_mercenaries_deck()
+		elif enemy.display_name=="Peace Keepers":
+			gs.run_player.DrawPile = CardFactory.make_peace_keepers_deck()
+		elif enemy.display_name=="Horde":
+			gs.run_player.DrawPile = CardFactory.make_horde_deck()
+		elif enemy.display_name=="Coalition Army":
+			gs.run_player.DrawPile = CardFactory.make_coalition_army_deck()
+		elif enemy.display_name=="Corporate Troops":
+			gs.run_player.DrawPile = CardFactory.make_corporate_troops_deck()
+		elif enemy.display_name=="Euro Army":
+			gs.run_player.DrawPile = CardFactory.make_euro_army_deck()
+		elif idx==0:
+			gs.run_player.DrawPile = CardFactory.make_state_troops_deck()
+		else:
+			gs.run_player.DrawPile = CardFactory.make_insurgents_deck()
 		gs.run_player.Hand.clear()
 		gs.run_player.DiscardPile.clear()
 		gs.run_player.Graveyard.clear()
@@ -146,7 +163,11 @@ func test_e2e_full_run_state_troops():
 			# Last enemy defeated
 			gs.advance_enemy()
 			assert_true(gs.is_run_complete(), "run complete after last victory")
-	assert_eq(total_influence_gained, 10 + 25 + 50 + 50, "total 135 influence from Insurgents+Horde+Coalition+Corporate")
+	# State Troops run excludes self (20), total = sum of all other 7 Influences
+	var expected_total: int = 0
+	for e in gs.run_enemies:
+		expected_total += e.Influence
+	assert_eq(total_influence_gained, expected_total, "total influence sums all defeated enemies")
 
 func test_e2e_every_card_type_play_and_combat():
 	var all_types: Array = [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new()]
@@ -280,7 +301,7 @@ func test_e2e_turn_loop_economy_and_board():
 		assert_true(_count_board_cards(p) <= 40, "board <=40 turn %d" % turn)
 
 func test_e2e_all_player_boards_and_decks():
-	for name in ["Insurgents", "State Troops", "Horde", "Euro Army"]:
+	for name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Coalition Army", "Corporate Troops", "Euro Army"]:
 		var pl: Player = _make_player_with_deck(name)
 		assert_not_null(pl, "player %s exists" % name)
 		assert_true(pl.HitPoints > 0, "%s HP >0" % name)
@@ -292,8 +313,14 @@ func test_e2e_all_player_boards_and_decks():
 			assert_eq(cnt, 0, "Insurgents empty board")
 		elif name == "State Troops":
 			assert_eq(cnt, 2, "State Troops 2")
+		elif name == "Fundamentalists":
+			assert_eq(cnt, 2, "Fundamentalists 2 Housing")
+		elif name == "Mercenaries":
+			assert_eq(cnt, 2, "Mercenaries 2 Barracks")
+		elif name == "Peace Keepers":
+			assert_eq(cnt, 3, "Peace Keepers 2 Interceptor+1 Barracks")
 		elif name == "Horde":
-			assert_eq(cnt, 5, "Horde 5")
+			assert_eq(cnt, 7, "Horde 7 per spec (2 Factory+2 Housing+1 Artilery+2 Tank)")
 			for row in pl.Board:
 				for sq in row.Squares:
 					if sq.Inhabitant != null:
@@ -301,6 +328,10 @@ func test_e2e_all_player_boards_and_decks():
 						assert_eq(hp, 5, "Horde all HP 5")
 		elif name == "Euro Army":
 			assert_eq(cnt, 3, "Euro 3")
+		elif name == "Coalition Army":
+			assert_eq(cnt, 3, "Coalition 3")
+		elif name == "Corporate Troops":
+			assert_eq(cnt, 2, "Corporate 2")
 		# BackgroundImage not empty except maybe
 		assert_true(pl.BackgroundImage != "", "%s background not empty" % name)
 		# Flag exists
@@ -346,7 +377,7 @@ func test_e2e_game_controller_shop_and_victory_flow():
 	gs.gain_influence(first_enemy.Influence)
 	assert_eq(gs.run_player.Influence, inf_before + first_enemy.Influence, "gain on victory")
 	gs.advance_enemy()
-	assert_false(gs.is_run_complete(), "not complete after 1/3")
+	assert_false(gs.is_run_complete(), "not complete after 1")
 	assert_eq(gs.shop_offer.size(), 5, "shop after advance")
 	assert_false(gs.shop_remove_used, "remove flag reset")
 	# Buy and remove in shop
@@ -357,21 +388,36 @@ func test_e2e_game_controller_shop_and_victory_flow():
 	var rem: Card = gs.run_player.DrawPile[0]
 	assert_true(gs.remove_card_from_deck(rem), "remove")
 	assert_true(gs.shop_remove_used, "flag")
-	# Next enemy should be State Troops (Diff2) after Insurgents, since Horde run excludes Horde
+	# Next enemies in difficulty order excluding Horde (6): Insurgents 1, State Troops 2, Fundamentalists 3, Mercenaries 4, Peace Keepers 5, Coalition 7, Corporate 8
 	var second: Player = gs.get_current_enemy()
 	assert_eq(second.display_name, "State Troops", "second enemy State Troops")
 	second.HitPoints = 0
 	gs.gain_influence(second.Influence)
 	gs.advance_enemy()
 	var third: Player = gs.get_current_enemy()
-	assert_eq(third.display_name, "Coalition Army", "third enemy Coalition Army per new spec")
+	assert_eq(third.display_name, "Fundamentalists", "third enemy Fundamentalists")
 	third.HitPoints = 0
 	gs.gain_influence(third.Influence)
 	gs.advance_enemy()
-	assert_false(gs.is_run_complete(), "not complete after 3/4")
 	var fourth: Player = gs.get_current_enemy()
-	assert_eq(fourth.display_name, "Corporate Troops", "fourth enemy Corporate Troops")
+	assert_eq(fourth.display_name, "Mercenaries", "fourth enemy Mercenaries")
 	fourth.HitPoints = 0
 	gs.gain_influence(fourth.Influence)
 	gs.advance_enemy()
-	assert_true(gs.is_run_complete(), "run complete after 4 victories")
+	var fifth: Player = gs.get_current_enemy()
+	assert_eq(fifth.display_name, "Peace Keepers", "fifth enemy Peace Keepers")
+	fifth.HitPoints = 0
+	gs.gain_influence(fifth.Influence)
+	gs.advance_enemy()
+	var sixth: Player = gs.get_current_enemy()
+	assert_eq(sixth.display_name, "Coalition Army", "sixth enemy Coalition Army")
+	sixth.HitPoints = 0
+	gs.gain_influence(sixth.Influence)
+	gs.advance_enemy()
+	assert_false(gs.is_run_complete(), "not complete after 6/7")
+	var seventh: Player = gs.get_current_enemy()
+	assert_eq(seventh.display_name, "Corporate Troops", "seventh enemy Corporate Troops")
+	seventh.HitPoints = 0
+	gs.gain_influence(seventh.Influence)
+	gs.advance_enemy()
+	assert_true(gs.is_run_complete(), "run complete after 7 victories")

@@ -76,6 +76,8 @@ func draw_cards():
 func economy_phase():
 	var rate: float = Housing.bio_rate(self)
 	BioSupply = int(BioSupply * rate + 5 + 0.0001)
+	# Housing now flat +8 per Housing (spec updated from 4% per Housing)
+	BioSupply += Housing.extra_bio(self)
 	if BioSupply == 0:
 		BioSupply = 1
 	# Modifier: Conscription +15 Bio
@@ -173,6 +175,11 @@ func effective_damage_for(card: Card, square: Square) -> int:
 	# Modifier: Aerial Supremacy - Flying +2 damage
 	if card is Unit and has_modifier("Aerial Supremacy") and (card as Unit).Flying:
 		base += 2
+	# Modifier: Defensive Doctrine -1 damage
+	if has_modifier("Defensive Doctrine"):
+		base -= 1
+		if base < 0:
+			base = 0
 	return base
 
 func effective_hitpoints_for(card: Card) -> int:
@@ -203,6 +210,9 @@ func effective_hitpoints_for(card: Card) -> int:
 			hp = int(hp * 0.5)
 			if hp < 1:
 				hp = 1
+	# Defensive Doctrine: +10 HP
+	if has_modifier("Defensive Doctrine"):
+		hp += 10
 	return hp
 
 func apply_hitpoints_modifier(card: Card):

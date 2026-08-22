@@ -13,11 +13,11 @@ var shop_modifier_offer: Array = [] # Modifier[] 3 modifiers
 var shop_remove_used: bool = false
 
 func set_player(name: String):
-	if name in ["Insurgents", "State Troops", "Horde", "Euro Army", "Coalition Army", "Corporate Troops"]:
+	if name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Euro Army", "Coalition Army", "Corporate Troops"]:
 		selected_player_name = name
 
 func set_enemy(name: String):
-	if name in ["Euro Army", "Coalition Army", "Corporate Troops", "Insurgents", "Horde", "State Troops"]:
+	if name in ["Euro Army", "Coalition Army", "Corporate Troops", "Insurgents", "Horde", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers"]:
 		selected_enemy = name
 
 func make_player_by_name(name: String, for_human: bool = false) -> Player:
@@ -26,6 +26,12 @@ func make_player_by_name(name: String, for_human: bool = false) -> Player:
 			return CardFactory.make_insurgents_player()
 		"State Troops":
 			return CardFactory.make_state_troops_player(for_human)
+		"Fundamentalists":
+			return CardFactory.make_fundamentalists_player(for_human)
+		"Mercenaries":
+			return CardFactory.make_mercenaries_player(for_human)
+		"Peace Keepers":
+			return CardFactory.make_peace_keepers_player(for_human)
 		"Horde":
 			return CardFactory.make_horde_player(for_human)
 		"Coalition Army":
@@ -40,10 +46,16 @@ func make_player_by_name(name: String, for_human: bool = false) -> Player:
 func make_selected_enemy() -> AIPlayer:
 	if selected_enemy == "Insurgents":
 		return CardFactory.make_insurgents_player()
-	if selected_enemy == "Horde":
-		return CardFactory.make_horde_player()
 	if selected_enemy == "State Troops":
 		return CardFactory.make_state_troops_player() as AIPlayer
+	if selected_enemy == "Fundamentalists":
+		return CardFactory.make_fundamentalists_player()
+	if selected_enemy == "Mercenaries":
+		return CardFactory.make_mercenaries_player()
+	if selected_enemy == "Peace Keepers":
+		return CardFactory.make_peace_keepers_player()
+	if selected_enemy == "Horde":
+		return CardFactory.make_horde_player()
 	if selected_enemy == "Coalition Army":
 		return CardFactory.make_coalition_army_player()
 	if selected_enemy == "Corporate Troops":
@@ -55,6 +67,12 @@ func background_path_for(player_name: String) -> String:
 		return "res://Assets/Players/Insurgents/background.png"
 	if player_name == "State Troops":
 		return "res://Assets/Players/State Troops/background.png"
+	if player_name == "Fundamentalists":
+		return "res://Assets/Players/Fundamentalists/background.png"
+	if player_name == "Mercenaries":
+		return "res://Assets/Players/Mercenaries/background.png"
+	if player_name == "Peace Keepers":
+		return "res://Assets/Players/Peace Keepers/background.png"
 	if player_name == "Horde":
 		return "res://Assets/Players/Horde/background.png"
 	if player_name == "Coalition Army":

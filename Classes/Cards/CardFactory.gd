@@ -51,8 +51,76 @@ static func make_state_troops_deck() -> Array:
 	deck.shuffle()
 	return deck
 
+static func make_fundamentalists_deck() -> Array:
+	# Fundamentalists: [5 wall, 15 Infantry, 4 Artillery, 2 Tank, 4 Barrack, 5 Anti Aircraft, 2 Housing, 1 Factory] =38
+	var deck: Array = []
+	for i in range(5):
+		deck.append(Wall.new())
+	for i in range(15):
+		deck.append(Infantry.new())
+	for i in range(4):
+		deck.append(Artilery.new())
+	for i in range(2):
+		deck.append(Tank.new())
+	for i in range(4):
+		deck.append(Barracks.new())
+	for i in range(5):
+		deck.append(AntiAircraft.new())
+	for i in range(2):
+		deck.append(Housing.new())
+	for i in range(1):
+		deck.append(Factory.new())
+	deck.shuffle()
+	return deck
+
+static func make_mercenaries_deck() -> Array:
+	# Mercenaries: [4 wall, 9 Infantry, 4 Artillery, 4 Tank, 2 Drones, 1 Barrack, 1 Interceptor, 5 Anti Aircraft] =30
+	var deck: Array = []
+	for i in range(4):
+		deck.append(Wall.new())
+	for i in range(9):
+		deck.append(Infantry.new())
+	for i in range(4):
+		deck.append(Artilery.new())
+	for i in range(4):
+		deck.append(Tank.new())
+	for i in range(2):
+		deck.append(Drone.new())
+	for i in range(1):
+		deck.append(Barracks.new())
+	for i in range(1):
+		deck.append(Interceptor.new())
+	for i in range(5):
+		deck.append(AntiAircraft.new())
+	deck.shuffle()
+	return deck
+
+static func make_peace_keepers_deck() -> Array:
+	# Peace Keepers: [12 wall, 6 Infantry, 5 Drones, 1 Fighter Jet, 1 Corporation, 2 Housing, 2 Barrack, 3 Interceptor, 3 Anti Aircraft] =35
+	var deck: Array = []
+	for i in range(12):
+		deck.append(Wall.new())
+	for i in range(6):
+		deck.append(Infantry.new())
+	for i in range(5):
+		deck.append(Drone.new())
+	for i in range(1):
+		deck.append(FighterJet.new())
+	for i in range(1):
+		deck.append(Corporation.new())
+	for i in range(2):
+		deck.append(Housing.new())
+	for i in range(2):
+		deck.append(Barracks.new())
+	for i in range(3):
+		deck.append(Interceptor.new())
+	for i in range(3):
+		deck.append(AntiAircraft.new())
+	deck.shuffle()
+	return deck
+
 static func make_horde_deck() -> Array:
-	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Anti Aircraft, 3 Special Ops] =52
+	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 3 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 3 Anti Aircraft, 3 Special Ops] =52
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -64,15 +132,15 @@ static func make_horde_deck() -> Array:
 		deck.append(Tank.new())
 	for i in range(2):
 		deck.append(Artilery.new())
-	for i in range(4):
+	for i in range(3):
 		deck.append(FighterJet.new())
-	for i in range(4):
+	for i in range(3):
 		deck.append(Factory.new())
 	for i in range(1):
 		deck.append(Housing.new())
 	for i in range(2):
 		deck.append(Barracks.new())
-	for i in range(1):
+	for i in range(3):
 		deck.append(AntiAircraft.new())
 	for i in range(3):
 		deck.append(SpecialOps.new())
@@ -80,7 +148,7 @@ static func make_horde_deck() -> Array:
 	return deck
 
 static func make_coalition_army_deck() -> Array:
-	# Coalition Army per new spec: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops, 1 Interceptor] =47
+	# Coalition Army: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 1 Corporation, 2 Special Ops, 1 Interceptor] =46
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -96,7 +164,7 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(RocketLauncher.new())
 	for i in range(4):
 		deck.append(FighterJet.new())
-	for i in range(4):
+	for i in range(3):
 		deck.append(Factory.new())
 	for i in range(1):
 		deck.append(Housing.new())
@@ -104,7 +172,7 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(Barracks.new())
 	for i in range(1):
 		deck.append(Corporation.new())
-	for i in range(3):
+	for i in range(2):
 		deck.append(SpecialOps.new())
 	for i in range(1):
 		deck.append(Interceptor.new())
@@ -136,21 +204,21 @@ static func make_euro_army_deck() -> Array:
 	return deck
 
 static func make_corporate_troops_deck() -> Array:
-	# Corporate Troops: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher, 2 Interceptor] =44
+	# Corporate Troops: [8 wall, 4 Infantry, 12 Drones, 3 Fighter Jet, 1 Corporation, 1 Housing, 2 Barrack, 3 Rocket Launcher, 2 Interceptor] =36
 	var deck: Array = []
-	for i in range(10):
+	for i in range(8):
 		deck.append(Wall.new())
 	for i in range(4):
 		deck.append(Infantry.new())
-	for i in range(14):
+	for i in range(12):
 		deck.append(Drone.new())
-	for i in range(4):
+	for i in range(3):
 		deck.append(FighterJet.new())
-	for i in range(2):
+	for i in range(1):
 		deck.append(Corporation.new())
 	for i in range(1):
 		deck.append(Housing.new())
-	for i in range(4):
+	for i in range(2):
 		deck.append(Barracks.new())
 	for i in range(3):
 		deck.append(RocketLauncher.new())
@@ -199,8 +267,48 @@ static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	p.Modifiers = [Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 20)]
 	return p
 
+static func make_fundamentalists_player(for_human: bool = false) -> AIPlayer:
+	var p := AIPlayer.new(150, 60, 60, 3, "Fundamentalists", "Cyberpunk Skyrises", 50)
+	var back_row: int = p.Board.size() - 1 if for_human else 0
+	var positions: Array = []
+	for c in range(10):
+		positions.append(c)
+	positions.shuffle()
+	p.Board[back_row].Squares[positions[0]].place(Housing.new())
+	p.Board[back_row].Squares[positions[1]].place(Housing.new())
+	p.DrawPile = make_fundamentalists_deck()
+	p.Modifiers = [Modifier.new("Fanaticism", "Your buildings have 50% less HP, but Units have 100% more", 30)]
+	return p
+
+static func make_mercenaries_player(for_human: bool = false) -> AIPlayer:
+	var p := AIPlayer.new(130, 60, 60, 4, "Mercenaries", "Warzone, fires and rubble everywhere", 50)
+	var back_row: int = p.Board.size() - 1 if for_human else 0
+	var positions: Array = []
+	for c in range(10):
+		positions.append(c)
+	positions.shuffle()
+	p.Board[back_row].Squares[positions[0]].place(Barracks.new())
+	p.Board[back_row].Squares[positions[1]].place(Barracks.new())
+	p.DrawPile = make_mercenaries_deck()
+	p.Modifiers = [Modifier.new("Corruption", "Your buildings have 50% less HP, but you gain +10 MoneySupply every turn", 30)]
+	return p
+
+static func make_peace_keepers_player(for_human: bool = false) -> AIPlayer:
+	var p := AIPlayer.new(90, 20, 80, 5, "Peace Keepers", "United nation tents", 50)
+	var back_row: int = p.Board.size() - 1 if for_human else 0
+	var positions: Array = []
+	for c in range(10):
+		positions.append(c)
+	positions.shuffle()
+	p.Board[back_row].Squares[positions[0]].place(Interceptor.new())
+	p.Board[back_row].Squares[positions[1]].place(Interceptor.new())
+	p.Board[back_row].Squares[positions[2]].place(Barracks.new())
+	p.DrawPile = make_peace_keepers_deck()
+	p.Modifiers = [Modifier.new("Defensive Doctrine", "Your cards have +10 hp, but they deal -1 damage", 40)]
+	return p
+
 static func make_horde_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(200, 160, 0, 4, "Horde", "Russian style city, snowy, add few trees", 25)
+	var p := AIPlayer.new(200, 160, 0, 6, "Horde", "Russian style city, snowy, add few trees", 25)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -220,7 +328,7 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(120, 80, 50, 5, "Coalition Army", "City with european style towers", 50)
+	var p := AIPlayer.new(120, 80, 50, 7, "Coalition Army", "City with european style towers", 50)
 	# Board: 2 Housing and 1 Factory randomly placed at back row furthest from enemy - row 3 for human, row 0 for AI
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
@@ -249,8 +357,8 @@ static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
-	# Corporate Troops: HitPoints 90, Background Cyberpunk Skyrises, Board 2 Corporation at back row, Diff 6, Bio 10 Money 100 Influence 50
-	var p := AIPlayer.new(90, 10, 100, 6, "Corporate Troops", "Cyberpunk Skyrises", 50)
+	# Corporate Troops: HitPoints 70, Background Cyberpunk Skyrises, Board 2 Corporation at back row, Diff 8, Bio 10 Money 100 Influence 50
+	var p := AIPlayer.new(70, 10, 100, 8, "Corporate Troops", "Cyberpunk Skyrises", 50)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -263,8 +371,7 @@ static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func all_enemy_players_sorted() -> Array:
-	# Per new spec 5 players: Insurgents 1, State Troops 2, Horde 4, Coalition 5, Corporate 6 (Euro kept as alias for compat not in sorted list)
-	var arr: Array = [make_insurgents_player(), make_state_troops_player(), make_horde_player(), make_coalition_army_player(), make_corporate_troops_player()]
+	var arr: Array = [make_insurgents_player(), make_state_troops_player(), make_fundamentalists_player(), make_mercenaries_player(), make_peace_keepers_player(), make_horde_player(), make_coalition_army_player(), make_corporate_troops_player()]
 	arr.sort_custom(func(a, b): return a.Difficulty < b.Difficulty)
 	return arr
 

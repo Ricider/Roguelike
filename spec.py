@@ -205,7 +205,7 @@ Card: Housing
     MoneyCost: 20
     BioCost: 30
 
-    SpecialEffect: In your economy phase gain 4% more BioSupply
+    SpecialEffect: In your economy phase gain +8 more BioSupply
 
     InfluenceCost: 15
 
@@ -275,10 +275,58 @@ Player: State Troops
     Hand: []
     Modifiers: [State of emergency]
 
+Player: Fundamentalists
+    HitPoints=150
+    Board=2 Housing randomly placed at back row
+    Difficulty=3
+    BackgroundImage=Cyberpunk Skyrises
+
+    BioSupply=60
+    MoneySupply=60
+
+    Influence=50
+
+    DrawPile: [5 wall, 15 Infantry, 4 Artillery, 2 Tank, 4 Barrack, 5 Anti Aircraft, 2 Housing, 1 Factory]
+    DiscardPile: []
+    Hand: []
+    Modifiers: [Fanaticism]
+
+Player: Mercenaries
+    HitPoints=130
+    Board=2 Barracks randomly placed at back row
+    Difficulty=4
+    BackgroundImage=Warzone, fires and rubble everywhere
+
+    BioSupply=60
+    MoneySupply=60
+
+    Influence=50
+
+    DrawPile: [4 wall, 9 Infantry, 4 Artillery, 4 Tank, 2 Drones, 1 Barrack, 1 Interceptor, 5 Anti Aircraft]
+    DiscardPile: []
+    Hand: []
+    Modifiers: [Corruption]
+
+Player: Peace Keepers
+    HitPoints=90
+    Board=2 Interceptors and 1 Barracks randomly placed at back row
+    Difficulty=5
+    BackgroundImage=United nation tents
+
+    BioSupply=20
+    MoneySupply=80
+
+    Influence=50
+
+    DrawPile: [12 wall, 6 Infantry, 5 Drones, 1 Fighter Jet, 1 Corporation, 2 Housing, 2 Barrack, 3 Interceptor, 3 Anti Aircraft]
+    DiscardPile: []
+    Hand: []
+    Modifiers: [Defensive Doctrine]
+
 Player: Horde
     HitPoints=200
     Board=2 Factory, 2 Housing and 1 Artilery, 2 tank randomly placed at back row, all damaged down to 5 hp
-    Difficulty=4
+    Difficulty=6
     BackgroundImage=Russian style city, snowy, add few trees
 
     BioSupply=160
@@ -286,7 +334,7 @@ Player: Horde
 
     Influence=25
 
-    DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Anti Aircraft, 3 Special Ops]
+    DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 3 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 3 Anti Aircraft, 3 Special Ops]
     DiscardPile: []
     Hand: []
     Modifiers: [Conscription]
@@ -294,7 +342,7 @@ Player: Horde
 Player: Coalition Army
     HitPoints=120
     Board=2 Housing and 1 Factory randomly placed at back row
-    Difficulty=5
+    Difficulty=7
     BackgroundImage=City with european style towers
 
     BioSupply=80
@@ -302,15 +350,15 @@ Player: Coalition Army
 
     Influence=50
 
-    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 4 Factory, 1 Housing, 2 Barrack, 1 Corporation, 3 Special Ops, 1 Interceptor]
+    DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 1 Corporation, 2 Special Ops, 1 Interceptor]
     DiscardPile: []
     Hand: [] 
     Modifiers: [Aerial Supremacy]
 
 Player: Corporate Troops
-    HitPoints=90
+    HitPoints=70
     Board=2 Corporation randomly placed at back row
-    Difficulty=6
+    Difficulty=8
     BackgroundImage=Cyberpunk Skyrises
 
     BioSupply=10
@@ -318,7 +366,7 @@ Player: Corporate Troops
 
     Influence=50
 
-    DrawPile: [10 wall, 4 Infantry, 14 Drones, 4 Fighter Jet, 2 Corporation, 1 Housing, 4 Barrack, 3 Rocket Launcher, 2 Interceptor]
+    DrawPile: [8 wall, 4 Infantry, 12 Drones, 3 Fighter Jet, 1 Corporation, 1 Housing, 2 Barrack, 3 Rocket Launcher, 2 Interceptor]
     DiscardPile: []
     Hand: []
     Modifiers: [Advanced Robotics]
@@ -352,6 +400,10 @@ Modifier: Advanced Robotics
 Modifier: Aerial Supremacy
     Effect=If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply
     InfluenceCost: 50
+
+Modifier: Defensive Doctrine
+    Effect=Your cards have +10 hp, but they deal -1 damage
+    InfluenceCost: 40
 
 ### Rules ###
 

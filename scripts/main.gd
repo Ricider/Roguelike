@@ -83,20 +83,25 @@ func _build_player_chooser():
 	lbl.add_theme_font_size_override("font_size", 16)
 	lbl.add_theme_color_override("font_color", Color(0.9,0.9,0.95))
 	chooser.add_child(lbl)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	chooser.add_child(row)
-	for name in ["Insurgents", "State Troops", "Horde", "Coalition Army", "Corporate Troops"]:
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
+	# Center the grid inside the chooser
+	var center_wrap := CenterContainer.new()
+	center_wrap.add_child(grid)
+	chooser.add_child(center_wrap)
+	for name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Coalition Army", "Corporate Troops"]:
 		var btn := Button.new()
 		btn.text = name
 		btn.name = name.replace(" ", "")
 		btn.custom_minimum_size = Vector2(160, 64)
-		btn.add_theme_font_size_override("font_size", 14)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", 13)
 		btn.add_theme_color_override("font_color", Color(1,1,1))
 		btn.pressed.connect(func(): _select_player(name))
 		_player_buttons[name] = btn
-		row.add_child(btn)
+		grid.add_child(btn)
 	var hint := Label.new()
 	hint.text = "State Troops recommended"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

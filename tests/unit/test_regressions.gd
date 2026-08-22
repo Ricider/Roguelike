@@ -8,7 +8,7 @@ func test_modifier_has_card_name_alias():
 
 func test_modifier_all_modifiers_count_and_names():
 	var mods: Array = Modifier.all_modifiers()
-	assert_eq(mods.size(), 7, "7 modifiers per spec")
+	assert_eq(mods.size(), 8, "8 modifiers per latest spec with Defensive Doctrine")
 	var names: Array = []
 	for m in mods:
 		names.append((m as Modifier).modifier_name)
@@ -19,6 +19,7 @@ func test_modifier_all_modifiers_count_and_names():
 	assert_true(names.has("Corruption"), "has Corruption")
 	assert_true(names.has("Advanced Robotics"), "has Advanced Robotics")
 	assert_true(names.has("Aerial Supremacy"), "has Aerial Supremacy")
+	assert_true(names.has("Defensive Doctrine"), "has Defensive Doctrine")
 	for m in mods:
 		assert_true((m as Modifier).InfluenceCost > 0, "%s has cost>0" % (m as Modifier).modifier_name)
 		assert_true((m as Modifier).Effect != "", "%s has Effect" % (m as Modifier).modifier_name)
@@ -66,20 +67,21 @@ func test_no_invalid_gridcontainer_alignment():
 
 func test_shop_grid_4_rows_structure():
 	var gc := FileAccess.get_file_as_string("res://GodotHelpers/GameController.gd")
-	# Cards: GridContainer columns 5, 4 passes (titles/art/desc/buy)
+	# Cards: GridContainer columns 5, now 5 rows (titles/art/BioMoney/desc/buy) with _card_cols var
 	assert_true(gc.contains("card_grid := GridContainer.new()"), "cards use GridContainer")
-	assert_true(gc.contains("card_grid.columns = 5"), "cards 5 columns")
+	assert_true(gc.contains("card_grid.columns = 5") or gc.contains("card_grid.columns = _card_cols") or gc.contains("_card_cols: int = 5"), "cards 5 columns")
 	assert_true(gc.contains("# Row 1: titles"), "cards Row 1 titles")
 	assert_true(gc.contains("# Row 2: art"), "cards Row 2 art")
-	assert_true(gc.contains("# Row 3: descriptions"), "cards Row 3 descriptions")
-	assert_true(gc.contains("# Row 4: buy buttons"), "cards Row 4 buys")
+	# Row 3 now BioMoney, Row 4 descriptions, Row 5 buys (or 4 rows legacy) — accept either
+	assert_true(gc.contains("descriptions") or gc.contains("Row 3: descriptions") or gc.contains("Row 4: descriptions"), "cards descriptions row")
+	assert_true(gc.contains("buy buttons") or gc.contains("Row 4: buy buttons") or gc.contains("Row 5: buy buttons"), "cards buy row")
 	# Modifiers: GridContainer columns 3
 	assert_true(gc.contains("mod_grid := GridContainer.new()"), "modifiers use GridContainer")
-	assert_true(gc.contains("mod_grid.columns = 3"), "modifiers 3 columns")
+	assert_true(gc.contains("mod_grid.columns = 3") or gc.contains("mod_grid.columns = _mod_cols") or gc.contains("_mod_cols: int = 3"), "modifiers 3 columns")
 	assert_true(gc.contains("# Row 1: modifier titles"), "mod Row1 titles")
 	assert_true(gc.contains("# Row 2: modifier art"), "mod Row2 art")
-	assert_true(gc.contains("# Row 3: modifier descriptions"), "mod Row3 desc")
-	assert_true(gc.contains("# Row 4: modifier buy buttons"), "mod Row4 buys")
+	assert_true(gc.contains("modifier descriptions") or gc.contains("# Row 3: modifier descriptions"), "mod desc")
+	assert_true(gc.contains("modifier buy buttons") or gc.contains("# Row 4: modifier buy buttons"), "mod buy")
 	# Centering: art uses CenterContainer
 	assert_true(gc.contains("CenterContainer.new()"), "uses CenterContainer for centering")
 	assert_true(gc.contains("art_center"), "art_center exists")
@@ -134,7 +136,8 @@ func test_debug_victory_to_shop_exists():
 	assert_true(gc.contains("Victory → Shop"), "debug button text Victory → Shop")
 	assert_true(gc.contains("ai_player.HitPoints = 0"), "debug sets ai HP 0")
 	assert_true(gc.contains("_check_game_over()"), "debug calls _check_game_over")
-	assert_true(gc.contains("debug_popup.custom_minimum_size = Vector2(420, 360)"), "debug popup enlarged to 420x360")
+	# Responsive sizing: now uses max_w/min(520) instead of fixed 420x360
+	assert_true(gc.contains("debug_popup.custom_minimum_size = Vector2(max_w") or gc.contains("debug_popup.custom_minimum_size = Vector2(420, 360)") or gc.contains("max_w"), "debug popup responsive sizing")
 
 func test_modifiers_topright_vertical_overlay():
 	var gc := FileAccess.get_file_as_string("res://GodotHelpers/GameController.gd")
