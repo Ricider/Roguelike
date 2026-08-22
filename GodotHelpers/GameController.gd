@@ -912,10 +912,10 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	root.z_as_relative = false
 	if root.has_method("set_as_top_level"):
 		root.top_level = true
-	root.custom_minimum_size = Vector2(160, 160)
-	root.size = Vector2(160, 160)
+	root.custom_minimum_size = Vector2(160, 190)
+	root.size = Vector2(160, 190)
 	root.modulate = Color(1, 1, 1, 0)
-	# Fully black crosshair - 4x (2x again)
+	# Red crosshair with black outline - same size (160 outer, 144/128 circles, 112x6/6x112 cross)
 	var outer_circle := PanelContainer.new()
 	outer_circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	outer_circle.custom_minimum_size = Vector2(144, 144)
@@ -935,20 +935,34 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	circle.position = Vector2(16, 16)
 	var csb := StyleBoxFlat.new()
 	csb.bg_color = Color(0, 0, 0, 0)
-	csb.border_color = Color(0, 0, 0, 1)
+	csb.border_color = Color(1, 0.18, 0.18, 1)
 	csb.set_border_width_all(6)
 	csb.set_corner_radius_all(64)
 	circle.add_theme_stylebox_override("panel", csb)
 	root.add_child(circle)
+	var h_bg := ColorRect.new()
+	h_bg.color = Color(0, 0, 0, 1)
+	h_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h_bg.custom_minimum_size = Vector2(116, 10)
+	h_bg.size = Vector2(116, 10)
+	h_bg.position = Vector2(22, 75)
+	root.add_child(h_bg)
 	var h := ColorRect.new()
-	h.color = Color(0, 0, 0, 1)
+	h.color = Color(1, 0.18, 0.18, 1)
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.custom_minimum_size = Vector2(112, 6)
 	h.size = Vector2(112, 6)
 	h.position = Vector2(24, 77)
 	root.add_child(h)
+	var v_bg := ColorRect.new()
+	v_bg.color = Color(0, 0, 0, 1)
+	v_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v_bg.custom_minimum_size = Vector2(10, 116)
+	v_bg.size = Vector2(10, 116)
+	v_bg.position = Vector2(75, 22)
+	root.add_child(v_bg)
 	var v := ColorRect.new()
-	v.color = Color(0, 0, 0, 1)
+	v.color = Color(1, 0.18, 0.18, 1)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.custom_minimum_size = Vector2(6, 112)
 	v.size = Vector2(6, 112)
@@ -960,19 +974,78 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	dot.size = Vector2(16, 16)
 	dot.position = Vector2(72, 72)
 	var dsb := StyleBoxFlat.new()
-	dsb.bg_color = Color(0, 0, 0, 1)
+	dsb.bg_color = Color(1, 0.18, 0.18, 1)
+	dsb.border_color = Color(0, 0, 0, 1)
+	dsb.set_border_width_all(2)
 	dsb.set_corner_radius_all(8)
 	dot.add_theme_stylebox_override("panel", dsb)
 	root.add_child(dot)
+	# Damage preview on top of crosshair (amount target would actually take)
+	var pred_dmg: int = 0
+	var pred_is_direct: bool = false
+	if best_sq != null and best_sq.Inhabitant != null:
+		var tgt_card_pred: Card = best_sq.Inhabitant
+		# Base effective damage (includes Barracks, Guerilla, Aerial Supremacy etc via effective_damage_for)
+		pred_dmg = cs._effective_damage(attacker, unit as Unit, attacker_sq) if (unit is Unit) else 0
+		var att_has_range_pred: bool = (unit as Unit).HasRange if (unit is Unit) else false
+		if attacker.has_method("has_range_for") and (unit is Unit):
+			att_has_range_pred = attacker.has_range_for(unit)
+		# Special Ops vs non-flying +100% (x2), Anti Aircraft vs flying +200% (x3)
+		if (unit is SpecialOps) and (tgt_card_pred is Unit) and not (tgt_card_pred as Unit).Flying:
+			pred_dmg *= 2
+		elif (unit is AntiAircraft) and (tgt_card_pred is Unit) and (tgt_card_pred as Unit).Flying:
+			pred_dmg *= 3
+		# Flying half-damage from non-ranged (except Anti Aircraft vs flying)
+		if (tgt_card_pred is Unit) and (tgt_card_pred as Unit).Flying and not att_has_range_pred and not ((unit is AntiAircraft) and (tgt_card_pred as Unit).Flying):
+			pred_dmg = int(pred_dmg / 2)
+			if pred_dmg < 1:
+				pred_dmg = 1
+		# Interceptor halving (adjacent friendly Interceptor) - uses same helper as combat
+		if (tgt_card_pred is Unit) or (tgt_card_pred is Building):
+			pred_dmg = Interceptor.apply_interception(defender, best_sq, tgt_card_pred, unit as Unit, attacker, pred_dmg)
+	else:
+		pred_is_direct = true
+		pred_dmg = cs._effective_damage(attacker, unit as Unit, attacker_sq) if (unit is Unit) else 0
+	var dmg_label := Label.new()
+	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dmg_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dmg_label.add_theme_font_size_override("font_size", 22)
+	dmg_label.add_theme_color_override("font_color", Color(1, 0.95, 0.35))
+	# Black outline via shadow
+	dmg_label.add_theme_color_override("font_shadow_color", Color(0,0,0,1))
+	dmg_label.add_theme_constant_override("shadow_offset_x", 2)
+	dmg_label.add_theme_constant_override("shadow_offset_y", 2)
+	# Background panel for readability
+	var dmg_bg := PanelContainer.new()
+	dmg_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dmg_bg.custom_minimum_size = Vector2(56, 26)
+	dmg_bg.size = Vector2(56, 26)
+	dmg_bg.position = Vector2(52, 162)
+	var bg_sb := StyleBoxFlat.new()
+	bg_sb.bg_color = Color(0,0,0,0.78)
+	bg_sb.set_corner_radius_all(6)
+	bg_sb.set_border_width_all(2)
+	bg_sb.border_color = Color(0,0,0,1)
+	dmg_bg.add_theme_stylebox_override("panel", bg_sb)
+	if pred_is_direct:
+		dmg_label.text = "-%d HP" % pred_dmg
+	else:
+		dmg_label.text = "-%d" % pred_dmg
+	dmg_label.custom_minimum_size = Vector2(56, 26)
+	dmg_label.size = Vector2(56, 26)
+	dmg_bg.add_child(dmg_label)
+	root.add_child(dmg_bg)
 	add_child(root)
 	var tgt_rect: Rect2 = tgt_btn.get_global_rect()
 	if tgt_rect.size.x < 4:
 		tgt_rect = Rect2(tgt_btn.get_global_position(), Vector2(78, 78))
-	var sz: Vector2 = Vector2(160, 160)
+	var sz: Vector2 = Vector2(160, 190)
 	root.size = sz
 	root.custom_minimum_size = sz
 	var center: Vector2 = tgt_rect.get_center()
-	var pos: Vector2 = center - sz * 0.5
+	var crosshair_center: Vector2 = Vector2(80, 80)
+	var pos: Vector2 = center - crosshair_center
 	var vp: Vector2 = get_viewport_rect().size
 	pos.x = clamp(pos.x, 4.0, vp.x - sz.x - 4.0)
 	pos.y = clamp(pos.y, 4.0, vp.y - sz.y - 4.0)
