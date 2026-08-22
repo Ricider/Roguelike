@@ -57,6 +57,7 @@ var selected_card_idx: int = -1
 @onready var player_graveyard_icon: Button = $VBox/MainHBox/RightGauges/PlayerGraveyard/PlayerGraveyardIcon
 @onready var ai_discard_icon: Button = $VBox/MainHBox/RightGauges/AIDiscard/AIDiscardIcon
 @onready var ai_graveyard_icon: Button = $VBox/MainHBox/RightGauges/AIGraveyard/AIGraveyardIcon
+var gauge_grid_bg_sprite: AnimatedSprite2D
 @onready var inspect_popup: PanelContainer = $InspectPopup
 @onready var inspect_title: Label = $InspectPopup/VBox/InspectTitle
 @onready var inspect_grid: GridContainer = $InspectPopup/VBox/InspectScroll/InspectGrid
@@ -365,6 +366,118 @@ func _find_influence_label(node: Node) -> Label:
 			return r
 	return null
 
+func _get_gauge_grid_frames() -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.add_animation("idle")
+	sf.set_animation_loop("idle", true)
+	sf.set_animation_speed("idle", 10.0)
+	for i in range(20):
+		var fpath: String = "res://Assets/UI/gauge_grid_bg/sprite_%d.png" % i
+		if ResourceLoader.exists(fpath):
+			var tex := load(fpath) as Texture2D
+			if tex != null:
+				sf.add_frame("idle", tex)
+	if sf.get_frame_count("idle") == 0:
+		# fallback single frame if not yet imported
+		var fb: String = "res://Assets/UI/gauge_grid_bg/sprite.png"
+		if ResourceLoader.exists(fb):
+			var tex2 := load(fb) as Texture2D
+			if tex2 != null:
+				sf.add_frame("idle", tex2)
+	return sf
+
+func _setup_gauge_grid_background():
+	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges")
+	if left_gauges == null:
+		return
+	var main_hbox = left_gauges.get_parent()
+	if main_hbox == null:
+		return
+	if get_node_or_null("VBox/MainHBox/GaugeGridPanel") != null:
+		return
+	var panel := PanelContainer.new()
+	panel.name = "GaugeGridPanel"
+	# Only bound the gauge side, not the board: shrink to LeftGauges content
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.clip_contents = true
+	panel.custom_minimum_size = Vector2(0, 0)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_width_left = 0
+	style.border_width_top = 0
+	style.border_width_right = 0
+	style.border_width_bottom = 0
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", style)
+	# Background control that fills panel behind gauges, clipped to panel
+	var bg_control := Control.new()
+	bg_control.name = "GaugeGridBG"
+	bg_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg_control.clip_contents = true
+	bg_control.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bg_control.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var sf := _get_gauge_grid_frames()
+	var asp := AnimatedSprite2D.new()
+	asp.name = "GaugeGridAnim"
+	asp.sprite_frames = sf
+	asp.animation = "idle"
+	asp.autoplay = "idle"
+	asp.centered = true
+	asp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	asp.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
+	bg_control.add_child(asp)
+	gauge_grid_bg_sprite = asp
+	panel.add_child(bg_control)
+	var idx: int = main_hbox.get_children().find(left_gauges)
+	main_hbox.remove_child(left_gauges)
+	panel.add_child(left_gauges)
+	main_hbox.add_child(panel)
+	main_hbox.move_child(panel, idx)
+	left_gauges.z_index = 1
+	bg_control.z_index = 0
+	asp.play("idle")
+	panel.resized.connect(_update_gauge_grid_bg_transform)
+	left_gauges.resized.connect(_update_gauge_grid_bg_transform)
+	call_deferred("_update_gauge_grid_bg_transform")
+
+func _update_gauge_grid_bg_transform():
+	if gauge_grid_bg_sprite == null:
+		return
+	var panel = get_node_or_null("VBox/MainHBox/GaugeGridPanel")
+	if panel == null:
+		return
+	var left_gauges = get_node_or_null("VBox/MainHBox/GaugeGridPanel/LeftGauges")
+	if left_gauges == null:
+		left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges")
+	var sz: Vector2 = panel.size
+	if left_gauges != null and left_gauges.size.x > 10 and left_gauges.size.y > 10:
+		sz = left_gauges.size + Vector2(12, 12)
+	if sz.x < 10 or sz.y < 10:
+		sz = Vector2(268, 560)
+	# Clamp to not exceed left side: never wider than LeftGauges + margins
+	sz.x = min(sz.x, 280)
+	panel.custom_minimum_size = sz
+	panel.size = sz
+	gauge_grid_bg_sprite.position = sz * 0.5
+	var base: float = 512.0
+	var sf: SpriteFrames = gauge_grid_bg_sprite.sprite_frames
+	if sf != null and sf.get_frame_count("idle") > 0:
+		var tex: Texture2D = sf.get_frame_texture("idle", 0)
+		if tex != null:
+			base = float(tex.get_width())
+			if base < 64:
+				base = 512.0
+	# Fit exactly to panel bounds (separate x/y) so it never spills onto board
+	var scale_x: float = sz.x / base
+	var scale_y: float = sz.y / base
+	gauge_grid_bg_sprite.scale = Vector2(scale_x, scale_y)
+
 func _enforce_uniform_gauge_width():
 	var w: float = 32
 	var h: float = 180
@@ -514,6 +627,7 @@ func _ready():
 	_ensure_debug_popup()
 	_add_debug_button()
 	_ensure_shop_popup()
+	_setup_gauge_grid_background()
 	_setup_gauge_and_influence_hovers()
 	_ensure_modifiers_stack()
 	_refresh_modifiers_stack()
