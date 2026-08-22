@@ -479,7 +479,7 @@ func _update_gauge_grid_bg_transform():
 	gauge_grid_bg_sprite.scale = Vector2(scale_x, scale_y)
 
 func _enforce_uniform_gauge_width():
-	var w: float = 32
+	var w: float = 26
 	var h: float = 180
 	var gw: float = 80
 	for gauge in [get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney")]:

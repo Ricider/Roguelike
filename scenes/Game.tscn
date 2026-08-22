@@ -115,7 +115,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -162,7 +162,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -209,7 +209,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -316,7 +316,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -363,7 +363,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -410,7 +410,7 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(32, 180)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
