@@ -66,6 +66,7 @@ var gauge_grid_bg_sprite: AnimatedSprite2D
 @onready var hover_label: Label = $HoverPopup/HoverLabel
 @onready var bg_rect: TextureRect = $BG
 var preview_popup: PanelContainer
+var _preview_eff_scroll: ScrollContainer = null
 var preview_built: bool = false
 var debug_popup: PanelContainer
 var debug_built: bool = false
@@ -1227,8 +1228,8 @@ func _ensure_preview_popup():
 	sb.content_margin_bottom = 6
 	preview_popup.add_theme_stylebox_override("panel", sb)
 	# Fixed consistent size — never varies, no empty bottom gap, click-through
-	preview_popup.custom_minimum_size = Vector2(280, 168)
-	preview_popup.size = Vector2(280, 168)
+	preview_popup.custom_minimum_size = Vector2(280, 192)
+	preview_popup.size = Vector2(280, 192)
 	preview_popup.clip_contents = true
 	# Ensure magnifier never blocks clicks to card buttons behind it
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1330,6 +1331,7 @@ func _show_card_preview(card: Card):
 		dmg_lbl.clip_contents = false
 		dmg_lbl.custom_minimum_size = Vector2(0, 30)
 		left_stats.add_child(dmg_lbl)
+
 	else:
 		var inc_icon := TextureRect.new()
 		inc_icon.texture = load("res://Assets/UI/income_icon.png") as Texture2D
@@ -1376,22 +1378,36 @@ func _show_card_preview(card: Card):
 	b_lbl.add_theme_font_size_override("font_size", 26)
 	b_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	costs.add_child(b_lbl)
-	# effect spans full width below — fixed 32px height for all cards, no variation, clipped if longer
-	var eff := Label.new()
-	if card.SpecialEffect != "":
-		eff.text = card.SpecialEffect
+	# Fixed-size hover: effect scrolls if too long (no overflow, fixed 280x168 outer)
+	var eff_scroll := ScrollContainer.new()
+	eff_scroll.custom_minimum_size = Vector2(264, 52)
+	eff_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	eff_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	eff_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	eff_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	eff_scroll.clip_contents = true
+	eff_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	var eff := RichTextLabel.new()
+	eff.bbcode_enabled = true
+	eff.fit_content = false
+	eff.scroll_active = false
+	var _eff_str: String = _effect_with_traits(card)
+	if _eff_str != "":
+		eff.text = _eff_str
 	else:
 		eff.text = " "
 	eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	eff.clip_contents = true
+	eff.clip_contents = false
 	eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	eff.custom_minimum_size = Vector2(264, 32)
-	eff.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	eff.add_theme_font_size_override("font_size", 22)
-	eff.add_theme_color_override("font_color", Color(0.92,0.92,1) if card.SpecialEffect != "" else Color(1,1,1,0))
-	root.add_child(eff)
+	eff.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	eff.custom_minimum_size = Vector2(264, 0)
+	eff.add_theme_font_size_override("normal_font_size", 22)
+	eff.add_theme_color_override("default_color", Color(0.92,0.92,1) if _eff_str.strip_edges() != "" else Color(1,1,1,0))
+	eff.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	eff_scroll.add_child(eff)
+	root.add_child(eff_scroll)
+	_preview_eff_scroll = eff_scroll
 	# filler to ensure root fills fixed popup height with no empty bottom variation — expands only if needed, keeps outer 168 constant
 	var filler := Control.new()
 	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1401,9 +1417,11 @@ func _show_card_preview(card: Card):
 	_set_preview_click_through(preview_popup)
 	preview_popup.visible = true
 	var vp: Vector2 = get_viewport_rect().size
-	var sz: Vector2 = Vector2(280, 168)
+	var sz: Vector2 = Vector2(280, 192)
 	preview_popup.size = sz
 	preview_popup.custom_minimum_size = sz
+	# Keep hover fixed size - scroll handles overflow, outer never expands
+	preview_popup.clip_contents = true
 	# flip above/beside cursor when near bottom/right edge — prevents hand hover spill at viewport bottom
 	var mouse: Vector2 = get_global_mouse_position()
 	var pos: Vector2 = mouse + Vector2(16, 16)
@@ -1417,7 +1435,26 @@ func _show_card_preview(card: Card):
 	preview_popup.z_index = 101
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+func _effect_with_traits(card: Card) -> String:
+	if card == null:
+		return ""
+	var prefix: String = ""
+	if card is Unit:
+		var hasR: bool = (card as Unit).HasRange
+		var fly: bool = (card as Unit).Flying
+		var r_str: String = "HasRange" if hasR else "Melee"
+		var f_str: String = "Flying" if fly else "Grounded"
+		# Orange prefix for traits
+		prefix = "[color=#FF9500][%s] [%s][/color] " % [r_str, f_str]
+	else:
+		prefix = ""
+	var base: String = card.SpecialEffect
+	if base == "":
+		return prefix.strip_edges()
+	return prefix + base
+
 func _hide_card_preview():
+	_preview_eff_scroll = null
 	if preview_popup != null:
 		preview_popup.visible = false
 	_hide_attack_arrow()
@@ -1861,6 +1898,13 @@ func _reveal_debug_ui():
 		btn.visible = true
 
 func _unhandled_input(event: InputEvent):
+	# Forward mouse wheel to preview effect scroll when hovering over card (preview visible)
+	if event is InputEventMouseButton and preview_popup != null and preview_popup.visible and _preview_eff_scroll != null:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			var delta: int = -14 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 14
+			_preview_eff_scroll.scroll_vertical = clamp(_preview_eff_scroll.scroll_vertical + delta, 0, max(0, _preview_eff_scroll.get_v_scroll_bar().max_value if _preview_eff_scroll.get_v_scroll_bar() != null else 0))
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var is_backtick: bool = false
 		if event.keycode == KEY_QUOTELEFT:
@@ -2240,14 +2284,16 @@ func _show_shop():
 		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
 		stats.custom_minimum_size = Vector2(150, 18)
 		desc.add_child(stats)
-		var eff := Label.new()
-		eff.text = c3.SpecialEffect
+		var eff := RichTextLabel.new()
+		eff.bbcode_enabled = true
+		eff.fit_content = true
+		eff.text = _effect_with_traits(c3 as Card)
 		eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		eff.custom_minimum_size = Vector2(150, 36)
 		eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		eff.add_theme_font_size_override("font_size", 11)
-		eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
+		eff.add_theme_font_size_override("normal_font_size", 11)
+		eff.add_theme_color_override("default_color", Color(0.8,0.8,1))
 		desc.add_child(eff)
 		card_grid.add_child(desc)
 	for i in range(_card_cols - _offer_sz):
@@ -4368,15 +4414,17 @@ func _inspect_pile(title: String, pile: Array):
 		# Row 4: desc (SpecialEffect)
 		for card in pile:
 			var c4: Card = card as Card if card is Card else null
-			var desc := Label.new()
-			desc.text = c4.SpecialEffect if c4 != null else ""
+			var desc := RichTextLabel.new()
+			desc.bbcode_enabled = true
+			desc.fit_content = true
+			desc.text = _effect_with_traits(c4 as Card) if c4 != null else ""
 			desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			desc.clip_contents = true
 			desc.custom_minimum_size = Vector2(110, 32)
 			desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			desc.add_theme_font_size_override("font_size", 14)
-			desc.add_theme_color_override("font_color", Color(0.8,0.8,1))
+			desc.add_theme_font_size_override("normal_font_size", 14)
+			desc.add_theme_color_override("default_color", Color(0.8,0.8,1))
 			inspect_grid.add_child(desc)
 	# enlarge popup to fit grid and enable horizontal scroll - opaque and on top to hide field cards
 	inspect_popup.z_index = 110
