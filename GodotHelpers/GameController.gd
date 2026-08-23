@@ -1242,7 +1242,7 @@ func _set_preview_click_through(node: Control):
 		if child is Control:
 			_set_preview_click_through(child as Control)
 
-func _show_card_preview(card: Card):
+func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control = null):
 	_ensure_preview_popup()
 	for c in preview_popup.get_children():
 		c.queue_free()
@@ -1422,15 +1422,35 @@ func _show_card_preview(card: Card):
 	preview_popup.custom_minimum_size = sz
 	# Keep hover fixed size - scroll handles overflow, outer never expands
 	preview_popup.clip_contents = true
-	# flip above/beside cursor when near bottom/right edge — prevents hand hover spill at viewport bottom
-	var mouse: Vector2 = get_global_mouse_position()
-	var pos: Vector2 = mouse + Vector2(16, 16)
-	if pos.x + sz.x > vp.x - 8:
-		pos.x = mouse.x - sz.x - 16
-	if pos.y + sz.y > vp.y - 8:
-		pos.y = mouse.y - sz.y - 16
-	pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
-	pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
+	# Position relative to anchor card: player card => above, opponent => below; fallback to mouse
+	var pos: Vector2
+	if anchor != null and is_instance_valid(anchor):
+		var rect: Rect2 = anchor.get_global_rect()
+		if rect.size == Vector2.ZERO:
+			rect = Rect2(anchor.get_global_position(), Vector2(78, 78))
+		if is_player_card:
+			# Above: centered horizontally on card, 8px gap above top
+			pos = Vector2(rect.get_center().x - sz.x * 0.5, rect.position.y - sz.y - 8)
+		else:
+			# Below: centered horizontally, 8px gap below bottom
+			pos = Vector2(rect.get_center().x - sz.x * 0.5, rect.position.y + rect.size.y + 8)
+		# Clamp horizontally, and if above goes off-top, flip below (and vice versa)
+		pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
+		if is_player_card and pos.y < 8:
+			pos.y = rect.position.y + rect.size.y + 8
+		elif not is_player_card and pos.y + sz.y > vp.y - 8:
+			pos.y = rect.position.y - sz.y - 8
+		pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
+	else:
+		# Fallback: near mouse (e.g. shop, no anchor)
+		var mouse: Vector2 = get_global_mouse_position()
+		pos = mouse + Vector2(16, 16)
+		if pos.x + sz.x > vp.x - 8:
+			pos.x = mouse.x - sz.x - 16
+		if pos.y + sz.y > vp.y - 8:
+			pos.y = mouse.y - sz.y - 16
+		pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
+		pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
 	preview_popup.global_position = pos
 	preview_popup.z_index = 101
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3169,9 +3189,11 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 						var i2tw := create_tween()
 						i2tw.set_loops()
 						i2tw.tween_property(inner2, "rotation", -6.28, 3.5).set_trans(Tween.TRANS_LINEAR)
-				# Magnified preview on hover — art + symbols + text enlarged
+				# Magnified preview on hover — art + symbols + text enlarged (above for player, below for opponent)
 				var _card_prev: Card = card
-				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev))
+				var _is_player_board: bool = is_human
+				var _anchor_board: Control = btn
+				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev, _is_player_board, _anchor_board))
 				btn.mouse_exited.connect(func(): _hide_card_preview())
 				# Non-random target arrow: show which enemy will be attacked (Manhattan closest)
 				if card is Unit and not (card as Unit).HasRange:
@@ -3407,7 +3429,8 @@ func _refresh_hand():
 		details.add_child(hand_costs)
 		# Magnified preview on hover — hand card art + symbols + text enlarged
 		var _hand_prev: Card = card
-		btn.mouse_entered.connect(func(): _show_card_preview(_hand_prev))
+		var _anchor_hand: Control = btn
+		btn.mouse_entered.connect(func(): _show_card_preview(_hand_prev, true, _anchor_hand))
 		btn.mouse_exited.connect(func(): _hide_card_preview())
 		# No separate hover tooltip for cards — preview already shows effect
 		btn.tooltip_text = ""
