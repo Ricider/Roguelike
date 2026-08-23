@@ -1011,7 +1011,7 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	dmg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	dmg_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	dmg_label.add_theme_font_size_override("font_size", 22)
-	dmg_label.add_theme_color_override("font_color", Color(1, 0.95, 0.35))
+	dmg_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	# Black outline via shadow
 	dmg_label.add_theme_color_override("font_shadow_color", Color(0,0,0,1))
 	dmg_label.add_theme_constant_override("shadow_offset_x", 2)
@@ -1021,7 +1021,7 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 	dmg_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dmg_bg.custom_minimum_size = Vector2(56, 26)
 	dmg_bg.size = Vector2(56, 26)
-	dmg_bg.position = Vector2(52, 162)
+	dmg_bg.position = Vector2(52, 67)
 	var bg_sb := StyleBoxFlat.new()
 	bg_sb.bg_color = Color(0,0,0,0.78)
 	bg_sb.set_corner_radius_all(6)
