@@ -110,61 +110,32 @@ func get_sprite_frames() -> SpriteFrames:
 	return sf
 
 func create_animated_sprite(size: Vector2) -> Control:
+	# No old logo overlay — pure 20-frame pixel art like Cards (512x512 @10fps)
 	var container := Control.new()
 	container.custom_minimum_size = size
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Panel background like card frame
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = size
-	panel.size = size
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = _modifier_base_color()
-	sb.border_color = _modifier_border_color()
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(14)
-	sb.content_margin_left = 4
-	sb.content_margin_right = 4
-	sb.content_margin_top = 4
-	sb.content_margin_bottom = 4
-	panel.add_theme_stylebox_override("panel", sb)
-	container.add_child(panel)
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 2)
-	panel.add_child(vbox)
-	var icon_lbl := Label.new()
-	icon_lbl.text = _modifier_icon()
-	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_lbl.add_theme_font_size_override("font_size", int(size.x * 0.55))
-	icon_lbl.add_theme_color_override("font_color", Color(1,1,1))
-	icon_lbl.add_theme_color_override("font_outline_color", Color(0,0,0))
-	icon_lbl.add_theme_constant_override("outline_size", 8)
-	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(icon_lbl)
-	var name_lbl := Label.new()
-	name_lbl.text = modifier_name
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", int(size.x * 0.13))
-	name_lbl.add_theme_color_override("font_color", Color(1,1,0.9))
-	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_lbl.custom_minimum_size = Vector2(size.x * 0.9, 0)
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(name_lbl)
-	# AnimatedSprite2D overlay for frame animation (pulsing tint) - same size/detail as Cards
+	container.clip_contents = true
 	var asp := AnimatedSprite2D.new()
 	asp.sprite_frames = get_sprite_frames()
 	asp.animation = "idle"
 	asp.autoplay = "idle"
 	asp.centered = true
 	asp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	asp.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
+	var base: float = 512.0
+	var sf := get_sprite_frames()
+	if sf.get_frame_count("idle") > 0:
+		var tex: Texture2D = sf.get_frame_texture("idle", 0)
+		if tex != null:
+			base = float(tex.get_width())
+			if base < 64:
+				base = 512.0
+	var scale_f: float = size.x / base
+	asp.scale = Vector2(scale_f, scale_f)
 	asp.position = size * 0.5
-	asp.scale = Vector2(size.x / 512.0, size.y / 512.0)
-	asp.modulate = Color(1,1,1,0.18) # subtle overlay
+	asp.modulate = Color(1,1,1,1)
 	container.add_child(asp)
 	asp.play("idle")
 	# Subtle scale pulse like cards - only if inside tree (tests create sprites off-tree)
