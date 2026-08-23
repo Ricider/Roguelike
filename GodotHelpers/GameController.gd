@@ -1228,8 +1228,8 @@ func _ensure_preview_popup():
 	sb.content_margin_bottom = 6
 	preview_popup.add_theme_stylebox_override("panel", sb)
 	# Fixed consistent size — never varies, no empty bottom gap, click-through
-	preview_popup.custom_minimum_size = Vector2(280, 192)
-	preview_popup.size = Vector2(280, 192)
+	preview_popup.custom_minimum_size = Vector2(320, 218)
+	preview_popup.size = Vector2(320, 218)
 	preview_popup.clip_contents = true
 	# Ensure magnifier never blocks clicks to card buttons behind it
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1279,8 +1279,8 @@ func _show_card_preview(card: Card):
 	name_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_lbl.clip_contents = true
-	# Fixed 1-line height for consistency — Rocket Launcher still fits 15 chars in 124px at 17px, no wrap variation
-	name_lbl.custom_minimum_size = Vector2(124, 20)
+	# Fixed 1-line — 320 wide fits Rocket Launcher (15 chars at 34px) in one line
+	name_lbl.custom_minimum_size = Vector2(164, 20)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -1378,9 +1378,9 @@ func _show_card_preview(card: Card):
 	b_lbl.add_theme_font_size_override("font_size", 26)
 	b_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	costs.add_child(b_lbl)
-	# Fixed-size hover: effect scrolls if too long (no overflow, fixed 280x168 outer)
+	# Fixed-size hover: 3 lines (~78px at 22px) before scroll (no overflow, fixed 280x218 outer)
 	var eff_scroll := ScrollContainer.new()
-	eff_scroll.custom_minimum_size = Vector2(264, 52)
+	eff_scroll.custom_minimum_size = Vector2(304, 78)
 	eff_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	eff_scroll.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	eff_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -1389,7 +1389,7 @@ func _show_card_preview(card: Card):
 	eff_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	var eff := RichTextLabel.new()
 	eff.bbcode_enabled = true
-	eff.fit_content = false
+	eff.fit_content = true
 	eff.scroll_active = false
 	var _eff_str: String = _effect_with_traits(card)
 	if _eff_str != "":
@@ -1401,7 +1401,7 @@ func _show_card_preview(card: Card):
 	eff.clip_contents = false
 	eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	eff.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	eff.custom_minimum_size = Vector2(264, 0)
+	eff.custom_minimum_size = Vector2(304, 0)
 	eff.add_theme_font_size_override("normal_font_size", 22)
 	eff.add_theme_color_override("default_color", Color(0.92,0.92,1) if _eff_str.strip_edges() != "" else Color(1,1,1,0))
 	eff.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1417,7 +1417,7 @@ func _show_card_preview(card: Card):
 	_set_preview_click_through(preview_popup)
 	preview_popup.visible = true
 	var vp: Vector2 = get_viewport_rect().size
-	var sz: Vector2 = Vector2(280, 192)
+	var sz: Vector2 = Vector2(320, 218)
 	preview_popup.size = sz
 	preview_popup.custom_minimum_size = sz
 	# Keep hover fixed size - scroll handles overflow, outer never expands
@@ -1901,8 +1901,15 @@ func _unhandled_input(event: InputEvent):
 	# Forward mouse wheel to preview effect scroll when hovering over card (preview visible)
 	if event is InputEventMouseButton and preview_popup != null and preview_popup.visible and _preview_eff_scroll != null:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			var delta: int = -14 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 14
-			_preview_eff_scroll.scroll_vertical = clamp(_preview_eff_scroll.scroll_vertical + delta, 0, max(0, _preview_eff_scroll.get_v_scroll_bar().max_value if _preview_eff_scroll.get_v_scroll_bar() != null else 0))
+			var delta: int = -20 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 20
+			var sb = _preview_eff_scroll.get_v_scroll_bar()
+			var maxv: int = int(sb.max_value) if sb != null else 0
+			if maxv == 0:
+				# Fallback: estimate from content (RichTextLabel height - container height)
+				var content = _preview_eff_scroll.get_child(0) as Control
+				if content != null:
+					maxv = int(max(0, content.size.y - _preview_eff_scroll.size.y))
+			_preview_eff_scroll.scroll_vertical = clamp(_preview_eff_scroll.scroll_vertical + delta, 0, maxv)
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventKey and event.pressed and not event.echo:
