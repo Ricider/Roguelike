@@ -349,21 +349,30 @@ func _add_tutorial_button():
 	var tbtn := Button.new()
 	tbtn.name = "TutorialButton"
 	tbtn.text = "Tutorial"
-	tbtn.custom_minimum_size = Vector2(340, 72)
+	# Horizontal size must match Play/Quit exactly (both 340×72 in Main.tscn)
+	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
+	var _quit_ref = vbox.get_node_or_null("QuitButton") as Button
+	var _w: float = 340
+	var _h: float = 72
+	if _play_ref != null:
+		_w = _play_ref.custom_minimum_size.x
+		_h = _play_ref.custom_minimum_size.y
+	elif _quit_ref != null:
+		_w = _quit_ref.custom_minimum_size.x
+		_h = _quit_ref.custom_minimum_size.y
+	tbtn.custom_minimum_size = Vector2(_w, _h)
 	tbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	tbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tbtn.add_theme_font_size_override("font_size", 26)
 	tbtn.pressed.connect(_on_tutorial_pressed)
-	# Insert after PlayButton, before QuitButton/PlayerChooser
-	var play = vbox.get_node_or_null("PlayButton")
+	# Put at bottom (below Quit, just before MessageLabel if present)
 	var quit = vbox.get_node_or_null("QuitButton")
-	if play != null:
-		vbox.add_child(tbtn)
-		if quit != null:
-			vbox.move_child(tbtn, quit.get_index())
-		else:
-			vbox.move_child(tbtn, play.get_index() + 1)
-	else:
-		vbox.add_child(tbtn)
+	var msg = vbox.get_node_or_null("MessageLabel")
+	vbox.add_child(tbtn)
+	if msg != null:
+		vbox.move_child(tbtn, msg.get_index())
+	elif quit != null:
+		vbox.move_child(tbtn, quit.get_index() + 1)
 	_style_pill_button(tbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
 
 func _on_tutorial_pressed():
