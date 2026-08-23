@@ -17,6 +17,7 @@ func _ready():
 	_wire_buttons()
 	_build_player_chooser()
 	_add_tutorial_button()
+	_add_resume_button()
 	_style_menu_buttons()
 	_setup_battle_background()
 
@@ -294,7 +295,7 @@ func _start_battle_loop():
 		_fire_menu_projectile(right2, left2)
 
 func _style_menu_buttons():
-	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton"]:
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton"]:
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
@@ -380,6 +381,63 @@ func _on_tutorial_pressed():
 	if gs != null:
 		gs.start_tutorial()
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
+
+func _add_resume_button():
+	var vbox = get_node_or_null("CenterContainer/VBox")
+	if vbox == null:
+		return
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null or not gs.has_method("has_save") or not gs.has_save():
+		# Remove existing resume if save deleted
+		var existing = vbox.get_node_or_null("ResumeButton")
+		if existing != null:
+			existing.queue_free()
+		return
+	if vbox.has_node("ResumeButton"):
+		return
+	var rbtn := Button.new()
+	rbtn.name = "ResumeButton"
+	rbtn.text = "Resume"
+	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
+	var _w: float = 340
+	var _h: float = 72
+	if _play_ref != null:
+		_w = _play_ref.custom_minimum_size.x
+		_h = _play_ref.custom_minimum_size.y
+	rbtn.custom_minimum_size = Vector2(_w, _h)
+	rbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	rbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rbtn.add_theme_font_size_override("font_size", 26)
+	rbtn.pressed.connect(_on_resume_pressed)
+	var quit = vbox.get_node_or_null("QuitButton")
+	var tutorial = vbox.get_node_or_null("TutorialButton")
+	vbox.add_child(rbtn)
+	# Place resume between Quit and Tutorial (Quit -> Resume -> Tutorial)
+	if quit != null and tutorial != null:
+		vbox.move_child(rbtn, tutorial.get_index())
+		# Ensure order is Quit, Resume, Tutorial -> if resume ended up after tutorial, swap
+		if rbtn.get_index() > tutorial.get_index():
+			vbox.move_child(rbtn, tutorial.get_index())
+	elif quit != null:
+		vbox.move_child(rbtn, quit.get_index() + 1)
+	elif tutorial != null:
+		vbox.move_child(rbtn, tutorial.get_index())
+	_style_pill_button(rbtn, Color(0.16,0.32,0.18,1), Color(0.22,0.42,0.24,1), Color(0.4,0.9,0.5,0.9))
+
+func _on_resume_pressed():
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("load_game"):
+		if gs.load_game():
+			get_tree().change_scene_to_file("res://scenes/Game.tscn")
+		else:
+			var msg = get_node_or_null("CenterContainer/VBox/MessageLabel") as Label
+			if msg != null:
+				msg.text = "No save found or failed to load."
+	else:
+		var msg2 = get_node_or_null("CenterContainer/VBox/MessageLabel") as Label
+		if msg2 != null:
+			msg2.text = "Resume not available."
+
 
 func _wire_buttons():
 	var play = get_node_or_null("CenterContainer/VBox/PlayButton")

@@ -124,7 +124,12 @@ func advance_enemy():
 	run_enemy_index += 1
 	shop_remove_used = false
 	shop_offer = CardFactory.random_shop_offer()
-	shop_modifier_offer = CardFactory.random_modifier_offer()
+	var _owned2: Array = []
+	if run_player != null:
+		for mm in run_player.Modifiers:
+			if mm is Modifier:
+				_owned2.append((mm as Modifier).modifier_name)
+	shop_modifier_offer = CardFactory.random_modifier_offer_excluding(_owned2)
 
 func reset_player_for_new_encounter():
 	if run_player == null:
@@ -191,7 +196,12 @@ func gain_influence(amount: int):
 
 func prepare_shop():
 	shop_offer = CardFactory.random_shop_offer()
-	shop_modifier_offer = CardFactory.random_modifier_offer()
+	var owned: Array = []
+	if run_player != null:
+		for m in run_player.Modifiers:
+			if m is Modifier:
+				owned.append((m as Modifier).modifier_name)
+	shop_modifier_offer = CardFactory.random_modifier_offer_excluding(owned)
 	shop_remove_used = false
 
 func buy_card(card: Card) -> bool:
@@ -252,3 +262,233 @@ func remove_card_from_deck(card: Card) -> bool:
 	run_player.Influence -= 25
 	shop_remove_used = true
 	return true
+const SAVE_PATH := "user://savegame.json"
+
+func has_save() -> bool:
+	return FileAccess.file_exists(SAVE_PATH)
+
+func delete_save() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		var dir = DirAccess.open("user://")
+		if dir != null:
+			dir.remove("savegame.json")
+
+func save_game() -> bool:
+	if run_player == null:
+		return false
+	var data: Dictionary = {}
+	data["selected_player_name"] = selected_player_name
+	data["selected_enemy"] = selected_enemy
+	data["run_enemy_index"] = run_enemy_index
+	data["run_started"] = run_started
+	data["is_tutorial"] = is_tutorial
+	data["shop_remove_used"] = shop_remove_used
+	# Serialize run_player
+	data["run_player"] = _serialize_player(run_player)
+	# Serialize enemies
+	var enemies_data: Array = []
+	for e in run_enemies:
+		if e is Player:
+			enemies_data.append(_serialize_player(e as Player))
+	data["run_enemies"] = enemies_data
+	# Serialize shop offers by name
+	var shop_cards: Array = []
+	for c in shop_offer:
+		if c is Card:
+			shop_cards.append((c as Card).card_name)
+	data["shop_offer"] = shop_cards
+	var shop_mods: Array = []
+	for m in shop_modifier_offer:
+		if m is Modifier:
+			shop_mods.append((m as Modifier).modifier_name)
+	data["shop_modifier_offer"] = shop_mods
+	var json_str: String = JSON.stringify(data)
+	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(json_str)
+	f.close()
+	return true
+
+func load_game() -> bool:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return false
+	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return false
+	var json_str: String = f.get_as_text()
+	f.close()
+	var json := JSON.new()
+	if json.parse(json_str) != OK:
+		return false
+	var data: Dictionary = json.data as Dictionary
+	if data == null:
+		return false
+	selected_player_name = data.get("selected_player_name", selected_player_name)
+	selected_enemy = data.get("selected_enemy", selected_enemy)
+	run_enemy_index = int(data.get("run_enemy_index", 0))
+	run_started = bool(data.get("run_started", false))
+	is_tutorial = bool(data.get("is_tutorial", false))
+	shop_remove_used = bool(data.get("shop_remove_used", false))
+	# Deserialize player
+	var pd = data.get("run_player", null)
+	if pd is Dictionary:
+		run_player = _deserialize_player(pd as Dictionary)
+	else:
+		run_player = null
+	# Deserialize enemies
+	run_enemies.clear()
+	var ed = data.get("run_enemies", [])
+	if ed is Array:
+		for e in ed as Array:
+			if e is Dictionary:
+				var pl = _deserialize_player(e as Dictionary)
+				if pl != null:
+					run_enemies.append(pl)
+	# Deserialize shop
+	shop_offer.clear()
+	var sc = data.get("shop_offer", [])
+	if sc is Array:
+		for n in sc as Array:
+			var c = _card_by_name(str(n))
+			if c != null:
+				shop_offer.append(c)
+	shop_modifier_offer.clear()
+	var sm = data.get("shop_modifier_offer", [])
+	if sm is Array:
+		for n in sm as Array:
+			var m = Modifier.by_name(str(n))
+			if m != null:
+				shop_modifier_offer.append(m)
+	return run_player != null
+
+func _serialize_player(p: Player) -> Dictionary:
+	var d: Dictionary = {}
+	d["display_name"] = p.display_name
+	d["HitPoints"] = p.HitPoints
+	d["MaxHitPoints"] = p.MaxHitPoints
+	d["BioSupply"] = p.BioSupply
+	d["MoneySupply"] = p.MoneySupply
+	d["Influence"] = p.Influence
+	d["Difficulty"] = p.Difficulty
+	d["BackgroundImage"] = p.BackgroundImage
+	d["is_ai"] = p is AIPlayer
+	# Modifiers
+	var mods: Array = []
+	for m in p.Modifiers:
+		if m is Modifier:
+			mods.append((m as Modifier).modifier_name)
+	d["Modifiers"] = mods
+	# Piles as card names with HP persistence
+	d["DrawPile"] = _pile_to_names(p.DrawPile)
+	d["DiscardPile"] = _pile_to_names(p.DiscardPile)
+	d["Hand"] = _pile_to_names(p.Hand)
+	d["Graveyard"] = _pile_to_names(p.Graveyard)
+	# Board 4x10 stored as dicts to preserve HP
+	var board: Array = []
+	for r in range(p.Board.size()):
+		var row: Array = []
+		var row_obj = p.Board[r] as Row
+		for c in range(row_obj.Squares.size()):
+			var sq = row_obj.Squares[c] as Square
+			if sq.Inhabitant != null and sq.Inhabitant is Card:
+				var card = sq.Inhabitant as Card
+				var cd: Dictionary = {"name": card.card_name}
+				if card is Unit:
+					cd["hp"] = (card as Unit).HitPoints
+				elif card is Building:
+					cd["hp"] = (card as Building).HitPoints
+				row.append(cd)
+			else:
+				row.append(null)
+		board.append(row)
+	d["Board"] = board
+	return d
+
+func _deserialize_player(d: Dictionary) -> Player:
+	var is_ai: bool = bool(d.get("is_ai", false))
+	var _p: Player = null
+	if is_ai:
+		_p = AIPlayer.new(int(d.get("HitPoints", 100)), int(d.get("BioSupply", 100)), int(d.get("MoneySupply", 20)), int(d.get("Difficulty", 0)), str(d.get("display_name", "")), str(d.get("BackgroundImage", "")), int(d.get("Influence", 0)))
+	else:
+		_p = Player.new(int(d.get("HitPoints", 100)), int(d.get("BioSupply", 100)), int(d.get("MoneySupply", 20)), int(d.get("Difficulty", 0)), str(d.get("display_name", "")), str(d.get("BackgroundImage", "")), int(d.get("Influence", 0)))
+	var p := _p
+	p.MaxHitPoints = int(d.get("MaxHitPoints", p.HitPoints))
+	p.HitPoints = int(d.get("HitPoints", p.HitPoints))
+	# Modifiers
+	p.Modifiers.clear()
+	var mods = d.get("Modifiers", [])
+	if mods is Array:
+		for n in mods as Array:
+			var m = Modifier.by_name(str(n))
+			if m != null:
+				p.Modifiers.append(m)
+	# Piles
+	p.DrawPile = _names_to_pile(d.get("DrawPile", []) as Array)
+	p.DiscardPile = _names_to_pile(d.get("DiscardPile", []) as Array)
+	p.Hand = _names_to_pile(d.get("Hand", []) as Array)
+	p.Graveyard = _names_to_pile(d.get("Graveyard", []) as Array)
+	# Board - supports both old string format and new dict with hp
+	var board = d.get("Board", [])
+	if board is Array:
+		for r in range(min(board.size(), p.Board.size())):
+			var row_data = (board as Array)[r]
+			if row_data is Array:
+				for c in range(min((row_data as Array).size(), (p.Board[r] as Row).Squares.size())):
+					var cell = (row_data as Array)[c]
+					if cell == null:
+						continue
+					var name: String = ""
+					var hp: int = -1
+					if cell is Dictionary:
+						name = str((cell as Dictionary).get("name", ""))
+						hp = int((cell as Dictionary).get("hp", -1))
+					elif cell is String:
+						name = str(cell)
+					if name == "":
+						continue
+					var card = _card_by_name(name)
+					if card != null:
+						if hp >= 0:
+							if card is Unit:
+								(card as Unit).HitPoints = hp
+							elif card is Building:
+								(card as Building).HitPoints = hp
+						(p.Board[r] as Row).Squares[c].place(card)
+	return p
+
+func _pile_to_names(pile: Array) -> Array:
+	var out: Array = []
+	for c in pile:
+		if c is Card:
+			out.append((c as Card).card_name)
+	return out
+
+func _names_to_pile(names: Array) -> Array:
+	var out: Array = []
+	for n in names:
+		var c = _card_by_name(str(n))
+		if c != null:
+			out.append(c)
+	return out
+
+func _card_by_name(name: String) -> Card:
+	match name:
+		"Infantry": return Infantry.new()
+		"Special Ops": return SpecialOps.new()
+		"Anti Aircraft": return AntiAircraft.new()
+		"Tank": return Tank.new()
+		"Wall": return Wall.new()
+		"Factory": return Factory.new()
+		"Housing": return Housing.new()
+		"Barracks": return Barracks.new()
+		"Corporation": return Corporation.new()
+		"Drone": return Drone.new()
+		"Interceptor": return Interceptor.new()
+		"Fighter Jet": return FighterJet.new()
+		"Howitzer": return Howitzer.new()
+		"Artilery": return Artilery.new()
+		"Rocket Launcher": return RocketLauncher.new()
+		"RocketLauncher": return RocketLauncher.new()
+		_: return null
+

@@ -240,11 +240,19 @@ static func random_shop_offer() -> Array:
 	return offer
 
 static func random_modifier_offer() -> Array:
+	return random_modifier_offer_excluding([])
+
+static func random_modifier_offer_excluding(owned_names: Array) -> Array:
 	var pool := Modifier.all_modifiers()
-	pool.shuffle()
+	# Exclude already-owned modifiers so shop never offers them
+	var filtered: Array = []
+	for m in pool:
+		if m is Modifier and (m as Modifier).modifier_name not in owned_names:
+			filtered.append(m)
+	filtered.shuffle()
 	var offer: Array = []
-	for i in range(min(3, pool.size())):
-		offer.append(pool[i])
+	for i in range(min(3, filtered.size())):
+		offer.append(filtered[i])
 	return offer
 
 static func make_insurgents_player() -> AIPlayer:

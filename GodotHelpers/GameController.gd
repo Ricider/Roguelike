@@ -1164,6 +1164,7 @@ func _ready():
 			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ensure_preview_popup()
 	_ensure_debug_popup()
+	_add_save_button()
 	_add_debug_button()
 	_ensure_shop_popup()
 	_setup_gauge_grid_background()
@@ -1882,6 +1883,32 @@ func _unhandled_input(event: InputEvent):
 				# consume to prevent typing
 				get_viewport().set_input_as_handled()
 
+func _add_save_button():
+	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	if controls == null:
+		return
+	if controls.has_node("SaveBtn"):
+		return
+	var sbtn := Button.new()
+	sbtn.name = "SaveBtn"
+	sbtn.text = "Save"
+	sbtn.custom_minimum_size = Vector2(90, 40)
+	sbtn.add_theme_font_size_override("font_size", 16)
+	sbtn.add_theme_color_override("font_color", Color(0.6,1,0.6))
+	_style_round_button(sbtn, false)
+	sbtn.pressed.connect(func():
+		var gs = get_node_or_null("/root/GameState")
+		if gs != null and gs.has_method("save_game"):
+			var ok: bool = gs.save_game()
+			message_label.text = "Game saved." if ok else "Save failed."
+		else:
+			message_label.text = "Save not available."
+	)
+	controls.add_child(sbtn)
+	var menu = controls.get_node_or_null("MenuBtn")
+	if menu:
+		controls.move_child(sbtn, menu.get_index())
+
 func _add_debug_button():
 	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
 	if controls == null:
@@ -2063,8 +2090,26 @@ func _show_shop():
 	var mod_offer: Array = []
 	if gs != null and not gs.shop_modifier_offer.is_empty():
 		mod_offer = gs.shop_modifier_offer
+		# Filter any owned modifiers that may have been saved before the fix
+		if gs.run_player != null:
+			var _owned_mods: Array = []
+			for mm in gs.run_player.Modifiers:
+				if mm is Modifier:
+					_owned_mods.append((mm as Modifier).modifier_name)
+			var _filtered: Array = []
+			for mm2 in mod_offer:
+				if mm2 is Modifier and (mm2 as Modifier).modifier_name not in _owned_mods:
+					_filtered.append(mm2)
+			if _filtered.size() != mod_offer.size():
+				mod_offer = _filtered
+				gs.shop_modifier_offer = mod_offer
 	else:
-		mod_offer = CardFactory.random_modifier_offer()
+		var _owned2: Array = []
+		if gs != null and gs.run_player != null:
+			for mm in gs.run_player.Modifiers:
+				if mm is Modifier:
+					_owned2.append((mm as Modifier).modifier_name)
+		mod_offer = CardFactory.random_modifier_offer_excluding(_owned2)
 		if gs != null:
 			gs.shop_modifier_offer = mod_offer
 	# --- CARDS GRID: 5 rows (titles / art / bio+money / description / buy) x 5 cols - fixed to prevent shift on buy ---
