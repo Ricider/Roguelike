@@ -1575,14 +1575,18 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 				# Fallback estimate if not yet laid out (RichTextLabel fit_content needs a frame)
 				stack_h = 2 * 48 + trait_gap
 				_stack_h_fallback_used = true
-			# Position trait stack on top of hover for player, bottom for opponent (centered horizontally) — stays outside grey rect with 8px gap
-			var traits_x: float = pos.x + (sz.x - box_w) * 0.5
+			# Trait stack to the left of hover grey bounding box (8px gap), vertically centered — stays outside grey rect
+			var traits_x: float = pos.x - box_w - 8
 			traits_x = clamp(traits_x, 8.0, max(8.0, vp.x - box_w - 8.0))
-			var traits_y: float
-			if is_player_card:
-				traits_y = pos.y - stack_h - 8
-			else:
-				traits_y = pos.y + sz.y + 8
+			# If left would go off left edge, flip to right side as fallback
+			if traits_x < pos.x - box_w - 9:
+				# Already clamped but hover near left edge could still push inside; keep left placement
+				pass
+			if pos.x - box_w - 8 < 8 and traits_x == 8:
+				# Hover near left edge — fallback to right side to stay outside
+				traits_x = pos.x + sz.x + 8
+				traits_x = clamp(traits_x, 8.0, max(8.0, vp.x - box_w - 8.0))
+			var traits_y: float = pos.y + (sz.y - stack_h) * 0.5
 			traits_y = clamp(traits_y, 8.0, max(8.0, vp.y - stack_h - 8.0))
 			preview_traits_root.global_position = Vector2(traits_x, traits_y)
 			preview_traits_root.size = Vector2(box_w, stack_h)
@@ -1608,13 +1612,12 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 					var _real_h: float = preview_traits_vbox.get_combined_minimum_size().y
 					if _real_h <= 4: return
 					if abs(_real_h - stack_h) < 1.5: return
-					var _real_traits_x: float = _hover_pos.x + (_hover_sz.x - _box_w) * 0.5
+					var _real_traits_x: float = _hover_pos.x - _box_w - 8
 					_real_traits_x = clamp(_real_traits_x, 8.0, max(8.0, vp.x - _box_w - 8.0))
-					var _real_traits_y: float
-					if _is_player:
-						_real_traits_y = _hover_pos.y - _real_h - 8
-					else:
-						_real_traits_y = _hover_pos.y + _hover_sz.y + 8
+					if _hover_pos.x - _box_w - 8 < 8 and _real_traits_x == 8:
+						_real_traits_x = _hover_pos.x + _hover_sz.x + 8
+						_real_traits_x = clamp(_real_traits_x, 8.0, max(8.0, vp.x - _box_w - 8.0))
+					var _real_traits_y: float = _hover_pos.y + (_hover_sz.y - _real_h) * 0.5
 					_real_traits_y = clamp(_real_traits_y, 8.0, max(8.0, vp.y - _real_h - 8.0))
 					preview_traits_root.global_position = Vector2(_real_traits_x, _real_traits_y)
 					preview_traits_root.size = Vector2(_box_w, _real_h)
@@ -1631,9 +1634,12 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 					if _real_h2 <= 4: return
 					var _cur_h: float = preview_traits_root.size.y
 					if abs(_real_h2 - _cur_h) < 1.5: return
-					var _rx: float = _hover_pos.x + (_hover_sz.x - _box_w) * 0.5
+					var _rx: float = _hover_pos.x - _box_w - 8
 					_rx = clamp(_rx, 8.0, max(8.0, vp.x - _box_w - 8.0))
-					var _ry: float = _hover_pos.y - _real_h2 - 8 if _is_player else _hover_pos.y + _hover_sz.y + 8
+					if _hover_pos.x - _box_w - 8 < 8 and _rx == 8:
+						_rx = _hover_pos.x + _hover_sz.x + 8
+						_rx = clamp(_rx, 8.0, max(8.0, vp.x - _box_w - 8.0))
+					var _ry: float = _hover_pos.y + (_hover_sz.y - _real_h2) * 0.5
 					_ry = clamp(_ry, 8.0, max(8.0, vp.y - _real_h2 - 8.0))
 					preview_traits_root.global_position = Vector2(_rx, _ry)
 					preview_traits_root.size = Vector2(_box_w, _real_h2)
@@ -3386,9 +3392,15 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 						var i2tw := create_tween()
 						i2tw.set_loops()
 						i2tw.tween_property(inner2, "rotation", -6.28, 3.5).set_trans(Tween.TRANS_LINEAR)
-				# Magnified preview on hover — art + symbols + text enlarged (above for player, below for opponent)
+				# Magnified preview on hover — flipped for middle rows: top 2 of player -> bottom, lower 2 of opponent -> top
 				var _card_prev: Card = card
+				var _row_for_hover: int = r
 				var _is_player_board: bool = is_human
+				# Invert hover side for middle confrontation rows (closest to center)
+				if is_human and _row_for_hover < 2:
+					_is_player_board = false # top 2 rows of player (near middle) -> pop bottom
+				elif not is_human and _row_for_hover >= 2:
+					_is_player_board = true # lower 2 rows of opponent (near middle) -> pop upwards
 				var _anchor_board: Control = btn
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev, _is_player_board, _anchor_board))
 				btn.mouse_exited.connect(func(): _hide_card_preview())
