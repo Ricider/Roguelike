@@ -72,6 +72,8 @@ var debug_built: bool = false
 var debug_enemy_option: OptionButton
 var debug_summon_card_option: OptionButton
 var debug_summon_target_option: OptionButton
+var _debug_timestamps: Array = []
+var _debug_unlocked: bool = false
 var shop_popup: PanelContainer
 var shop_built: bool = false
 var influence_value_label: Label
@@ -1312,6 +1314,37 @@ func _ensure_debug_popup():
 	_center_debug_popup()
 	debug_built = true
 
+func _reveal_debug_ui():
+	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	if controls == null:
+		return
+	var btn = controls.get_node_or_null("DebugBtn")
+	if btn != null:
+		btn.visible = true
+
+func _unhandled_input(event: InputEvent):
+	if event is InputEventKey and event.pressed and not event.echo:
+		var is_backtick: bool = false
+		if event.keycode == KEY_QUOTELEFT:
+			is_backtick = true
+		elif event.unicode == 96 or event.unicode == 126:
+			is_backtick = true
+		if is_backtick:
+			var now: int = Time.get_ticks_msec()
+			_debug_timestamps.append(now)
+			# prune older than 2000ms
+			var pruned: Array = []
+			for t in _debug_timestamps:
+				if now - int(t) <= 2000:
+					pruned.append(t)
+			_debug_timestamps = pruned
+			if not _debug_unlocked and _debug_timestamps.size() >= 5:
+				_debug_unlocked = true
+				_reveal_debug_ui()
+				_debug_timestamps.clear()
+				# consume to prevent typing
+				get_viewport().set_input_as_handled()
+
 func _add_debug_button():
 	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
 	if controls == null:
@@ -1321,6 +1354,7 @@ func _add_debug_button():
 	var btn := Button.new()
 	btn.name = "DebugBtn"
 	btn.text = "Debug"
+	btn.visible = _debug_unlocked
 	btn.custom_minimum_size = Vector2(90, 40)
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_color_override("font_color", Color(1,1,0.6))
