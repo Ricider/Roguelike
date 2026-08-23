@@ -1257,7 +1257,7 @@ func _setup_gauge_and_influence_hovers():
 			hover_popup.set_meta("rt_label", rt)
 			hover_label = rt as Control
 	# Gauge + influence + pile tooltips: same box design via _show_hover with requested texts
-	var hp_tip: String = "[Health]: You hit points, if it drops to 0 you lose, you lose hit points when one of your cards die equal to the amount of BioSupply sent on the card"
+	var hp_tip: String = "[Health]: Your hit points, if it drops to 0 you lose, you lose hit points when one of your cards die equal to the amount of BioSupply spent on the card"
 	var bio_tip: String = "[BioSupply]: Amount of people you have, used for playing cards"
 	var money_tip: String = "[MoneySupply]: The amount of money you have, used for playing cards"
 	var inf_tip: String = "Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"
@@ -1300,17 +1300,20 @@ func _setup_gauge_and_influence_hovers():
 	if p_bio_box == null: p_bio_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio") as Control
 	var p_money_box := get_node_or_null(gp + "/PlayerGauges/PlayerGaugeMoney") as Control
 	if p_money_box == null: p_money_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney") as Control
-	bind.call(ai_hp_box, "AI " + hp_tip)
-	bind.call(ai_bio_box, "AI " + bio_tip)
-	bind.call(ai_money_box, "AI " + money_tip)
+	var ai_hp_tip: String = "[Health]: AI hit points, if it drops to 0 AI loses, AI loses hit points when one of its cards die equal to the amount of BioSupply spent on the card"
+	var ai_bio_tip: String = "[BioSupply]: Amount of people AI has, used for playing cards"
+	var ai_money_tip: String = "[MoneySupply]: The amount of money AI has, used for playing cards"
+	bind.call(ai_hp_box, ai_hp_tip)
+	bind.call(ai_bio_box, ai_bio_tip)
+	bind.call(ai_money_box, ai_money_tip)
 	bind.call(p_hp_box, hp_tip)
 	bind.call(p_bio_box, bio_tip)
 	bind.call(p_money_box, money_tip)
 	# Also bind icons/bars themselves so hover works even if container has gaps — per-gauge tip
 	var gauge_pairs: Array = [
-		[ai_hp_box, "AI " + hp_tip],
-		[ai_bio_box, "AI " + bio_tip],
-		[ai_money_box, "AI " + money_tip],
+		[ai_hp_box, ai_hp_tip],
+		[ai_bio_box, ai_bio_tip],
+		[ai_money_box, ai_money_tip],
 		[p_hp_box, hp_tip],
 		[p_bio_box, bio_tip],
 		[p_money_box, money_tip],
