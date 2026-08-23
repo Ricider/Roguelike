@@ -3,6 +3,7 @@ extends Control
 # Main Menu with Player chooser per Main Game Rules: any Player, State Troops recommended with border
 var _selected_player: String = "State Troops"
 var _player_buttons: Dictionary = {}
+var _flag_rects: Dictionary = {}
 
 func _ready():
 	var play_btn = get_node_or_null("CenterContainer/VBox/PlayButton")
@@ -85,30 +86,51 @@ func _build_player_chooser():
 	chooser.add_child(lbl)
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 10)
-	# Center the grid inside the chooser
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 14)
 	var center_wrap := CenterContainer.new()
 	center_wrap.add_child(grid)
 	chooser.add_child(center_wrap)
 	for name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Coalition Army", "Corporate Troops"]:
+		var entry := VBoxContainer.new()
+		entry.alignment = BoxContainer.ALIGNMENT_CENTER
+		entry.add_theme_constant_override("separation", 6)
+		entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# Flag art above faction name
+		var flag := TextureRect.new()
+		flag.custom_minimum_size = Vector2(84, 84)
+		flag.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		flag.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var flag_path := "res://Assets/Players/%s/flag.png" % name
+		if ResourceLoader.exists(flag_path):
+			var tex := load(flag_path) as Texture2D
+			if tex != null:
+				flag.texture = tex
+		else:
+				flag.texture = null
+		flag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		entry.add_child(flag)
 		var btn := Button.new()
 		btn.text = name
 		btn.name = name.replace(" ", "")
-		btn.custom_minimum_size = Vector2(160, 64)
+		btn.custom_minimum_size = Vector2(140, 44)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_font_size_override("font_size", 12)
 		btn.add_theme_color_override("font_color", Color(1,1,1))
 		btn.pressed.connect(func(): _select_player(name))
+		# Also make flag clickable by forwarding click to selection
+		flag.gui_input.connect(func(event: InputEvent): if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT: _select_player(name))
+		flag.mouse_filter = Control.MOUSE_FILTER_STOP
+		_flag_rects[name] = flag
 		_player_buttons[name] = btn
-		grid.add_child(btn)
+		entry.add_child(btn)
+		grid.add_child(entry)
 	var hint := Label.new()
 	hint.text = "State Troops recommended"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(1,0.85,0.3))
 	chooser.add_child(hint)
-	# Insert before PlayButton
 	var play = vbox.get_node_or_null("PlayButton")
 	if play:
 		vbox.add_child(chooser)
@@ -121,6 +143,11 @@ func _select_player(name: String):
 	_selected_player = name
 	for n in _player_buttons.keys():
 		var b: Button = _player_buttons[n]
+		var flag_rect: TextureRect = _flag_rects.get(n, null) as TextureRect
+		if flag_rect != null:
+			flag_rect.modulate = Color(1,1,1,1) if n == name else Color(1,1,1,0.78)
+			# yellow border highlight for selected via modulate + subtle scale
+			flag_rect.material = null
 		b.modulate = Color(1,1,1,1) if n == name else Color(1,1,1,0.7)
 		b.button_pressed = (n == name)
 		# Round pill faction chooser — 18 radius, soft shadow
