@@ -68,6 +68,11 @@ var gauge_grid_bg_sprite: AnimatedSprite2D
 var preview_popup: PanelContainer
 var _preview_eff_scroll: ScrollContainer = null
 var preview_built: bool = false
+var preview_traits_root: Control = null
+var preview_traits_vbox: VBoxContainer = null
+var preview_traits_built: bool = false
+var _preview_traits_gen: int = 0
+var _preview_traits_tween: Tween = null
 var debug_popup: PanelContainer
 var debug_built: bool = false
 var debug_enemy_option: OptionButton
@@ -1235,6 +1240,29 @@ func _ensure_preview_popup():
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(preview_popup)
 	preview_built = true
+	# Trait side boxes container (half-width, stacked vertically to the right of hover)
+	if preview_traits_built and preview_traits_root != null:
+		return
+	preview_traits_root = Control.new()
+	preview_traits_root.visible = false
+	preview_traits_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_traits_root.z_index = 202
+	preview_traits_root.z_as_relative = false
+	if preview_traits_root.has_method("set_as_top_level"):
+		preview_traits_root.top_level = true
+	preview_traits_root.clip_contents = false
+	preview_traits_root.custom_minimum_size = Vector2(160, 0)
+	preview_traits_root.size = Vector2(160, 0)
+	preview_traits_vbox = VBoxContainer.new()
+	preview_traits_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview_traits_vbox.alignment = BoxContainer.ALIGNMENT_BEGIN
+	preview_traits_vbox.add_theme_constant_override("separation", 6)
+	preview_traits_vbox.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	preview_traits_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	preview_traits_vbox.clip_contents = false
+	preview_traits_root.add_child(preview_traits_vbox)
+	add_child(preview_traits_root)
+	preview_traits_built = true
 
 func _set_preview_click_through(node: Control):
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1454,6 +1482,165 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 	preview_popup.global_position = pos
 	preview_popup.z_index = 101
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# --- Trait side boxes (half-width, stacked vertically) ---
+	_ensure_preview_popup()
+	if preview_traits_root != null and preview_traits_vbox != null:
+		# Immediate removal (not deferred queue_free alone) — quick switch would otherwise leave old boxes queued and double stack_h, pushing y too high
+		for c in preview_traits_vbox.get_children():
+			preview_traits_vbox.remove_child(c)
+			c.queue_free()
+		if card is Unit:
+			var is_flying: bool = (card as Unit).Flying
+			var has_range: bool = (card as Unit).HasRange
+			# Orange bracket portion via BBCode, keep boxes strictly outside grey hover rect
+			var flying_text: String = "[color=#FF9500][Flying][/color]: This card takes half damage from melee or grounded enemies" if is_flying else "[color=#FF9500][Grounded][/color]: This card deals half damage to flying units"
+			var range_text: String = "[color=#FF9500][HasRange][/color]: This card attacks a random enemy at the end of the turn" if has_range else "[color=#FF9500][Melee][/color]: This card attacks the closest enemy at the end of turn"
+			var trait_gap: int = 6
+			var box_w: float = 160.0 # half width of hover (320)
+			# Create trait boxes inline (avoid Variant lambda inference) — RichTextLabel for orange brackets, Panel outside hover
+			var box_flying: PanelContainer = PanelContainer.new()
+			box_flying.custom_minimum_size = Vector2(box_w, 0)
+			box_flying.size = Vector2(box_w, 0)
+			box_flying.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			box_flying.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			box_flying.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box_flying.clip_contents = false
+			var sbox_f: StyleBoxFlat = StyleBoxFlat.new()
+			sbox_f.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+			sbox_f.border_color = Color(0.9, 0.9, 0.95, 0.85)
+			sbox_f.set_border_width_all(1)
+			sbox_f.set_corner_radius_all(8)
+			sbox_f.content_margin_left = 6
+			sbox_f.content_margin_right = 6
+			sbox_f.content_margin_top = 5
+			sbox_f.content_margin_bottom = 5
+			box_flying.add_theme_stylebox_override("panel", sbox_f)
+			var lbl_f: RichTextLabel = RichTextLabel.new()
+			lbl_f.bbcode_enabled = true
+			lbl_f.text = flying_text
+			lbl_f.fit_content = true
+			lbl_f.scroll_active = false
+			lbl_f.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			lbl_f.clip_contents = false
+			lbl_f.custom_minimum_size = Vector2(box_w - 12, 0)
+			lbl_f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			lbl_f.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			lbl_f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			lbl_f.add_theme_font_size_override("normal_font_size", 13)
+			lbl_f.add_theme_color_override("default_color", Color(1, 1, 1))
+			box_flying.add_child(lbl_f)
+			var box_range: PanelContainer = PanelContainer.new()
+			box_range.custom_minimum_size = Vector2(box_w, 0)
+			box_range.size = Vector2(box_w, 0)
+			box_range.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			box_range.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			box_range.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box_range.clip_contents = false
+			var sbox_r: StyleBoxFlat = StyleBoxFlat.new()
+			sbox_r.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+			sbox_r.border_color = Color(0.9, 0.9, 0.95, 0.85)
+			sbox_r.set_border_width_all(1)
+			sbox_r.set_corner_radius_all(8)
+			sbox_r.content_margin_left = 6
+			sbox_r.content_margin_right = 6
+			sbox_r.content_margin_top = 5
+			sbox_r.content_margin_bottom = 5
+			box_range.add_theme_stylebox_override("panel", sbox_r)
+			var lbl_r: RichTextLabel = RichTextLabel.new()
+			lbl_r.bbcode_enabled = true
+			lbl_r.text = range_text
+			lbl_r.fit_content = true
+			lbl_r.scroll_active = false
+			lbl_r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			lbl_r.clip_contents = false
+			lbl_r.custom_minimum_size = Vector2(box_w - 12, 0)
+			lbl_r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			lbl_r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			lbl_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			lbl_r.add_theme_font_size_override("normal_font_size", 13)
+			lbl_r.add_theme_color_override("default_color", Color(1, 1, 1))
+			box_range.add_child(lbl_r)
+			preview_traits_vbox.add_child(box_flying)
+			preview_traits_vbox.add_child(box_range)
+			# Force layout update to get stack height before positioning — measure after adding; defer correction next frame if estimated
+			_preview_traits_gen += 1
+			var _this_gen: int = _preview_traits_gen
+			if _preview_traits_tween != null and is_instance_valid(_preview_traits_tween):
+				_preview_traits_tween.kill()
+				_preview_traits_tween = null
+			preview_traits_root.visible = true
+			var stack_h: float = preview_traits_vbox.get_combined_minimum_size().y
+			var _stack_h_fallback_used: bool = false
+			if stack_h <= 4:
+				# Fallback estimate if not yet laid out (RichTextLabel fit_content needs a frame)
+				stack_h = 2 * 48 + trait_gap
+				_stack_h_fallback_used = true
+			# Position trait stack on top of hover for player, bottom for opponent (centered horizontally) — stays outside grey rect with 8px gap
+			var traits_x: float = pos.x + (sz.x - box_w) * 0.5
+			traits_x = clamp(traits_x, 8.0, max(8.0, vp.x - box_w - 8.0))
+			var traits_y: float
+			if is_player_card:
+				traits_y = pos.y - stack_h - 8
+			else:
+				traits_y = pos.y + sz.y + 8
+			traits_y = clamp(traits_y, 8.0, max(8.0, vp.y - stack_h - 8.0))
+			preview_traits_root.global_position = Vector2(traits_x, traits_y)
+			preview_traits_root.size = Vector2(box_w, stack_h)
+			preview_traits_root.custom_minimum_size = Vector2(box_w, stack_h)
+			preview_traits_root.z_index = 102
+			preview_traits_root.visible = true
+			_set_preview_click_through(preview_traits_root)
+			# Next-frame correction: real height after RichTextLabel layout can differ by ~10-20px, causing 1-frame high offset
+			if _stack_h_fallback_used:
+				var _hover_pos: Vector2 = pos
+				var _hover_sz: Vector2 = sz
+				var _is_player: bool = is_player_card
+				var _box_w: float = box_w
+				var _trait_gap: int = trait_gap
+				# Defer one frame to get true height, then nudge correctly (no Variant lambda)
+				_preview_traits_tween = create_tween()
+				_preview_traits_tween.tween_interval(0.02)
+				_preview_traits_tween.tween_callback(func():
+					if _this_gen != _preview_traits_gen: return
+					if preview_traits_root == null or not is_instance_valid(preview_traits_root): return
+					if not preview_traits_root.visible: return
+					if preview_traits_vbox == null or not is_instance_valid(preview_traits_vbox): return
+					var _real_h: float = preview_traits_vbox.get_combined_minimum_size().y
+					if _real_h <= 4: return
+					if abs(_real_h - stack_h) < 1.5: return
+					var _real_traits_x: float = _hover_pos.x + (_hover_sz.x - _box_w) * 0.5
+					_real_traits_x = clamp(_real_traits_x, 8.0, max(8.0, vp.x - _box_w - 8.0))
+					var _real_traits_y: float
+					if _is_player:
+						_real_traits_y = _hover_pos.y - _real_h - 8
+					else:
+						_real_traits_y = _hover_pos.y + _hover_sz.y + 8
+					_real_traits_y = clamp(_real_traits_y, 8.0, max(8.0, vp.y - _real_h - 8.0))
+					preview_traits_root.global_position = Vector2(_real_traits_x, _real_traits_y)
+					preview_traits_root.size = Vector2(_box_w, _real_h)
+					preview_traits_root.custom_minimum_size = Vector2(_box_w, _real_h)
+				)
+				_preview_traits_tween.tween_interval(0.02)
+				_preview_traits_tween.tween_callback(func():
+					if _this_gen != _preview_traits_gen: return
+					# Second frame check for RichTextLabel word-wrap settling
+					if preview_traits_root == null or not is_instance_valid(preview_traits_root): return
+					if not preview_traits_root.visible: return
+					if preview_traits_vbox == null or not is_instance_valid(preview_traits_vbox): return
+					var _real_h2: float = preview_traits_vbox.get_combined_minimum_size().y
+					if _real_h2 <= 4: return
+					var _cur_h: float = preview_traits_root.size.y
+					if abs(_real_h2 - _cur_h) < 1.5: return
+					var _rx: float = _hover_pos.x + (_hover_sz.x - _box_w) * 0.5
+					_rx = clamp(_rx, 8.0, max(8.0, vp.x - _box_w - 8.0))
+					var _ry: float = _hover_pos.y - _real_h2 - 8 if _is_player else _hover_pos.y + _hover_sz.y + 8
+					_ry = clamp(_ry, 8.0, max(8.0, vp.y - _real_h2 - 8.0))
+					preview_traits_root.global_position = Vector2(_rx, _ry)
+					preview_traits_root.size = Vector2(_box_w, _real_h2)
+					preview_traits_root.custom_minimum_size = Vector2(_box_w, _real_h2)
+				)
+		else:
+			preview_traits_root.visible = false
 
 func _effect_with_traits(card: Card) -> String:
 	if card == null:
@@ -1475,8 +1662,18 @@ func _effect_with_traits(card: Card) -> String:
 
 func _hide_card_preview():
 	_preview_eff_scroll = null
+	_preview_traits_gen += 1
+	if _preview_traits_tween != null and is_instance_valid(_preview_traits_tween):
+		_preview_traits_tween.kill()
+		_preview_traits_tween = null
 	if preview_popup != null:
 		preview_popup.visible = false
+	if preview_traits_root != null:
+		preview_traits_root.visible = false
+		if preview_traits_vbox != null:
+			for c in preview_traits_vbox.get_children():
+				preview_traits_vbox.remove_child(c)
+				c.queue_free()
 	_hide_attack_arrow()
 
 func _hide_hover():
