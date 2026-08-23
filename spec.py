@@ -357,7 +357,7 @@ Player: Coalition Army
 
 Player: Corporate Troops
     HitPoints=70
-    Board=1 Interceptor randomly placed at back row and 3 Corporations adjacent to it at its left, right and in front
+    Board=1 Interceptor randomly placed at back row and 3 Corporations adjacent to it 
     Difficulty=8
     BackgroundImage=Cyberpunk Skyrises
 

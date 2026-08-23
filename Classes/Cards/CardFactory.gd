@@ -387,19 +387,53 @@ static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
-	# Corporate Troops: HitPoints 70, Background Cyberpunk Skyrises, Board 2 Corporation at back row, Diff 8, Bio 10 Money 100 Influence 50
+	# Corporate Troops: HitPoints 70, Background Cyberpunk Skyrises, Board 1 Interceptor at back row +3 Corporations adjacent, Diff 8, Bio 10 Money 100 Influence 60
 	var p := AIPlayer.new(70, 10, 100, 8, "Corporate Troops", "Cyberpunk Skyrises", 60)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
-	var positions: Array = []
+	# Pick Interceptor position on back row
+	var cols: Array = []
 	for c in range(10):
-		positions.append(c)
-	positions.shuffle()
-	var c1 := Corporation.new()
-	p.Board[back_row].Squares[positions[0]].place(c1)
-	p.apply_hitpoints_modifier(c1)
-	var c2 := Corporation.new()
-	p.Board[back_row].Squares[positions[1]].place(c2)
-	p.apply_hitpoints_modifier(c2)
+		cols.append(c)
+	cols.shuffle()
+	var inter_col: int = cols[0] as int
+	var inter := Interceptor.new()
+	p.Board[back_row].Squares[inter_col].place(inter)
+	p.apply_hitpoints_modifier(inter)
+	# Find 3 adjacent squares for Corporations (8-dir, within board)
+	var adj: Array = []
+	for dr in [-1, 0, 1]:
+		for dc in [-1, 0, 1]:
+			if dr == 0 and dc == 0:
+				continue
+			var nr: int = back_row + dr
+			var nc: int = inter_col + dc
+			if nr < 0 or nr >= p.Board.size():
+				continue
+			if nc < 0 or nc >= 10:
+				continue
+			if p.Board[nr].Squares[nc].is_empty():
+				adj.append(Vector2i(nr, nc))
+	adj.shuffle()
+	var placed: int = 0
+	for i in range(min(3, adj.size())):
+		var pos: Vector2i = adj[i] as Vector2i
+		var corp := Corporation.new()
+		p.Board[pos.x].Squares[pos.y].place(corp)
+		p.apply_hitpoints_modifier(corp)
+		placed += 1
+	# Fallback if not enough adjacent (corner) — fill random empties
+	if placed < 3:
+		var remaining: Array = []
+		for r in range(p.Board.size()):
+			for c in range(10):
+				if p.Board[r].Squares[c].is_empty():
+					remaining.append(Vector2i(r, c))
+		remaining.shuffle()
+		for i in range(min(3 - placed, remaining.size())):
+			var pos2: Vector2i = remaining[i] as Vector2i
+			var corp2 := Corporation.new()
+			p.Board[pos2.x].Squares[pos2.y].place(corp2)
+			p.apply_hitpoints_modifier(corp2)
 	p.DrawPile = make_corporate_troops_deck()
 	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60)]
 	return p
