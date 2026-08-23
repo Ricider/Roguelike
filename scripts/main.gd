@@ -55,9 +55,10 @@ func _create_battle_layer():
 	layer.grow_vertical = 2
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.z_index = 1
-	# Left army pinned to left side, vertically centered
-	var left_box := VBoxContainer.new()
+	# Left army pinned to left side, vertically centered - 2 columns for 8 units
+	var left_box := GridContainer.new()
 	left_box.name = "LeftArmy"
+	left_box.columns = 2
 	left_box.layout_mode = 1
 	left_box.anchor_left = 0.0
 	left_box.anchor_top = 0.5
@@ -65,15 +66,16 @@ func _create_battle_layer():
 	left_box.anchor_bottom = 0.5
 	left_box.grow_horizontal = 0
 	left_box.grow_vertical = 2
-	left_box.position = Vector2(60, -180)
-	left_box.size = Vector2(140, 360)
-	left_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	left_box.add_theme_constant_override("separation", 18)
+	left_box.position = Vector2(30, -220)
+	left_box.size = Vector2(190, 440)
+	left_box.add_theme_constant_override("h_separation", 10)
+	left_box.add_theme_constant_override("v_separation", 10)
 	left_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_box.z_index = 0
-	# Right army pinned to right side
-	var right_box := VBoxContainer.new()
+	# Right army pinned to right side - flipped horizontally
+	var right_box := GridContainer.new()
 	right_box.name = "RightArmy"
+	right_box.columns = 2
 	right_box.layout_mode = 1
 	right_box.anchor_left = 1.0
 	right_box.anchor_top = 0.5
@@ -81,23 +83,33 @@ func _create_battle_layer():
 	right_box.anchor_bottom = 0.5
 	right_box.grow_horizontal = 0
 	right_box.grow_vertical = 2
-	right_box.position = Vector2(-200, -180)
-	right_box.size = Vector2(140, 360)
-	right_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	right_box.add_theme_constant_override("separation", 18)
+	right_box.position = Vector2(-220, -220)
+	right_box.size = Vector2(190, 440)
+	right_box.add_theme_constant_override("h_separation", 10)
+	right_box.add_theme_constant_override("v_separation", 10)
 	right_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right_box.z_index = 0
-	# Choose card mix for each side - reuse card art
+	# Choose card mix for each side - reuse card art, 3 fixed + 5 random each (total 8)
 	var left_cards: Array = ["Infantry", "Tank", "Drone", "Interceptor"]
 	var right_cards: Array = ["Fighter Jet", "Anti Aircraft", "Howitzer", "Artilery"]
-	# Pick 3 per side
+	var unit_pool: Array = ["Infantry", "Tank", "Drone", "Interceptor", "Fighter Jet", "Anti Aircraft", "Howitzer", "Artilery", "Rocket Launcher", "Special Ops"]
+	# Build lists: 3 fixed + 5 random
+	var left_list: Array = []
+	var right_list: Array = []
 	for i in range(3):
-		var cname_l: String = left_cards[i % left_cards.size()]
-		var u_l := _create_army_unit(cname_l, Vector2(110, 110))
+		left_list.append(left_cards[i % left_cards.size()])
+		right_list.append(right_cards[i % right_cards.size()])
+	for i in range(5):
+		left_list.append(unit_pool[_battle_rng.randi_range(0, unit_pool.size() - 1)])
+		right_list.append(unit_pool[_battle_rng.randi_range(0, unit_pool.size() - 1)])
+	for i in range(left_list.size()):
+		var cname_l: String = left_list[i] as String
+		var u_l := _create_army_unit(cname_l, Vector2(84, 84), false)
 		left_box.add_child(u_l)
 		_left_attackers.append(u_l)
-		var cname_r: String = right_cards[i % right_cards.size()]
-		var u_r := _create_army_unit(cname_r, Vector2(110, 110))
+	for i in range(right_list.size()):
+		var cname_r: String = right_list[i] as String
+		var u_r := _create_army_unit(cname_r, Vector2(84, 84), true)
 		right_box.add_child(u_r)
 		_right_attackers.append(u_r)
 	layer.add_child(left_box)
@@ -115,15 +127,20 @@ func _create_battle_layer():
 		move_child(layer, bg.get_index() + 1)
 	_battle_layer = layer
 
-func _create_army_unit(card_name: String, size: Vector2) -> Control:
+func _create_army_unit(card_name: String, size: Vector2, flip_h: bool = false) -> Control:
 	var holder := Control.new()
 	holder.custom_minimum_size = size
 	holder.size = size
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.set_meta("card_name", card_name)
 	# Reuse Card animated 20-frame idle (512x512 @10fps)
 	var sprite_ctrl := Card.create_sprite_for(card_name, size) as Control
 	if sprite_ctrl != null:
 		sprite_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if flip_h:
+			for child in sprite_ctrl.get_children():
+				if child is AnimatedSprite2D:
+					(child as AnimatedSprite2D).scale.x *= -1
 		# sprite_ctrl already has centered AnimatedSprite scaled to size
 		holder.add_child(sprite_ctrl)
 		# slight sway animation for idle
@@ -154,15 +171,8 @@ func _get_menu_projectile_frames(card_name: String) -> SpriteFrames:
 	return sf
 
 func _card_name_for_attacker(ctrl: Control) -> String:
-	# Map holder index back to card name via left/right lists
-	if _left_attackers.has(ctrl):
-		var idx: int = _left_attackers.find(ctrl)
-		var left_cards: Array = ["Infantry", "Tank", "Drone", "Interceptor"]
-		return left_cards[idx % left_cards.size()] as String
-	if _right_attackers.has(ctrl):
-		var idx: int = _right_attackers.find(ctrl)
-		var right_cards: Array = ["Fighter Jet", "Anti Aircraft", "Howitzer", "Artilery"]
-		return right_cards[idx % right_cards.size()] as String
+	if ctrl != null and ctrl.has_meta("card_name"):
+		return ctrl.get_meta("card_name") as String
 	return "Infantry"
 
 func _fire_menu_projectile(from_ctrl: Control, to_ctrl: Control):
