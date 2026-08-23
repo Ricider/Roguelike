@@ -895,8 +895,8 @@ func _setup_phase_ui_top_left():
 	# Create traffic light panel at very top left with 10px margin — extended 2x width for 6 AI+Player lights
 	phase_panel = PanelContainer.new()
 	phase_panel.name = "PhasePanelTopLeft"
-	phase_panel.custom_minimum_size = Vector2(248, 110)
-	phase_panel.size = Vector2(248, 110)
+	phase_panel.custom_minimum_size = Vector2(248, 90)
+	phase_panel.size = Vector2(248, 90)
 	phase_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	phase_panel.z_index = 300
 	phase_panel.z_as_relative = false
@@ -973,9 +973,9 @@ func _setup_phase_ui_top_left():
 	phase_panel.offset_left = 10.0
 	phase_panel.offset_top = 10.0
 	phase_panel.offset_right = 258.0
-	phase_panel.offset_bottom = 120.0
+	phase_panel.offset_bottom = 100.0
 	phase_panel.position = Vector2(10, 10)
-	phase_panel.size = Vector2(248, 110)
+	phase_panel.size = Vector2(248, 90)
 	_update_phase_traffic_lights()
 	# Move gauge directly underneath traffic light 20px down
 	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges") as VBoxContainer
@@ -1338,6 +1338,7 @@ func _ready():
 	_ensure_preview_popup()
 	_ensure_debug_popup()
 	_add_save_button()
+	_add_view_deck_button()
 	_add_debug_button()
 	_ensure_shop_popup()
 	_setup_gauge_grid_background()
@@ -2351,6 +2352,45 @@ func _add_save_button():
 	var menu = controls.get_node_or_null("MenuBtn")
 	if menu:
 		controls.move_child(sbtn, menu.get_index())
+
+func _add_view_deck_button():
+	var controls = get_node_or_null("VBox/Controls")
+	if controls == null:
+		return
+	if controls.has_node("ViewDeckBtn"):
+		return
+	var vbtn := Button.new()
+	vbtn.name = "ViewDeckBtn"
+	vbtn.text = "View Deck"
+	vbtn.custom_minimum_size = Vector2(140, 40)
+	vbtn.add_theme_font_size_override("font_size", 16)
+	vbtn.add_theme_color_override("font_color", Color(1,1,1))
+	_style_round_button(vbtn, false)
+	# Purple outline
+	for _state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var _sb = vbtn.get_theme_stylebox(_state) as StyleBoxFlat
+		if _sb != null:
+			var _nsb: StyleBoxFlat = _sb.duplicate() as StyleBoxFlat
+			_nsb.border_color = Color(0.65, 0.4, 1.0, 1)
+			_nsb.set_border_width_all(2)
+			if _state == "hover":
+				_nsb.bg_color = Color(0.24, 0.18, 0.38, 1)
+			vbtn.add_theme_stylebox_override(_state, _nsb)
+	vbtn.pressed.connect(func():
+		if human == null:
+			return
+		var full: Array = human.get_full_deck_for_inspection() if human.has_method("get_full_deck_for_inspection") else human.DrawPile
+		_inspect_pile("Your Full Deck", full)
+	)
+	controls.add_child(vbtn)
+	# Place right of EndTurn (after EndTurn, before Save/Debug/Menu)
+	var endt = controls.get_node_or_null("EndTurn")
+	if endt:
+		controls.move_child(vbtn, endt.get_index() + 1)
+	else:
+		var menu = controls.get_node_or_null("MenuBtn")
+		if menu:
+			controls.move_child(vbtn, menu.get_index())
 
 func _add_debug_button():
 	var controls = get_node_or_null("VBox/Controls")
