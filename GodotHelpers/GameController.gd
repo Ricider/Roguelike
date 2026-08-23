@@ -824,8 +824,17 @@ func _hide_hand_label():
 		hl.text = ""
 
 func _setup_influence_at_draw_pile():
-	var left = get_node_or_null("VBox/MainHBox/LeftGauges")
-	var pd = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck")
+	var left: Control = _get_left_gauges()
+	if left == null:
+		left = get_node_or_null("VBox/MainHBox/LeftGauges") as Control
+	var pd: Control = left.get_node_or_null("PlayerDeck") as Control if left != null else null
+	if pd == null:
+		pd = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck") as Control
+	if pd == null and left != null:
+		# Also check BottomRow already
+		var br2: Control = left.get_node_or_null("BottomRow") as Control
+		if br2 != null:
+			pd = br2.get_node_or_null("PlayerDeck") as Control
 	if left == null or pd == null:
 		return
 	# Hide old player_info (was center)
@@ -1410,23 +1419,8 @@ func _enforce_uniform_gauge_width():
 		if hbar != null:
 			hbar.custom_minimum_size = Vector2(32, 6)
 			hbar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-			# Small horizontal bars rounded radius 4
-			if hbar.get_parent() != null and not hbar.get_parent().name.begins_with("RoundedClip"):
-				var ph: Control = hbar.get_parent() as Control
-				var idh: int = ph.get_children().find(hbar)
-				ph.remove_child(hbar)
-				var w2 := PanelContainer.new()
-				w2.name = "RoundedClip_" + hbar.name
-				w2.custom_minimum_size = Vector2(32, 6)
-				w2.clip_contents = true
-				w2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				var sb2 := StyleBoxFlat.new()
-				sb2.bg_color = Color(0, 0, 0, 0)
-				sb2.set_corner_radius_all(4)
-				w2.add_theme_stylebox_override("panel", sb2)
-				w2.add_child(hbar)
-				ph.add_child(w2)
-				ph.move_child(w2, idh)
+			# Keep deck bars sharp to avoid wrapping issues that broke draw pile button layout
+			# Rounded corners for small bars would need wrapper which shifts VBox layout - skipped
 
 func _setup_gauge_and_influence_hovers():
 	_enforce_uniform_gauge_width()
@@ -1571,86 +1565,23 @@ func _setup_gauge_and_influence_hovers():
 		var pn: Control = pp[0] as Control
 		var ptip: String = pp[1] as String
 		if pn != null:
-			bind.call(pn, ptip)
+			# Do not set mouse_filter STOP on the pile VBox itself - let Button handle click, VBox tooltip via IGNORE pass-through
+			pn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			for ch in pn.get_children():
 				if ch is Control:
-					bind.call(ch as Control, ptip)
+					var cname: String = ch.name
+					# Button should stay STOP for click, others for tooltip
+					if ch is Button:
+						bind.call(ch as Control, ptip)
+					else:
+						bind.call(ch as Control, ptip)
 					for gc in (ch as Control).get_children():
-						if gc is Control:
+						if gc is Control and not (gc is Button):
 							bind.call(gc as Control, ptip)
-
-var influence_bottom_right_panel: PanelContainer = null
-var influence_bottom_right_label: Label = null
-
-func _setup_influence_bottom_right():
-	if influence_bottom_right_panel != null and is_instance_valid(influence_bottom_right_panel):
-		return
-	var br := PanelContainer.new()
-	br.name = "InfluenceBottomRight"
-	br.custom_minimum_size = Vector2(140, 48)
-	br.size = Vector2(140, 48)
-	br.mouse_filter = Control.MOUSE_FILTER_STOP
-	br.z_index = 250
-	br.clip_contents = false
-	if br.has_method("set_as_top_level"):
-		br.top_level = true
-	br.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	br.anchor_left = 1.0
-	br.anchor_top = 1.0
-	br.anchor_right = 1.0
-	br.anchor_bottom = 1.0
-	br.offset_left = -150
-	br.offset_top = -58
-	br.offset_right = -10
-	br.offset_bottom = -10
-	br.position = Vector2(0,0) # anchored will place
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.92)
-	sb.set_corner_radius_all(10)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.85, 0.75, 0.35, 1)
-	sb.content_margin_left = 8
-	sb.content_margin_right = 8
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	sb.shadow_color = Color(0,0,0,0.4)
-	sb.shadow_size = 6
-	br.add_theme_stylebox_override("panel", sb)
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 8)
-	br.add_child(hbox)
-	var icon := TextureRect.new()
-	icon.name = "BRIcon"
-	icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
-	icon.custom_minimum_size = Vector2(28, 28)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	hbox.add_child(icon)
-	var lbl := Label.new()
-	lbl.name = "BRLabel"
-	lbl.text = "%d" % (human.Influence if human != null else 0)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 22)
-	lbl.add_theme_color_override("font_color", Color(1,1,0.85))
-	lbl.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	hbox.add_child(lbl)
-	influence_bottom_right_panel = br
-	influence_bottom_right_label = lbl
-	# Tooltip same as other influence
-	br.mouse_entered.connect(func(): _show_hover("Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"))
-	br.mouse_exited.connect(func(): _hide_hover())
-	add_child(br)
-	# Ensure it stays top_right even if viewport resizes - anchor handles it
 
 func _refresh_influence_display():
 	if influence_value_label != null and is_instance_valid(influence_value_label):
 		influence_value_label.text = "%d" % human.Influence
-	if influence_bottom_right_label != null and is_instance_valid(influence_bottom_right_label):
-		influence_bottom_right_label.text = "%d" % human.Influence
-	if influence_bottom_right_panel != null and is_instance_valid(influence_bottom_right_panel):
-		influence_bottom_right_panel.visible = true
 	# Also hide old info if still visible
 	var old_info2 = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
 	if old_info2 != null:
@@ -1729,7 +1660,31 @@ func _ready():
 	_start_new_round()
 	_move_player_piles_to_bottom()
 	_setup_influence_at_draw_pile()
-	_setup_influence_bottom_right()
+	# Ensure draw pile buttons remain clickable after UI wrappers - reassert connections
+	for _btn in [player_deck_icon, ai_deck_icon]:
+		if _btn != null and is_instance_valid(_btn):
+			_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+			_btn.z_index = 10
+			_btn.clip_contents = false
+			_btn.disabled = false
+			_btn.visible = true
+	# Explicitly ensure draw/opponent pile pressed connections exist
+	if player_deck_icon != null and not player_deck_icon.pressed.is_connected(func(): _inspect_pile("Your Draw Pile", human.DrawPile)):
+		# Use is_connected with callable check - reconnect if needed
+		var conns = player_deck_icon.get_signal_connection_list("pressed")
+		var has_draw = false
+		for c in conns:
+			has_draw = true
+		if not has_draw:
+			player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
+	if ai_deck_icon != null:
+		var conns2 = ai_deck_icon.get_signal_connection_list("pressed")
+		if conns2.is_empty():
+			ai_deck_icon.pressed.connect(func(): _inspect_ai_full_deck())
+	for _btn2 in [player_discard_icon, ai_discard_icon, player_graveyard_icon, ai_graveyard_icon]:
+		if _btn2 != null and is_instance_valid(_btn2):
+			_btn2.mouse_filter = Control.MOUSE_FILTER_STOP
+			_btn2.z_index = 10
 	_setup_phase_ui_top_left()
 	_set_phase("Player Build Phase")
 	_hide_hand_label()
@@ -5333,6 +5288,9 @@ func _inspect_ai_full_deck():
 	full.sort_custom(func(a,b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
 	_inspect_pile("AI Deck (Full)", full)
 func _inspect_pile(title: String, pile: Array):
+	# If already open, close first to allow second click to refresh cleanly
+	if inspect_popup.visible:
+		inspect_popup.visible = false
 	# Sort and stack identical cards alphabetically (count badge), keep actual pile order (draw order) untouched
 	var view_pile: Array = pile.duplicate()
 	view_pile.sort_custom(func(a, b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
