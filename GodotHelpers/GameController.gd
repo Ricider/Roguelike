@@ -978,7 +978,9 @@ func _setup_phase_ui_top_left():
 	phase_panel.size = Vector2(248, 90)
 	_update_phase_traffic_lights()
 	# Move gauge directly underneath traffic light 20px down
-	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges") as VBoxContainer
+	var left_gauges: Control = _get_left_gauges() as Control
+	if left_gauges == null:
+		left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges") as VBoxContainer
 	if left_gauges != null:
 		if left_gauges.get_node_or_null("TopGaugeSpacer") == null:
 			var sp: Control = Control.new()
@@ -1188,12 +1190,20 @@ func _update_gauge_grid_bg_transform():
 	var scale_y: float = sz.y / base
 	gauge_grid_bg_sprite.scale = Vector2(scale_x, scale_y)
 
+func _get_left_gauges() -> Control:
+	var lg: Control = get_node_or_null("VBox/MainHBox/GaugeGridPanel/LeftGauges") as Control
+	if lg != null:
+		return lg
+	return get_node_or_null("VBox/MainHBox/LeftGauges") as Control
+
 func _enforce_uniform_gauge_width():
 	# Kraj Key #5 weight + Key #1 safe zone: thin beige bars, narrow green zone
 	var w: float = 26
 	var h: float = 180
 	var gw: float = 80
-	for gauge in [get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney")]:
+	var lg0: Control = _get_left_gauges()
+	var base_path: String = "VBox/MainHBox/GaugeGridPanel/LeftGauges" if lg0 != null and lg0.get_parent() != null and lg0.get_parent().name == "GaugeGridPanel" else "VBox/MainHBox/LeftGauges"
+	for gauge in [get_node_or_null(base_path + "/AIGauges/AIGaugeHP"), get_node_or_null(base_path + "/AIGauges/AIGaugeBio"), get_node_or_null(base_path + "/AIGauges/AIGaugeMoney"), get_node_or_null(base_path + "/PlayerGauges/PlayerGaugeHP"), get_node_or_null(base_path + "/PlayerGauges/PlayerGaugeBio"), get_node_or_null(base_path + "/PlayerGauges/PlayerGaugeMoney")]:
 		if gauge != null:
 			gauge.custom_minimum_size = Vector2(gw, 0)
 			gauge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1202,7 +1212,7 @@ func _enforce_uniform_gauge_width():
 			bar.custom_minimum_size = Vector2(w, h)
 			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	for lbl in [ai_hp_value, ai_bio_value, ai_money_value, player_hp_value, player_bio_value, player_money_value, ai_bio_income, ai_money_income, player_bio_income, player_money_income, get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHPIncome"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPIncome")]:
+	for lbl in [ai_hp_value, ai_bio_value, ai_money_value, player_hp_value, player_bio_value, player_money_value, ai_bio_income, ai_money_income, player_bio_income, player_money_income, get_node_or_null(base_path + "/AIGauges/AIGaugeHP/AIHPIncome"), get_node_or_null(base_path + "/PlayerGauges/PlayerGaugeHP/PlayerHPIncome")]:
 		if lbl != null:
 			lbl.custom_minimum_size = Vector2(gw, 12)
 			lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1259,19 +1269,37 @@ func _setup_gauge_and_influence_hovers():
 		if node == null:
 			return
 		node.mouse_filter = Control.MOUSE_FILTER_STOP
+		# Allow rebinding (fixes gauge tooltips after UI rebuild) - disconnect old hover binds if present
 		if node.has_meta("hover_bound"):
-			return
+			for conn in node.get_signal_connection_list("mouse_entered"):
+				var cb: Callable = conn["callable"] as Callable
+				if cb.is_valid() and cb.get_object() == self:
+					if node.is_connected("mouse_entered", cb):
+						node.disconnect("mouse_entered", cb)
+			for conn2 in node.get_signal_connection_list("mouse_exited"):
+				var cb2: Callable = conn2["callable"] as Callable
+				if cb2.is_valid() and cb2.get_object() == self:
+					if node.is_connected("mouse_exited", cb2):
+						node.disconnect("mouse_exited", cb2)
 		node.set_meta("hover_bound", true)
 		var t2: String = text
 		node.mouse_entered.connect(func(): _show_hover(t2))
 		node.mouse_exited.connect(func(): _hide_hover())
-	# Player + AI gauges (6 total)
-	var ai_hp_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP") as Control
-	var ai_bio_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio") as Control
-	var ai_money_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney") as Control
-	var p_hp_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP") as Control
-	var p_bio_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio") as Control
-	var p_money_box := get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney") as Control
+	# Player + AI gauges (6 total) - handle reparent into GaugeGridPanel
+	var lg_gauge: Control = _get_left_gauges()
+	var gp: String = "VBox/MainHBox/GaugeGridPanel/LeftGauges" if lg_gauge != null and lg_gauge.get_parent() != null and lg_gauge.get_parent().name == "GaugeGridPanel" else "VBox/MainHBox/LeftGauges"
+	var ai_hp_box := get_node_or_null(gp + "/AIGauges/AIGaugeHP") as Control
+	if ai_hp_box == null: ai_hp_box = get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP") as Control
+	var ai_bio_box := get_node_or_null(gp + "/AIGauges/AIGaugeBio") as Control
+	if ai_bio_box == null: ai_bio_box = get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio") as Control
+	var ai_money_box := get_node_or_null(gp + "/AIGauges/AIGaugeMoney") as Control
+	if ai_money_box == null: ai_money_box = get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney") as Control
+	var p_hp_box := get_node_or_null(gp + "/PlayerGauges/PlayerGaugeHP") as Control
+	if p_hp_box == null: p_hp_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP") as Control
+	var p_bio_box := get_node_or_null(gp + "/PlayerGauges/PlayerGaugeBio") as Control
+	if p_bio_box == null: p_bio_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio") as Control
+	var p_money_box := get_node_or_null(gp + "/PlayerGauges/PlayerGaugeMoney") as Control
+	if p_money_box == null: p_money_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney") as Control
 	bind.call(ai_hp_box, "AI " + hp_tip)
 	bind.call(ai_bio_box, "AI " + bio_tip)
 	bind.call(ai_money_box, "AI " + money_tip)
@@ -1295,7 +1323,7 @@ func _setup_gauge_and_influence_hovers():
 				if child is Control:
 					bind.call(child as Control, tip)
 	# Influence symbol (icon + value) — bind to the whole InfluenceBox
-	var left := get_node_or_null("VBox/MainHBox/LeftGauges") as Control
+	var left := _get_left_gauges()
 	var bottom_row := left.get_node_or_null("BottomRow") as Control if left != null else null
 	var inf_box := bottom_row.get_node_or_null("InfluenceBox") as Control if bottom_row != null else null
 	if inf_box != null:
@@ -1311,11 +1339,15 @@ func _setup_gauge_and_influence_hovers():
 		bind.call(influence_icon_rect, inf_tip)
 	if influence_value_label != null:
 		bind.call(influence_value_label as Control, inf_tip)
-	# Draw/Discard/Graveyard piles - same box design, requested texts
-	var draw_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/AIDeck") as Control
-	var p_draw_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerDeck") as Control
+	# Draw/Discard/Graveyard piles - same box design, requested texts (handle reparent)
+	var draw_box: Control = get_node_or_null(gp + "/AIDeck") as Control
+	var p_draw_box: Control = get_node_or_null(gp + "/BottomRow/PlayerDeck") as Control
 	if p_draw_box == null:
-		p_draw_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck") as Control
+		p_draw_box = get_node_or_null(gp + "/PlayerDeck") as Control
+	if draw_box == null:
+		draw_box = get_node_or_null("VBox/MainHBox/LeftGauges/AIDeck") as Control
+	if p_draw_box == null:
+		p_draw_box = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerDeck") as Control
 	var aidis_box: Control = get_node_or_null("VBox/MainHBox/RightGauges/AIDiscard") as Control
 	var aigrave_box: Control = get_node_or_null("VBox/MainHBox/RightGauges/AIGraveyard") as Control
 	var pdis_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerDiscard") as Control
