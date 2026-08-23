@@ -1250,6 +1250,114 @@ func _get_left_gauges() -> Control:
 		return lg
 	return get_node_or_null("VBox/MainHBox/LeftGauges") as Control
 
+func _generate_high_detail_symbols():
+	# Higher detail symbols - upscale existing 512 icons to 1024 with high-quality filter and add highlights
+	# This is fast (C++ resize) vs per-pixel GDScript loops which would freeze
+	var hp_src: Texture2D = load("res://Assets/UI/heart.png") as Texture2D
+	var bio_src: Texture2D = load("res://Assets/UI/bio_icon.png") as Texture2D
+	var money_src: Texture2D = load("res://Assets/UI/money_icon.png") as Texture2D
+	var hp_tex: Texture2D = hp_src
+	var bio_tex: Texture2D = bio_src
+	var money_tex: Texture2D = money_src
+	if hp_src != null and hp_src.get_image() != null:
+		var img: Image = hp_src.get_image()
+		img.convert(Image.FORMAT_RGBA8)
+		img.resize(1024, 1024, Image.INTERPOLATE_CUBIC)
+		# Add subtle highlight and outline for higher detail perception
+		for y in range(220, 380):
+			for x in range(300, 500):
+				var c: Color = img.get_pixel(x,y)
+				if c.a > 0.1:
+					var dx: float = x - 380
+					var dy: float = y - 300
+					if dx*dx + dy*dy < 90*90:
+						img.set_pixel(x,y, c.lerp(Color(1,0.92,0.92,1), 0.25))
+		hp_tex = ImageTexture.create_from_image(img)
+	if money_src != null and money_src.get_image() != null:
+		var img2: Image = money_src.get_image()
+		img2.convert(Image.FORMAT_RGBA8)
+		img2.resize(1024, 1024, Image.INTERPOLATE_CUBIC)
+		# Add metallic rim highlight
+		for y in range(200, 400):
+			for x in range(300, 500):
+				var c2: Color = img2.get_pixel(x,y)
+				if c2.a > 0.1:
+					var dx2: float = x - 400
+					var dy2: float = y - 300
+					if dx2*dx2 + dy2*dy2 < 70*70:
+						img2.set_pixel(x,y, c2.lerp(Color(1,0.97,0.75,1), 0.3))
+		money_tex = ImageTexture.create_from_image(img2)
+	if bio_src != null and bio_src.get_image() != null:
+		var img3: Image = bio_src.get_image()
+		img3.convert(Image.FORMAT_RGBA8)
+		img3.resize(1024, 1024, Image.INTERPOLATE_CUBIC)
+		# Add vein highlight
+		for y in range(300, 700):
+			for x in range(480, 540):
+				var c3: Color = img3.get_pixel(x,y)
+				if c3.a > 0.1:
+					if abs(x - 512) < 6:
+						img3.set_pixel(x,y, c3.lerp(Color(0.95,1,0.88,1), 0.25))
+		bio_tex = ImageTexture.create_from_image(img3)
+	# Apply to all relevant TextureRects
+	for path in ["VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHPIcon", "VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/AIGauges/AIGaugeHP/AIHPIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/PlayerGauges/PlayerGaugeHP/PlayerHPIcon"]:
+		var n: TextureRect = get_node_or_null(path) as TextureRect
+		if n != null:
+			n.texture = hp_tex
+			n.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	for path2 in ["VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBioIcon", "VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/AIGauges/AIGaugeBio/AIBioIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/PlayerGauges/PlayerGaugeBio/PlayerBioIcon"]:
+		var n2: TextureRect = get_node_or_null(path2) as TextureRect
+		if n2 != null:
+			n2.texture = bio_tex
+			n2.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	for path3 in ["VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyIcon", "VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/AIGauges/AIGaugeMoney/AIMoneyIcon", "VBox/MainHBox/GaugeGridPanel/LeftGauges/PlayerGauges/PlayerGaugeMoney/PlayerMoneyIcon"]:
+		var n3: TextureRect = get_node_or_null(path3) as TextureRect
+		if n3 != null:
+			n3.texture = money_tex
+			n3.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+func _boost_text_resolution():
+	# Higher resolution text across board - increase oversampling and sharpness
+	# Traverse all Labels/RichTextLabels/Buttons and bump font sizes + texture filtering
+	var all: Array = []
+	var stack: Array = [self]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back() as Node
+		if n == null:
+			continue
+		for c in n.get_children():
+			if c != null:
+				stack.append(c)
+		if n is Label or n is RichTextLabel or n is Button:
+			var ctrl: Control = n as Control
+			if ctrl != null:
+				ctrl.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+				ctrl.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
+		if n is Label:
+			var lbl: Label = n as Label
+			var sz: int = lbl.get_theme_font_size("font_size")
+			if sz > 0 and sz < 40:
+				# Scale up slightly for crisper rendering at high DPI (keep layout by not changing min size drastically)
+				lbl.add_theme_font_size_override("font_size", int(sz * 1.25))
+			lbl.add_theme_constant_override("outline_size", 3 if sz >= 20 else 2)
+		elif n is RichTextLabel:
+			var rtl: RichTextLabel = n as RichTextLabel
+			var rsz: int = rtl.get_theme_font_size("normal_font_size")
+			if rsz == 0:
+				rsz = rtl.get_theme_font_size("font_size")
+			if rsz > 0 and rsz < 40:
+				rtl.add_theme_font_size_override("normal_font_size", int(rsz * 1.25))
+				rtl.add_theme_font_size_override("font_size", int(rsz * 1.25))
+		elif n is Button:
+			var btn: Button = n as Button
+			var bsz: int = btn.get_theme_font_size("font_size")
+			if bsz > 0 and bsz < 40:
+				btn.add_theme_font_size_override("font_size", int(bsz * 1.25))
+	# Also bump global viewport MSAA / FXAA for text
+	if get_viewport() != null:
+		get_viewport().msaa_2d = Viewport.MSAA_4X
+		get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+
 func _enforce_uniform_gauge_width():
 	# Kraj Key #5 weight + Key #1 safe zone: thin beige bars, narrow green zone
 	var w: float = 26
@@ -1264,16 +1372,61 @@ func _enforce_uniform_gauge_width():
 	for bar in [ai_hp_bar, ai_bio_bar, ai_money_bar, player_hp_bar, player_bio_bar, player_money_bar]:
 		if bar != null:
 			bar.custom_minimum_size = Vector2(w, h)
-			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			bar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			# Round corners via wrapper clipping - pill shape radius 13
+			if bar.get_parent() != null and not bar.get_parent().name.begins_with("RoundedClip"):
+				var parent: Control = bar.get_parent() as Control
+				var idx: int = parent.get_children().find(bar)
+				parent.remove_child(bar)
+				var wrap := PanelContainer.new()
+				wrap.name = "RoundedClip_" + bar.name
+				wrap.custom_minimum_size = Vector2(w, h)
+				wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+				wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+				wrap.clip_contents = true
+				wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				var wsb := StyleBoxFlat.new()
+				wsb.bg_color = Color(0, 0, 0, 0)
+				wsb.set_corner_radius_all(13)
+				wsb.set_border_width_all(0)
+				wrap.add_theme_stylebox_override("panel", wsb)
+				wrap.add_child(bar)
+				bar.custom_minimum_size = Vector2(w, h)
+				bar.size = Vector2(w, h)
+				parent.add_child(wrap)
+				parent.move_child(wrap, idx)
+				# Ensure bar fills wrapper
+				bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	for lbl in [ai_hp_value, ai_bio_value, ai_money_value, player_hp_value, player_bio_value, player_money_value, ai_bio_income, ai_money_income, player_bio_income, player_money_income, get_node_or_null(base_path + "/AIGauges/AIGaugeHP/AIHPIncome"), get_node_or_null(base_path + "/PlayerGauges/PlayerGaugeHP/PlayerHPIncome")]:
 		if lbl != null:
 			lbl.custom_minimum_size = Vector2(gw, 12)
 			lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	for hbar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
 		if hbar != null:
 			hbar.custom_minimum_size = Vector2(32, 6)
+			hbar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			# Small horizontal bars rounded radius 4
+			if hbar.get_parent() != null and not hbar.get_parent().name.begins_with("RoundedClip"):
+				var ph: Control = hbar.get_parent() as Control
+				var idh: int = ph.get_children().find(hbar)
+				ph.remove_child(hbar)
+				var w2 := PanelContainer.new()
+				w2.name = "RoundedClip_" + hbar.name
+				w2.custom_minimum_size = Vector2(32, 6)
+				w2.clip_contents = true
+				w2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				var sb2 := StyleBoxFlat.new()
+				sb2.bg_color = Color(0, 0, 0, 0)
+				sb2.set_corner_radius_all(4)
+				w2.add_theme_stylebox_override("panel", sb2)
+				w2.add_child(hbar)
+				ph.add_child(w2)
+				ph.move_child(w2, idh)
 
 func _setup_gauge_and_influence_hovers():
 	_enforce_uniform_gauge_width()
@@ -1426,9 +1579,78 @@ func _setup_gauge_and_influence_hovers():
 						if gc is Control:
 							bind.call(gc as Control, ptip)
 
+var influence_bottom_right_panel: PanelContainer = null
+var influence_bottom_right_label: Label = null
+
+func _setup_influence_bottom_right():
+	if influence_bottom_right_panel != null and is_instance_valid(influence_bottom_right_panel):
+		return
+	var br := PanelContainer.new()
+	br.name = "InfluenceBottomRight"
+	br.custom_minimum_size = Vector2(140, 48)
+	br.size = Vector2(140, 48)
+	br.mouse_filter = Control.MOUSE_FILTER_STOP
+	br.z_index = 250
+	br.clip_contents = false
+	if br.has_method("set_as_top_level"):
+		br.top_level = true
+	br.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	br.anchor_left = 1.0
+	br.anchor_top = 1.0
+	br.anchor_right = 1.0
+	br.anchor_bottom = 1.0
+	br.offset_left = -150
+	br.offset_top = -58
+	br.offset_right = -10
+	br.offset_bottom = -10
+	br.position = Vector2(0,0) # anchored will place
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.92)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.85, 0.75, 0.35, 1)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	sb.shadow_color = Color(0,0,0,0.4)
+	sb.shadow_size = 6
+	br.add_theme_stylebox_override("panel", sb)
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 8)
+	br.add_child(hbox)
+	var icon := TextureRect.new()
+	icon.name = "BRIcon"
+	icon.texture = load("res://Assets/UI/influence_icon.png") as Texture2D
+	icon.custom_minimum_size = Vector2(28, 28)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	hbox.add_child(icon)
+	var lbl := Label.new()
+	lbl.name = "BRLabel"
+	lbl.text = "%d" % (human.Influence if human != null else 0)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", Color(1,1,0.85))
+	lbl.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	hbox.add_child(lbl)
+	influence_bottom_right_panel = br
+	influence_bottom_right_label = lbl
+	# Tooltip same as other influence
+	br.mouse_entered.connect(func(): _show_hover("Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"))
+	br.mouse_exited.connect(func(): _hide_hover())
+	add_child(br)
+	# Ensure it stays top_right even if viewport resizes - anchor handles it
+
 func _refresh_influence_display():
 	if influence_value_label != null and is_instance_valid(influence_value_label):
 		influence_value_label.text = "%d" % human.Influence
+	if influence_bottom_right_label != null and is_instance_valid(influence_bottom_right_label):
+		influence_bottom_right_label.text = "%d" % human.Influence
+	if influence_bottom_right_panel != null and is_instance_valid(influence_bottom_right_panel):
+		influence_bottom_right_panel.visible = true
 	# Also hide old info if still visible
 	var old_info2 = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
 	if old_info2 != null:
@@ -1464,6 +1686,8 @@ func _ready():
 			human.DrawPile = CardFactory.make_state_troops_deck()
 	_update_background()
 	_apply_kraj_efficient_ui()
+	_boost_text_resolution()
+	_generate_high_detail_symbols()
 	state = CombatState.new(human, ai_player)
 	# Tutorial check
 	var gs_tut = get_node_or_null("/root/GameState")
@@ -1505,6 +1729,7 @@ func _ready():
 	_start_new_round()
 	_move_player_piles_to_bottom()
 	_setup_influence_at_draw_pile()
+	_setup_influence_bottom_right()
 	_setup_phase_ui_top_left()
 	_set_phase("Player Build Phase")
 	_hide_hand_label()
