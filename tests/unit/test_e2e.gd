@@ -331,7 +331,7 @@ func test_e2e_all_player_boards_and_decks():
 		elif name == "Coalition Army":
 			assert_eq(cnt, 3, "Coalition 3")
 		elif name == "Corporate Troops":
-			assert_eq(cnt, 2, "Corporate 2")
+			assert_eq(cnt, 4, "Corporate 4 (1 Interceptor+3 adjacent Corps)")
 		# BackgroundImage not empty except maybe
 		assert_true(pl.BackgroundImage != "", "%s background not empty" % name)
 		# Flag exists
