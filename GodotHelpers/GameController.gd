@@ -585,7 +585,7 @@ func _apply_kraj_efficient_ui():
 	if is_tutorial:
 		player_turn = tutorial_step in [0, 1, 2, 4, 5, 6, 8, 9, 10]
 	# On player flow, AI gauges 40% alpha, player gauges 100%; reverse on enemy flow
-	var ai_mod := Color(1, 1, 1, 0.42) if player_turn else Color(1, 1, 1, 1.0)
+	var ai_mod := Color(1, 1, 1, 0.78) if player_turn else Color(1, 1, 1, 1.0)
 	var p_mod := Color(1, 1, 1, 1.0) if player_turn else Color(1, 1, 1, 0.45)
 	var ai_header = left.get_node_or_null("AIHeader") if left != null else null
 	var p_header = left.get_node_or_null("PlayerHeader") if left != null else null
@@ -595,6 +595,8 @@ func _apply_kraj_efficient_ui():
 	if pg != null: pg.modulate = p_mod
 	if ai_header != null: ai_header.modulate = ai_mod
 	if p_header != null: p_header.modulate = p_mod
+	var ai_deck_box = left.get_node_or_null("AIDeck") as Control if left != null else null
+	if ai_deck_box != null: ai_deck_box.modulate = Color(1,1,1,0.92) if player_turn else Color(1,1,1,1.0)
 	# Hide non-critical labels when empty (overpaint test: if we painted this bright ugly, would game still be playable?)
 	if ai_info != null: ai_info.visible = false
 	if player_info != null: player_info.visible = false
@@ -2710,7 +2712,7 @@ func _refresh_ui():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33)
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33)
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33)
-	ai_deck_value.text = "Draw %d/33" % ai_player.DrawPile.size()
+	ai_deck_value.text = "Opponent Pile %d/33" % ai_player.DrawPile.size()
 	player_deck_value.text = "Draw %d/33" % human.DrawPile.size()
 	ai_discard_value.text = "Discard %d/33" % ai_player.DiscardPile.size()
 	player_discard_value.text = "Discard %d/33" % human.DiscardPile.size()
@@ -2759,7 +2761,7 @@ func _refresh_ui():
 		btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# Center the pile VBox above its bar (Icon centered horizontally over 78-wide bar)
-		var pile_box := btn.get_parent() as VBoxContainer
+		var pile_box := btn.get_parent() as VBoxContainer if btn.get_parent() != null else null
 		if pile_box != null:
 			pile_box.alignment = BoxContainer.ALIGNMENT_CENTER
 			pile_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -2775,6 +2777,13 @@ func _refresh_ui():
 					pass
 		var anim := PileArt.create_sprite_for(pile, Vector2(78, 78))
 		anim.name = "PileAnim"
+		# AI draw pile label should read Opponent Pile instead of Draw
+		if pile == "Draw" and btn == ai_deck_icon:
+			for ch in anim.get_children():
+				if ch is Label:
+					(ch as Label).text = "Opponent Pile"
+					(ch as Label).add_theme_font_size_override("font_size", int(78 * 0.10))
+					break
 		anim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		anim.clip_contents = true
 		for ch in anim.get_children():
@@ -3425,7 +3434,7 @@ func _refresh_gauges_only():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33) if human != null else 0
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33) if ai_player != null else 0
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33) if human != null else 0
-	ai_deck_value.text = "Draw %d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
+	ai_deck_value.text = "Opponent Pile %d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
 	player_deck_value.text = "Draw %d/33" % (human.DrawPile.size() if human != null else 0)
 	ai_discard_value.text = "Discard %d/33" % (ai_player.DiscardPile.size() if ai_player != null else 0)
 	player_discard_value.text = "Discard %d/33" % (human.DiscardPile.size() if human != null else 0)
@@ -3448,12 +3457,18 @@ func _refresh_gauges_only():
 			b2.clip_contents = true
 			var anim2 := PileArt.create_sprite_for(pile2, Vector2(78,78))
 			anim2.name = "PileAnim"
+			if pile2 == "Draw" and b2 == ai_deck_icon:
+				for ch in anim2.get_children():
+					if ch is Label:
+						(ch as Label).text = "Opponent Pile"
+						(ch as Label).add_theme_font_size_override("font_size", int(78 * 0.10))
+						break
 			anim2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			for ch in anim2.get_children():
 				if ch is Control:
 					(ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 			b2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			var pile_box2 := b2.get_parent() as VBoxContainer
+			var pile_box2 := b2.get_parent() as VBoxContainer if b2.get_parent() != null else null
 			if pile_box2 != null:
 				pile_box2.alignment = BoxContainer.ALIGNMENT_CENTER
 			b2.add_child(anim2)
