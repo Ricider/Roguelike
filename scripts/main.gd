@@ -20,6 +20,7 @@ func _ready():
 	_add_resume_button()
 	_enforce_menu_order()
 	_style_menu_buttons()
+	_stylize_title()
 	_setup_battle_background()
 
 func _setup_battle_background():
@@ -294,6 +295,51 @@ func _start_battle_loop():
 		var right2 = _right_attackers[_battle_rng.randi_range(0, _right_attackers.size() - 1)] as Control
 		var left2 = _left_attackers[_battle_rng.randi_range(0, _left_attackers.size() - 1)] as Control
 		_fire_menu_projectile(right2, left2)
+
+func _stylize_title():
+	var title = get_node_or_null("CenterContainer/VBox/TitleLabel") as Label
+	var subtitle = get_node_or_null("CenterContainer/VBox/SubtitleLabel") as Label
+	if title == null:
+		return
+	# Military stencil / geopolitical header style
+	title.text = "GEOPOLITICS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 78)
+	title.add_theme_color_override("font_color", Color(0.94, 0.92, 0.86, 1))
+	title.add_theme_color_override("font_outline_color", Color(0.08, 0.09, 0.12, 1))
+	title.add_theme_constant_override("outline_size", 14)
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+	title.add_theme_constant_override("shadow_offset_x", 4)
+	title.add_theme_constant_override("shadow_offset_y", 4)
+	title.add_theme_constant_override("shadow_outline_size", 6)
+	# Letter spacing for stencil impact
+	# Add slight extra spacing via custom theme if available (Godot 4.7 supports font letter spacing via theme override)
+	title.add_theme_constant_override("outline_size", 12)
+	# Subtitle as operation tag
+	if subtitle != null:
+		subtitle.text = "STRATEGIC COMMAND  //  MAIN MENU"
+		subtitle.add_theme_font_size_override("font_size", 13)
+		subtitle.add_theme_color_override("font_color", Color(0.78, 0.84, 0.92, 0.85))
+		subtitle.add_theme_color_override("font_outline_color", Color(0.06, 0.07, 0.10, 0.9))
+		subtitle.add_theme_constant_override("outline_size", 6)
+		subtitle.add_theme_constant_override("shadow_offset_x", 2)
+		subtitle.add_theme_constant_override("shadow_offset_y", 2)
+		# Add decorative separator line under subtitle
+		var vbox = get_node_or_null("CenterContainer/VBox")
+		if vbox != null and not vbox.has_node("TitleSeparator"):
+			var sep := ColorRect.new()
+			sep.name = "TitleSeparator"
+			sep.color = Color(0.82, 0.78, 0.70, 0.45)
+			sep.custom_minimum_size = Vector2(420, 2)
+			sep.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			var subtitle_idx = subtitle.get_index()
+			vbox.add_child(sep)
+			vbox.move_child(sep, subtitle_idx + 1)
+	# Gentle title pulse to evoke distant conflict
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(title, "modulate", Color(1.02, 1.0, 0.96, 1), 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(title, "modulate", Color(0.96, 0.97, 1.0, 1), 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _style_menu_buttons():
 	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton"]:
