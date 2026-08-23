@@ -3189,17 +3189,38 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 
 func _refresh_hand():
 	_hide_hover()
+	if hand_container != null:
+		hand_container.clip_contents = false
+		var _rc := hand_container.get_parent()
+		if _rc != null:
+			_rc.clip_contents = false
 	for child in hand_container.get_children():
 		hand_container.remove_child(child)
 		child.queue_free()
-	# Display sorted alphabetically, but keep Hand's random draw order intact
+	# Display sorted alphabetically and stacked by identical card_name (count badge), keep Hand's random draw order intact
 	var hand_sorted: Array = []
 	for i in range(human.Hand.size()):
 		hand_sorted.append({"card": human.Hand[i], "idx": i})
 	hand_sorted.sort_custom(func(a, b): return (a["card"].card_name if a["card"] is Card else str(a["card"])) < (b["card"].card_name if b["card"] is Card else str(b["card"])))
+	# Group identical cards for stacking
+	var hand_grouped: Array = []
+	var _last_name: String = ""
+	var _group: Dictionary = {}
 	for entry in hand_sorted:
-		var idx: int = entry["idx"] as int
-		var card: Card = entry["card"] as Card
+		var cname: String = (entry["card"] as Card).card_name if entry["card"] is Card else str(entry["card"])
+		if _group.is_empty() or cname != _last_name:
+			if not _group.is_empty():
+				hand_grouped.append(_group)
+			_group = {"card": entry["card"], "idx": entry["idx"], "count": 1, "name": cname}
+			_last_name = cname
+		else:
+			_group["count"] = (_group["count"] as int) + 1
+	if not _group.is_empty():
+		hand_grouped.append(_group)
+	for _g in hand_grouped:
+		var idx: int = _g["idx"] as int
+		var card: Card = _g["card"] as Card
+		var _stack_count: int = _g["count"] as int
 		var btn := Button.new()
 		btn.clip_contents = false
 		btn.custom_minimum_size = Vector2(108, 68)
@@ -3391,6 +3412,47 @@ func _refresh_hand():
 		# No separate hover tooltip for cards — preview already shows effect
 		btn.tooltip_text = ""
 		btn.add_child(hand_hbox)
+		# Stack count badge pinned to bottom-right of grey rounded rect (Button's background) — bigger in hand
+		if _stack_count > 1:
+			var _badge_wrap := Control.new()
+			_badge_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_badge_wrap.custom_minimum_size = Vector2(28, 28)
+			_badge_wrap.size = Vector2(28, 28)
+			_badge_wrap.z_index = 10
+			# Anchor to bottom-right so it stays pinned when Button stretches horizontally with hand size
+			_badge_wrap.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+			_badge_wrap.anchor_left = 1.0
+			_badge_wrap.anchor_top = 1.0
+			_badge_wrap.anchor_right = 1.0
+			_badge_wrap.anchor_bottom = 1.0
+			_badge_wrap.offset_left = -28 - 4
+			_badge_wrap.offset_top = -28 - 4
+			_badge_wrap.offset_right = -4
+			_badge_wrap.offset_bottom = -4
+			_badge_wrap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			_badge_wrap.grow_vertical = Control.GROW_DIRECTION_BEGIN
+			var _badge_bg := PanelContainer.new()
+			_badge_bg.custom_minimum_size = Vector2(28, 28)
+			_badge_bg.size = Vector2(28, 28)
+			_badge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var _sb := StyleBoxFlat.new()
+			_sb.bg_color = Color(0.92, 0.22, 0.22, 1)
+			_sb.set_corner_radius_all(14)
+			_sb.border_color = Color(1,1,1,0.9)
+			_sb.set_border_width_all(2)
+			_badge_bg.add_theme_stylebox_override("panel", _sb)
+			var _badge_lbl := Label.new()
+			_badge_lbl.text = str(_stack_count)
+			_badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			_badge_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			_badge_lbl.add_theme_font_size_override("font_size", 16)
+			_badge_lbl.add_theme_color_override("font_color", Color(1,1,1))
+			_badge_lbl.add_theme_color_override("font_outline_color", Color(0,0,0,0.9))
+			_badge_lbl.add_theme_constant_override("outline_size", 5)
+			_badge_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_badge_bg.add_child(_badge_lbl)
+			_badge_wrap.add_child(_badge_bg)
+			btn.add_child(_badge_wrap)
 		if idx == selected_card_idx:
 			btn.modulate = Color(1, 1, 1)
 			btn.add_theme_font_size_override("font_size", 28)
@@ -4364,10 +4426,31 @@ func _inspect_ai_full_deck():
 	full.sort_custom(func(a,b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
 	_inspect_pile("AI Deck (Full)", full)
 func _inspect_pile(title: String, pile: Array):
-	# Sort view alphabetically, keep actual pile order (draw order) untouched
+	# Sort and stack identical cards alphabetically (count badge), keep actual pile order (draw order) untouched
 	var view_pile: Array = pile.duplicate()
 	view_pile.sort_custom(func(a, b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
-	var pile_sorted: Array = view_pile
+	# Group identical for stacking
+	var pile_grouped: Array = []
+	var _last: String = ""
+	var _g: Dictionary = {}
+	for c in view_pile:
+		var cn: String = c.card_name if c is Card else str(c)
+		if _g.is_empty() or cn != _last:
+			if not _g.is_empty():
+				pile_grouped.append(_g)
+			_g = {"card": c, "count": 1, "name": cn}
+			_last = cn
+		else:
+			_g["count"] = (_g["count"] as int) + 1
+	if not _g.is_empty():
+		pile_grouped.append(_g)
+	var pile_sorted: Array = []
+	for g in pile_grouped:
+		pile_sorted.append(g["card"])
+	# Keep counts aligned with pile_sorted via dictionary lookup
+	var _pile_counts: Dictionary = {}
+	for g in pile_grouped:
+		_pile_counts[g["name"]] = g["count"]
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
 	# Clear previous grid
 	for child in inspect_grid.get_children():
@@ -4384,8 +4467,8 @@ func _inspect_pile(title: String, pile: Array):
 		empty_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		inspect_grid.add_child(empty_lbl)
 	else:
-		var cols: int = pile.size()
-		# cap visible columns to avoid absurd width; ScrollContainer will scroll
+		var cols: int = pile_sorted.size()
+		# cap visible columns to avoid absurd width; ScrollContainer will scroll (stacked view)
 		inspect_grid.columns = cols
 		# Row 1: titles
 		for card in pile_sorted:
@@ -4399,18 +4482,52 @@ func _inspect_pile(title: String, pile: Array):
 			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			inspect_grid.add_child(lbl)
-		# Row 2: art
+		# Row 2: art (with stack count badge)
 		for card in pile_sorted:
 			var cname2: String = card.card_name if card is Card else str(card)
 			var art_center := CenterContainer.new()
 			art_center.custom_minimum_size = Vector2(110, 56)
 			art_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			# Wrapper for badge overlay
+			var art_wrap := Control.new()
+			art_wrap.custom_minimum_size = Vector2(56, 56)
+			art_wrap.size = Vector2(56, 56)
+			art_wrap.clip_contents = false
 			var art := Card.create_sprite_for(cname2, Vector2(56, 56))
 			art.clip_contents = true
 			art.custom_minimum_size = Vector2(56, 56)
 			art.size = Vector2(56, 56)
 			art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			art_center.add_child(art)
+			art_wrap.add_child(art)
+			var _cnt: int = _pile_counts.get(cname2, 1) as int
+			if _cnt > 1:
+				var _badge := Control.new()
+				_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				_badge.custom_minimum_size = Vector2(20, 20)
+				_badge.size = Vector2(20, 20)
+				_badge.position = Vector2(36, 36)
+				_badge.z_index = 10
+				var _bg := PanelContainer.new()
+				_bg.custom_minimum_size = Vector2(20, 20)
+				_bg.size = Vector2(20, 20)
+				var _sb2 := StyleBoxFlat.new()
+				_sb2.bg_color = Color(0.92, 0.22, 0.22, 1)
+				_sb2.set_corner_radius_all(10)
+				_sb2.border_color = Color(1,1,1,0.9)
+				_sb2.set_border_width_all(1)
+				_bg.add_theme_stylebox_override("panel", _sb2)
+				var _lbl2 := Label.new()
+				_lbl2.text = str(_cnt)
+				_lbl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				_lbl2.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				_lbl2.add_theme_font_size_override("font_size", 12)
+				_lbl2.add_theme_color_override("font_color", Color(1,1,1))
+				_lbl2.add_theme_color_override("font_outline_color", Color(0,0,0,0.9))
+				_lbl2.add_theme_constant_override("outline_size", 3)
+				_bg.add_child(_lbl2)
+				_badge.add_child(_bg)
+				art_wrap.add_child(_badge)
+			art_center.add_child(art_wrap)
 			inspect_grid.add_child(art_center)
 		# Row 3: stats
 		for card in pile_sorted:
