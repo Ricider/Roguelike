@@ -18,6 +18,7 @@ func _ready():
 	_build_player_chooser()
 	_add_tutorial_button()
 	_add_resume_button()
+	_enforce_menu_order()
 	_style_menu_buttons()
 	_setup_battle_background()
 
@@ -375,12 +376,53 @@ func _add_tutorial_button():
 	elif quit != null:
 		vbox.move_child(tbtn, quit.get_index() + 1)
 	_style_pill_button(tbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
+	_enforce_menu_order()
 
 func _on_tutorial_pressed():
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
 		gs.start_tutorial()
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
+
+func _enforce_menu_order():
+	var vbox = get_node_or_null("CenterContainer/VBox")
+	if vbox == null:
+		return
+	# Desired order top→bottom: New Game (Play), Resume, Tutorial, Quit (Exit) at bottom - all 340x72
+	var order = ["PlayButton", "ResumeButton", "TutorialButton", "QuitButton"]
+	var to_place: Array = []
+	for name in order:
+		var btn = vbox.get_node_or_null(name)
+		if btn != null:
+			to_place.append(btn)
+	for btn in to_place:
+		btn.custom_minimum_size = Vector2(340, 72)
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Anchor: place buttons directly after Spacer/PlayerChooser so gap is above, not between Quit and Tutorial
+	var anchor = vbox.get_node_or_null("PlayerChooser")
+	if anchor == null:
+		anchor = vbox.get_node_or_null("Spacer")
+	if anchor == null:
+		anchor = vbox.get_node_or_null("SubtitleLabel")
+	var anchor_idx = anchor.get_index() if anchor != null else 1
+	# Remove buttons temporarily to avoid index shifting, then re-insert in correct top→bottom order
+	for btn in to_place:
+		if btn.get_parent() == vbox:
+			vbox.remove_child(btn)
+	# Re-add in order: Play first (top), Quit last (bottom) just before MessageLabel
+	var msg = vbox.get_node_or_null("MessageLabel")
+	var insert_idx = msg.get_index() if msg != null else vbox.get_child_count()
+	# If anchor still exists, insert after anchor, otherwise before msg
+	if anchor != null and is_instance_valid(anchor) and anchor.get_parent() == vbox:
+		insert_idx = anchor.get_index() + 1
+		# If MessageLabel is before anchor (should not), fall back to before MessageLabel
+		if msg != null and insert_idx > msg.get_index():
+			insert_idx = msg.get_index()
+	for btn in to_place:
+		vbox.add_child(btn)
+		vbox.move_child(btn, insert_idx)
+		insert_idx += 1
 
 func _add_resume_button():
 	var vbox = get_node_or_null("CenterContainer/VBox")
@@ -423,6 +465,7 @@ func _add_resume_button():
 	elif tutorial != null:
 		vbox.move_child(rbtn, tutorial.get_index())
 	_style_pill_button(rbtn, Color(0.16,0.32,0.18,1), Color(0.22,0.42,0.24,1), Color(0.4,0.9,0.5,0.9))
+	_enforce_menu_order()
 
 func _on_resume_pressed():
 	var gs = get_node_or_null("/root/GameState")
