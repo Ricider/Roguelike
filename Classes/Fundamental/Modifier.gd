@@ -138,6 +138,21 @@ func create_animated_sprite(size: Vector2) -> Control:
 	asp.modulate = Color(1,1,1,1)
 	container.add_child(asp)
 	asp.play("idle")
+	var name_lbl := Label.new()
+	name_lbl.text = modifier_name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", int(size.x * 0.11))
+	name_lbl.add_theme_color_override("font_color", Color(1,1,0.92))
+	name_lbl.add_theme_color_override("font_outline_color", Color(0,0,0,0.85))
+	name_lbl.add_theme_constant_override("outline_size", 6)
+	name_lbl.add_theme_color_override("font_shadow_color", Color(0,0,0,0.6))
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.custom_minimum_size = Vector2(size.x, size.y * 0.22)
+	name_lbl.position = Vector2(0, 6)
+	name_lbl.z_index = 10
+	container.add_child(name_lbl)
 	# Subtle scale pulse like cards - only if inside tree (tests create sprites off-tree)
 	var do_pulse := func():
 		if not is_instance_valid(container) or not container.is_inside_tree():
