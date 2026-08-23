@@ -1610,10 +1610,11 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 	details.add_child(name_lbl)
 	var hp: int = 0
 	var is_unit: bool = card is Unit
+	var _is_in_hand: bool = human != null and human.Hand.has(card)
 	if is_unit:
-		hp = (card as Unit).HitPoints
+		hp = human.effective_hitpoints_for(card) if _is_in_hand else (card as Unit).HitPoints
 	elif card is Building:
-		hp = (card as Building).HitPoints
+		hp = human.effective_hitpoints_for(card) if _is_in_hand else (card as Building).HitPoints
 	# single compact grid: HP | DMG/INC || Money | Bio — uses horizontal space fully
 	var grid := HBoxContainer.new()
 	grid.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -1635,7 +1636,15 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 	var hp_lbl := Label.new()
 	hp_lbl.text = "%d" % hp
 	hp_lbl.add_theme_font_size_override("font_size", 30)
-	hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	var _base_hp_prev: int = human.base_hitpoints_for(card) if _is_in_hand else hp
+	var _eff_hp_prev: int = hp
+	if _is_in_hand:
+		if _eff_hp_prev != _base_hp_prev:
+			hp_lbl.add_theme_color_override("font_color", Color(0.35, 0.9, 0.35) if _eff_hp_prev > _base_hp_prev else Color(1, 0.35, 0.35))
+		else:
+			hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	else:
+		hp_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	hp_lbl.clip_contents = false
 	hp_lbl.custom_minimum_size = Vector2(0, 30)
 	left_stats.add_child(hp_lbl)
@@ -1648,9 +1657,14 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 		sw.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		left_stats.add_child(sw)
 		var dmg_lbl := Label.new()
-		dmg_lbl.text = "%d" % (card as Unit).Damage
+		var _base_dmg_prev: int = (card as Unit).Damage
+		var _eff_dmg_prev: int = human.effective_damage_for(card, null) if _is_in_hand else _base_dmg_prev
+		dmg_lbl.text = "%d" % _eff_dmg_prev
 		dmg_lbl.add_theme_font_size_override("font_size", 30)
-		dmg_lbl.add_theme_color_override("font_color", Color(1,1,1))
+		if _eff_dmg_prev != _base_dmg_prev:
+			dmg_lbl.add_theme_color_override("font_color", Color(0.35, 0.9, 0.35) if _eff_dmg_prev > _base_dmg_prev else Color(1, 0.35, 0.35))
+		else:
+			dmg_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		dmg_lbl.clip_contents = false
 		dmg_lbl.custom_minimum_size = Vector2(0, 30)
 		left_stats.add_child(dmg_lbl)
@@ -1685,9 +1699,13 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 	m_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	costs.add_child(m_icon)
 	var m_lbl := Label.new()
-	m_lbl.text = "%d" % card.MoneyCost
+	var _eff_cost_prev: int = human.get_effective_money_cost(card) if _is_in_hand else card.MoneyCost
+	m_lbl.text = "%d" % _eff_cost_prev
 	m_lbl.add_theme_font_size_override("font_size", 26)
-	m_lbl.add_theme_color_override("font_color", Color(1,1,1))
+	if _is_in_hand and _eff_cost_prev != card.MoneyCost:
+		m_lbl.add_theme_color_override("font_color", Color(1, 0.35, 0.35) if _eff_cost_prev > card.MoneyCost else Color(0.35, 0.9, 0.35))
+	else:
+		m_lbl.add_theme_color_override("font_color", Color(1,1,1))
 	costs.add_child(m_lbl)
 	var b_icon := TextureRect.new()
 	b_icon.texture = load("res://Assets/UI/bio_icon.png") as Texture2D
@@ -3827,13 +3845,8 @@ func _refresh_hand():
 			base_hp = (card as Unit).HitPoints
 			base_dmg = (card as Unit).Damage
 			eff_hp = human.effective_hitpoints_for(card)
-			# Effective dmg in hand: base + Guerilla/Aerial (no Barracks adjacency)
-			var dmg: int = base_dmg
-			if human.has_modifier("Guerilla Warfare") and card.BioCost > card.MoneyCost:
-				dmg *= 2
-			if human.has_modifier("Aerial Supremacy") and (card as Unit).Flying:
-				dmg += 2
-			eff_dmg = dmg
+			# Effective dmg in hand: use Player.effective_damage_for (covers Guerilla, Aerial, Defensive Doctrine; Barracks 0 without board adjacency)
+			eff_dmg = human.effective_damage_for(card, null) if card is Unit else 0
 		elif card is Building:
 			base_hp = (card as Building).HitPoints
 			eff_hp = human.effective_hitpoints_for(card)
