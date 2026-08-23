@@ -21,8 +21,8 @@ var selected_card_idx: int = -1
 @onready var player_label: Label = $VBox/MainHBox/LeftGauges/PlayerHeader/PlayerLabel
 @onready var ai_flag: TextureRect = $VBox/MainHBox/LeftGauges/AIHeader/AIFlag
 @onready var player_flag: TextureRect = $VBox/MainHBox/LeftGauges/PlayerHeader/PlayerFlag
-@onready var end_turn_btn: Button = $VBox/MainHBox/RightContent/Controls/EndTurn
-@onready var menu_btn: Button = $VBox/MainHBox/RightContent/Controls/MenuBtn
+@onready var end_turn_btn: Button = $VBox/Controls/EndTurn
+@onready var menu_btn: Button = $VBox/Controls/MenuBtn
 @onready var ai_hp_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP/AIHP
 @onready var ai_bio_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio/AIBio
 @onready var ai_money_bar: TextureProgressBar = $VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney/AIMoney
@@ -2113,7 +2113,7 @@ func _ensure_debug_popup():
 	debug_built = true
 
 func _reveal_debug_ui():
-	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	var controls = get_node_or_null("VBox/Controls")
 	if controls == null:
 		return
 	var btn = controls.get_node_or_null("DebugBtn")
@@ -2158,7 +2158,7 @@ func _unhandled_input(event: InputEvent):
 				get_viewport().set_input_as_handled()
 
 func _add_save_button():
-	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	var controls = get_node_or_null("VBox/Controls")
 	if controls == null:
 		return
 	if controls.has_node("SaveBtn"):
@@ -2166,7 +2166,7 @@ func _add_save_button():
 	var sbtn := Button.new()
 	sbtn.name = "SaveBtn"
 	sbtn.text = "Save"
-	sbtn.custom_minimum_size = Vector2(90, 40)
+	sbtn.custom_minimum_size = Vector2(140, 40)
 	sbtn.add_theme_font_size_override("font_size", 16)
 	sbtn.add_theme_color_override("font_color", Color(0.6,1,0.6))
 	_style_round_button(sbtn, false)
@@ -2184,7 +2184,7 @@ func _add_save_button():
 		controls.move_child(sbtn, menu.get_index())
 
 func _add_debug_button():
-	var controls = get_node_or_null("VBox/MainHBox/RightContent/Controls")
+	var controls = get_node_or_null("VBox/Controls")
 	if controls == null:
 		return
 	if controls.has_node("DebugBtn"):
@@ -2193,7 +2193,7 @@ func _add_debug_button():
 	btn.name = "DebugBtn"
 	btn.text = "Debug"
 	btn.visible = _debug_unlocked
-	btn.custom_minimum_size = Vector2(90, 40)
+	btn.custom_minimum_size = Vector2(140, 40)
 	btn.add_theme_font_size_override("font_size", 16)
 	btn.add_theme_color_override("font_color", Color(1,1,0.6))
 	_style_round_button(btn, false)

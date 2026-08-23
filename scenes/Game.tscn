@@ -53,6 +53,28 @@ grow_horizontal = 2
 grow_vertical = 2
 alignment = 0
 
+[node name="TopSpacer" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="Controls" type="HBoxContainer" parent="VBox"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+alignment = 1
+
+[node name="EndTurn" type="Button" parent="VBox/Controls"]
+custom_minimum_size = Vector2(140, 40)
+layout_mode = 2
+text = "End Turn"
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="MenuBtn" type="Button" parent="VBox/Controls"]
+custom_minimum_size = Vector2(140, 40)
+layout_mode = 2
+text = "Menu"
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIInfo" type="Label" parent="VBox"]
 custom_minimum_size = Vector2(0, 0)
@@ -432,7 +454,6 @@ size_flags_horizontal = 0
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-
 [node name="PlayerMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
 custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
@@ -472,31 +493,12 @@ horizontal_alignment = 1
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
-
 [node name="RightContent" type="VBoxContainer" parent="VBox/MainHBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 alignment = 0
 
-[node name="Controls" type="HBoxContainer" parent="VBox/MainHBox/RightContent"]
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-alignment = 1
-
-[node name="EndTurn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
-custom_minimum_size = Vector2(150, 40)
-layout_mode = 2
-text = "End Turn"
-theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-
-[node name="MenuBtn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
-custom_minimum_size = Vector2(110, 40)
-layout_mode = 2
-text = "Menu"
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBoard" type="GridContainer" parent="VBox/MainHBox/RightContent"]
 custom_minimum_size = Vector2(0, 150)
