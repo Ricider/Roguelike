@@ -2716,46 +2716,80 @@ func _refresh_ui():
 	player_discard_value.text = "Discard %d/33" % human.DiscardPile.size()
 	ai_graveyard_value.text = "Graveyard %d/33" % ai_player.Graveyard.size()
 	player_graveyard_value.text = "Graveyard %d/33" % human.Graveyard.size()
-	# --- Pile building stylization: HQ / Waiting Zone / Graveyard as grid tiles on right side ---
-	var hq_tex := load("res://Assets/UI/hq_building.png") as Texture2D
-	var hosp_tex := load("res://Assets/UI/waiting_zone_building.png") as Texture2D
-	var grave_tex := load("res://Assets/UI/graveyard_building.png") as Texture2D
+	# --- Pile animated art: 512x512 20fps square, rounded 44, no pulse, twice-detailed like Modifiers/Cards ---
 	for entry in [
-		[ai_deck_icon, hq_tex, false],
-		[player_deck_icon, hq_tex, true],
-		[ai_discard_icon, hosp_tex, false],
-		[player_discard_icon, hosp_tex, true],
-		[ai_graveyard_icon, grave_tex, false],
-		[player_graveyard_icon, grave_tex, true]
+		[ai_deck_icon, "Draw", false],
+		[player_deck_icon, "Draw", true],
+		[ai_discard_icon, "Discard", false],
+		[player_discard_icon, "Discard", true],
+		[ai_graveyard_icon, "Graveyard", false],
+		[player_graveyard_icon, "Graveyard", true]
 	]:
 		var btn: Button = entry[0] as Button
-		var tex: Texture2D = entry[1] as Texture2D
+		var pile: String = entry[1] as String
 		var is_human: bool = entry[2] as bool
-		if btn != null and tex != null:
-			btn.icon = tex
-			btn.expand_icon = true
-			btn.custom_minimum_size = Vector2(78, 78)
-			btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-			# Grid-tile look: same grey as board squares, building icon on top, count below via label
-			var bg := StyleBoxFlat.new()
-			bg.bg_color = Color(0.32,0.32,0.38,1) if is_human else Color(0.05,0.05,0.08,1)
-			bg.set_corner_radius_all(6)
-			bg.content_margin_left = 4
-			bg.content_margin_right = 4
-			bg.content_margin_top = 4
-			bg.content_margin_bottom = 4
-			bg.border_color = Color(0.6,0.6,0.7,0.6) if is_human else Color(0.3,0.3,0.35,0.5)
-			bg.set_border_width_all(1)
-			btn.add_theme_stylebox_override("normal", bg)
-			btn.add_theme_stylebox_override("hover", bg)
-			btn.add_theme_stylebox_override("pressed", bg)
-			btn.add_theme_stylebox_override("focus", bg)
-			btn.add_theme_stylebox_override("disabled", bg)
-	# Make pile bars 78 wide to sit under building tile like grid
+		if btn == null:
+			continue
+		# Clear static icon, use animated PileArt inside button (keeps click/hover)
+		btn.icon = null
+		btn.text = ""
+		btn.expand_icon = false
+		btn.custom_minimum_size = Vector2(78, 78)
+		btn.clip_contents = true
+		btn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		# No grey/black tile background — transparent button, sprite itself has rounded 44 and frame
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color(0,0,0,0)
+		bg.set_corner_radius_all(6)
+		bg.content_margin_left = 0
+		bg.content_margin_right = 0
+		bg.content_margin_top = 0
+		bg.content_margin_bottom = 0
+		bg.border_width_left = 0
+		bg.border_width_right = 0
+		bg.border_width_top = 0
+		bg.border_width_bottom = 0
+		bg.border_color = Color(0,0,0,0)
+		btn.add_theme_stylebox_override("normal", bg)
+		btn.add_theme_stylebox_override("hover", bg)
+		btn.add_theme_stylebox_override("pressed", bg)
+		btn.add_theme_stylebox_override("focus", bg)
+		btn.add_theme_stylebox_override("disabled", bg)
+		btn.flat = true
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		# Center the pile VBox above its bar (Icon centered horizontally over 78-wide bar)
+		var pile_box := btn.get_parent() as VBoxContainer
+		if pile_box != null:
+			pile_box.alignment = BoxContainer.ALIGNMENT_CENTER
+			pile_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			pile_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		# Replace or create animated child
+		var existing := btn.get_node_or_null("PileAnim") as Control
+		if existing != null:
+			existing.queue_free()
+		# Clean any leftover static icon children from old code
+		for c in btn.get_children():
+			if c is Control and c.name != "PileAnim":
+				if c.get_class() != "Control" or c.custom_minimum_size == Vector2(78,78):
+					pass
+		var anim := PileArt.create_sprite_for(pile, Vector2(78, 78))
+		anim.name = "PileAnim"
+		anim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		anim.clip_contents = true
+		for ch in anim.get_children():
+			if ch is Control:
+				(ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(anim)
+	# Make pile bars 78 wide centered under 78-wide icon (Icon centered above Bar)
 	for bar in [ai_deck_bar, player_deck_bar, ai_discard_bar, player_discard_bar, ai_graveyard_bar, player_graveyard_bar]:
 		bar.custom_minimum_size = Vector2(78, 8)
-		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Center pile value labels under bars
+	for lbl in [ai_deck_value, player_deck_value, ai_discard_value, player_discard_value, ai_graveyard_value, player_graveyard_value]:
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# Pulse deck when low
 	for pair in [[ai_deck_icon, ai_player.DrawPile.size()], [player_deck_icon, human.DrawPile.size()]]:
 		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
@@ -3397,24 +3431,32 @@ func _refresh_gauges_only():
 	player_discard_value.text = "Discard %d/33" % (human.DiscardPile.size() if human != null else 0)
 	ai_graveyard_value.text = "Graveyard %d/33" % (ai_player.Graveyard.size() if ai_player != null else 0)
 	player_graveyard_value.text = "Graveyard %d/33" % (human.Graveyard.size() if human != null else 0)
-	# Keep pile buildings styled as grid tiles (also in live updates)
-	var hq_tex2 := load("res://Assets/UI/hq_building.png") as Texture2D
-	var hosp_tex2 := load("res://Assets/UI/waiting_zone_building.png") as Texture2D
-	var grave_tex2 := load("res://Assets/UI/graveyard_building.png") as Texture2D
+	# Keep pile animated (ensure PileAnim exists in live updates too, no re-load of static pngs)
 	for entry in [
-		[ai_deck_icon, hq_tex2, false],
-		[player_deck_icon, hq_tex2, true],
-		[ai_discard_icon, hosp_tex2, false],
-		[player_discard_icon, hosp_tex2, true],
-		[ai_graveyard_icon, grave_tex2, false],
-		[player_graveyard_icon, grave_tex2, true]
+		[ai_deck_icon, "Draw"],
+		[player_deck_icon, "Draw"],
+		[ai_discard_icon, "Discard"],
+		[player_discard_icon, "Discard"],
+		[ai_graveyard_icon, "Graveyard"],
+		[player_graveyard_icon, "Graveyard"]
 	]:
 		var b2: Button = entry[0] as Button
-		var t2: Texture2D = entry[1] as Texture2D
-		var ih2: bool = entry[2] as bool
-		if b2 != null and t2 != null and b2.icon != t2:
-			b2.icon = t2
+		var pile2: String = entry[1] as String
+		if b2 != null and b2.get_node_or_null("PileAnim") == null:
+			b2.icon = null
 			b2.custom_minimum_size = Vector2(78,78)
+			b2.clip_contents = true
+			var anim2 := PileArt.create_sprite_for(pile2, Vector2(78,78))
+			anim2.name = "PileAnim"
+			anim2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for ch in anim2.get_children():
+				if ch is Control:
+					(ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			var pile_box2 := b2.get_parent() as VBoxContainer
+			if pile_box2 != null:
+				pile_box2.alignment = BoxContainer.ALIGNMENT_CENTER
+			b2.add_child(anim2)
 	for pair in [[ai_deck_icon, ai_player.DrawPile.size() if ai_player != null else 0], [player_deck_icon, human.DrawPile.size() if human != null else 0]]:
 		pair[0].modulate = Color(1, 0.4, 0.4) if pair[1] <= 3 else Color(1, 1, 1)
 	ai_hp_bar.tint_progress = Color(1, 0.35, 0.35) if ai_player != null and ai_player.HitPoints < 30 else Color(1,1,1)
