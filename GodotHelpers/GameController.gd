@@ -66,7 +66,7 @@ var gauge_grid_bg_sprite: AnimatedSprite2D
 @onready var inspect_grid: GridContainer = $InspectPopup/VBox/InspectScroll/InspectGrid
 @onready var close_btn: Button = $InspectPopup/VBox/CloseBtn
 @onready var hover_popup: PanelContainer = $HoverPopup
-@onready var hover_label: Label = $HoverPopup/HoverLabel
+@onready var hover_label: Control = $HoverPopup/HoverLabel
 @onready var bg_rect: TextureRect = $BG
 var preview_popup: PanelContainer
 var _preview_eff_scroll: ScrollContainer = null
@@ -981,12 +981,17 @@ func _setup_phase_ui_top_left():
 	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges") as VBoxContainer
 	if left_gauges != null:
 		if left_gauges.get_node_or_null("TopGaugeSpacer") == null:
-			var sp := Control.new()
+			var sp: Control = Control.new()
 			sp.name = "TopGaugeSpacer"
 			sp.custom_minimum_size = Vector2(0, 20)
 			sp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			left_gauges.add_child(sp)
 			left_gauges.move_child(sp, 0)
+		else:
+			var sp2: Control = left_gauges.get_node_or_null("TopGaugeSpacer") as Control
+			if sp2 != null:
+				sp2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _set_phase(text: String):
 	_current_phase = text
@@ -1208,25 +1213,57 @@ func _enforce_uniform_gauge_width():
 
 func _setup_gauge_and_influence_hovers():
 	_enforce_uniform_gauge_width()
-	# Gauge + influence tooltips: click-through, inside window, always on top via _show_hover
-	var hp_tip: String = "Hit Points — when a card dies its owner loses HP equal to its BioSupply cost; at 0 you lose"
-	var bio_tip: String = "BioSupply — pay BioCost to play cards; grows 10% +5 each Economy phase"
-	var money_tip: String = "MoneySupply — pay MoneyCost to play cards; grows +10 + building Income each turn"
+	# Upgrade HoverPopup to same dark box design as preview/phase (rounded, bordered, 0.85 alpha)
+	if hover_popup != null:
+		var hsb: StyleBoxFlat = StyleBoxFlat.new()
+		hsb.bg_color = Color(0.08, 0.08, 0.14, 0.85)
+		hsb.set_corner_radius_all(8)
+		hsb.border_color = Color(0.6, 0.6, 0.7, 0.9)
+		hsb.set_border_width_all(1)
+		hsb.content_margin_left = 10
+		hsb.content_margin_right = 10
+		hsb.content_margin_top = 8
+		hsb.content_margin_bottom = 8
+		hsb.shadow_color = Color(0.05, 0.05, 0.15, 0.5)
+		hsb.shadow_size = 8
+		hover_popup.add_theme_stylebox_override("panel", hsb)
+		hover_popup.custom_minimum_size = Vector2(240, 70)
+		# Replace Label with RichTextLabel for orange bracket support, keep name HoverLabel
+		var old_lbl: Control = hover_popup.get_node_or_null("HoverLabel") as Control
+		if old_lbl != null and not (old_lbl is RichTextLabel):
+			hover_popup.remove_child(old_lbl)
+			old_lbl.queue_free()
+			var rt: RichTextLabel = RichTextLabel.new()
+			rt.name = "HoverLabel"
+			rt.bbcode_enabled = true
+			rt.fit_content = true
+			rt.scroll_active = false
+			rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			rt.custom_minimum_size = Vector2(220, 0)
+			rt.add_theme_font_size_override("normal_font_size", 14)
+			rt.add_theme_color_override("default_color", Color(1, 1, 1, 1))
+			rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hover_popup.add_child(rt)
+			hover_popup.set_meta("rt_label", rt)
+			hover_label = rt as Control
+	# Gauge + influence + pile tooltips: same box design via _show_hover with requested texts
+	var hp_tip: String = "[Health]: You hit points, if it drops to 0 you lose, you lose hit points when one of your cards die equal to the amount of BioSupply sent on the card"
+	var bio_tip: String = "[BioSupply]: Amount of people you have, used for playing cards"
+	var money_tip: String = "[MoneySupply]: The amount of money you have, used for playing cards"
 	var inf_tip: String = "Influence — spend between battles in the Shop (5 cards offered, or 25 to remove a card)"
+	var draw_tip: String = "[Draw Pile]: The cards you have left in your deck, draw 10 cards each turn"
+	var discard_tip: String = "[Discard Pile]: Cards that were discarded from your hand at the end of turn, shuffled back in draw pile if you run out or cards"
+	var grave_tip: String = "[Graveyard]: Your cards that are dead"
 	# Helper to bind hover to any Control without duplicating connections
-	var bind := func(node: Control, text: String):
+	var bind: Callable = func(node: Control, text: String):
 		if node == null:
 			return
-		# make container itself not block clicks to gauges? gauges are non-interactive, but we still want hover
-		# Keep STOP for hover detection, but popups themselves are IGNORE
 		node.mouse_filter = Control.MOUSE_FILTER_STOP
-		# avoid double-connect
 		if node.has_meta("hover_bound"):
 			return
 		node.set_meta("hover_bound", true)
-		# single custom hover popup only (no native single-line tooltip)
-		var t: String = text
-		node.mouse_entered.connect(func(): _show_hover(t))
+		var t2: String = text
+		node.mouse_entered.connect(func(): _show_hover(t2))
 		node.mouse_exited.connect(func(): _hide_hover())
 	# Player + AI gauges (6 total)
 	var ai_hp_box := get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP") as Control
@@ -1274,6 +1311,31 @@ func _setup_gauge_and_influence_hovers():
 		bind.call(influence_icon_rect, inf_tip)
 	if influence_value_label != null:
 		bind.call(influence_value_label as Control, inf_tip)
+	# Draw/Discard/Graveyard piles - same box design, requested texts
+	var draw_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/AIDeck") as Control
+	var p_draw_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerDeck") as Control
+	if p_draw_box == null:
+		p_draw_box = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck") as Control
+	var aidis_box: Control = get_node_or_null("VBox/MainHBox/RightGauges/AIDiscard") as Control
+	var aigrave_box: Control = get_node_or_null("VBox/MainHBox/RightGauges/AIGraveyard") as Control
+	var pdis_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerDiscard") as Control
+	if pdis_box == null:
+		pdis_box = get_node_or_null("VBox/MainHBox/RightGauges/PlayerDiscard") as Control
+	var pgrave_box: Control = get_node_or_null("VBox/MainHBox/LeftGauges/BottomRow/PlayerGraveyard") as Control
+	if pgrave_box == null:
+		pgrave_box = get_node_or_null("VBox/MainHBox/RightGauges/PlayerGraveyard") as Control
+	var pile_pairs: Array = [[draw_box, draw_tip], [p_draw_box, draw_tip], [aidis_box, discard_tip], [aigrave_box, grave_tip], [pdis_box, discard_tip], [pgrave_box, grave_tip]]
+	for pp in pile_pairs:
+		var pn: Control = pp[0] as Control
+		var ptip: String = pp[1] as String
+		if pn != null:
+			bind.call(pn, ptip)
+			for ch in pn.get_children():
+				if ch is Control:
+					bind.call(ch as Control, ptip)
+					for gc in (ch as Control).get_children():
+						if gc is Control:
+							bind.call(gc as Control, ptip)
 
 func _refresh_influence_display():
 	if influence_value_label != null and is_instance_valid(influence_value_label):
@@ -1361,7 +1423,35 @@ func _ready():
 func _show_hover(text: String):
 	if text == "":
 		return
-	hover_label.text = text
+	# Same box design as preview/phase: render brackets orange via BBCode
+	var rt2: RichTextLabel = hover_popup.get_node_or_null("HoverLabel") as RichTextLabel
+	if rt2 != null and rt2 is RichTextLabel:
+		var bb: String = text
+		if bb.begins_with("["):
+			var epos: int = bb.find("]")
+			if epos != -1:
+				var brack: String = bb.substr(0, epos + 1)
+				var rest: String = bb.substr(epos + 1)
+				bb = "[color=#FF9500]" + brack + "[/color]" + rest
+		bb = bb.replace("[MoneySupply]", "[color=#FF9500][MoneySupply][/color]")
+		bb = bb.replace("[BioSupply]", "[color=#FF9500][BioSupply][/color]")
+		bb = bb.replace("[Health]", "[color=#FF9500][Health][/color]")
+		bb = bb.replace("[Draw Pile]", "[color=#FF9500][Draw Pile][/color]")
+		bb = bb.replace("[Discard Pile]", "[color=#FF9500][Discard Pile][/color]")
+		bb = bb.replace("[Graveyard]", "[color=#FF9500][Graveyard][/color]")
+		rt2.bbcode_enabled = true
+		rt2.text = bb
+	else:
+		var lbl2: Label = hover_popup.get_node_or_null("HoverLabel") as Label
+		if lbl2 != null:
+			lbl2.text = text
+		elif hover_label != null and is_instance_valid(hover_label):
+			if hover_label is RichTextLabel:
+				(hover_label as RichTextLabel).text = text
+			elif hover_label is Label:
+				(hover_label as Label).text = text
+			else:
+				hover_label.set("text", text)
 	hover_popup.visible = true
 	# click-through, inside window, always on top
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
