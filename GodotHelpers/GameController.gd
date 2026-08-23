@@ -891,13 +891,42 @@ func _setup_influence_at_draw_pile():
 
 func _setup_phase_ui_top_left():
 	if phase_panel != null and is_instance_valid(phase_panel):
+		# Ensure phase tooltips still bound (in case panel was created before this fix)
+		if not phase_panel.has_meta("hover_bound"):
+			phase_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+			phase_panel.set_meta("hover_bound", true)
+			phase_panel.mouse_entered.connect(func(): _show_hover(_phase_tooltip_for(_current_phase)))
+			phase_panel.mouse_exited.connect(func(): _hide_hover())
+		var _lights = phase_panel.get_node_or_null("VBox/Lights") as HBoxContainer
+		if _lights != null:
+			var _tips: Dictionary = {
+				"P_Blue": "[Player Economy Phase]: Gain income",
+				"P_Green": "[Player Build Phase]: Play cards in your half of the field",
+				"P_Red": "[Player Combat Phase]: Your units attack enemy",
+				"AI_Blue": "[AI Economy Phase]: Opponent gains income",
+				"AI_Green": "[AI Build Phase]: Opponent plays cards in your half of the field",
+				"AI_Red": "[AI Combat Phase]: Opponents units attack you"
+			}
+			for _c in _lights.get_children():
+				if _c is PanelContainer and not _c.has_meta("hover_bound"):
+					var _pc := _c as PanelContainer
+					_pc.mouse_filter = Control.MOUSE_FILTER_STOP
+					_pc.set_meta("hover_bound", true)
+					var _tt: String = _tips.get(_pc.name, _pc.name) as String
+					_pc.mouse_entered.connect(func(): _show_hover(_tt))
+					_pc.mouse_exited.connect(func(): _hide_hover())
 		return
 	# Create traffic light panel at very top left with 10px margin — extended 2x width for 6 AI+Player lights
 	phase_panel = PanelContainer.new()
 	phase_panel.name = "PhasePanelTopLeft"
 	phase_panel.custom_minimum_size = Vector2(248, 90)
 	phase_panel.size = Vector2(248, 90)
-	phase_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	phase_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Tooltip for panel background (outside lights) shows current phase - same box design
+	if not phase_panel.has_meta("hover_bound"):
+		phase_panel.set_meta("hover_bound", true)
+		phase_panel.mouse_entered.connect(func(): _show_hover(_phase_tooltip_for(_current_phase)))
+		phase_panel.mouse_exited.connect(func(): _hide_hover())
 	phase_panel.z_index = 300
 	phase_panel.z_as_relative = false
 	if phase_panel.has_method("set_as_top_level"):
@@ -930,13 +959,28 @@ func _setup_phase_ui_top_left():
 	lights.add_theme_constant_override("separation", 10)
 	vbox.add_child(lights)
 	# 6 lights: Player Economy/Build/Combat + AI Economy/Build/Combat (Blue=Economy, Green=Build, Red=Combat)
+	# Phase tooltips - same box design as gauges (orange brackets via _show_hover)
+	var _phase_tips: Dictionary = {
+		"P_Blue": "[Player Economy Phase]: Gain income",
+		"P_Green": "[Player Build Phase]: Play cards in your half of the field",
+		"P_Red": "[Player Combat Phase]: Your units attack enemy",
+		"AI_Blue": "[AI Economy Phase]: Opponent gains income",
+		"AI_Green": "[AI Build Phase]: Opponent plays cards in your half of the field",
+		"AI_Red": "[AI Combat Phase]: Opponents units attack you"
+	}
 	for _cname in ["P_Blue", "P_Green", "P_Red", "AI_Blue", "AI_Green", "AI_Red"]:
 		var light := PanelContainer.new()
 		light.name = _cname
 		light.custom_minimum_size = Vector2(28, 28)
 		light.size = Vector2(28, 28)
-		light.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		light.tooltip_text = _cname.replace("P_", "Player ").replace("AI_", "AI ").replace("Blue", "Economy").replace("Green", "Build").replace("Red", "Combat")
+		light.mouse_filter = Control.MOUSE_FILTER_STOP
+		var _ltip: String = _phase_tips.get(_cname, _cname) as String
+		# Bind hover same as gauges - use _show_hover custom popup (not native tooltip)
+		if not light.has_meta("hover_bound"):
+			light.set_meta("hover_bound", true)
+			var _lt: String = _ltip
+			light.mouse_entered.connect(func(): _show_hover(_lt))
+			light.mouse_exited.connect(func(): _hide_hover())
 		var s := StyleBoxFlat.new()
 		if _cname.ends_with("Blue"):
 			s.bg_color = Color(0.12, 0.18, 0.45, 1)
@@ -994,6 +1038,16 @@ func _setup_phase_ui_top_left():
 			var sp2: Control = left_gauges.get_node_or_null("TopGaugeSpacer") as Control
 			if sp2 != null:
 				sp2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func _phase_tooltip_for(phase: String) -> String:
+	match phase:
+		"Player Build Phase": return "[Player Build Phase]: Play cards in your half of the field"
+		"AI Build Phase": return "[AI Build Phase]: Opponent plays cards in your half of the field"
+		"Player Economy Phase": return "[Player Economy Phase]: Gain income"
+		"AI Economy Phase": return "[AI Economy Phase]: Opponent gains income"
+		"Player Combat Phase": return "[Player Combat Phase]: Your units attack enemy"
+		"AI Combat Phase": return "[AI Combat Phase]: Opponents units attack you"
+		_: return "[" + phase + "]: " + phase
 
 func _set_phase(text: String):
 	_current_phase = text
@@ -1425,7 +1479,7 @@ func _ready():
 	hover_popup.visible = false
 	# Hover popup: click-through, inside window, always on top
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hover_popup.z_index = 200
+	hover_popup.z_index = 500
 	hover_popup.z_as_relative = false
 	if hover_popup.has_method("set_as_top_level"):
 		hover_popup.top_level = true
@@ -1490,7 +1544,7 @@ func _show_hover(text: String):
 	hover_popup.visible = true
 	# click-through, inside window, always on top
 	hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hover_popup.z_index = 200
+	hover_popup.z_index = 500
 	hover_popup.z_as_relative = false
 	if hover_popup.has_method("set_as_top_level"):
 		hover_popup.top_level = true
@@ -1513,7 +1567,7 @@ func _ensure_preview_popup():
 	preview_popup = PanelContainer.new()
 	preview_popup.visible = false
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview_popup.z_index = 201
+	preview_popup.z_index = 501
 	preview_popup.z_as_relative = false
 	if preview_popup.has_method("set_as_top_level"):
 		preview_popup.top_level = true
@@ -1541,7 +1595,7 @@ func _ensure_preview_popup():
 	preview_traits_root = Control.new()
 	preview_traits_root.visible = false
 	preview_traits_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview_traits_root.z_index = 202
+	preview_traits_root.z_index = 502
 	preview_traits_root.z_as_relative = false
 	if preview_traits_root.has_method("set_as_top_level"):
 		preview_traits_root.top_level = true
@@ -1793,7 +1847,7 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 		pos.x = clamp(pos.x, 8.0, max(8.0, vp.x - sz.x - 8.0))
 		pos.y = clamp(pos.y, 8.0, max(8.0, vp.y - sz.y - 8.0))
 	preview_popup.global_position = pos
-	preview_popup.z_index = 101
+	preview_popup.z_index = 501
 	preview_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# --- Trait side boxes (half-width, stacked vertically) ---
 	_ensure_preview_popup()
@@ -1904,7 +1958,7 @@ func _show_card_preview(card: Card, is_player_card: bool = true, anchor: Control
 			preview_traits_root.global_position = Vector2(traits_x, traits_y)
 			preview_traits_root.size = Vector2(box_w, stack_h)
 			preview_traits_root.custom_minimum_size = Vector2(box_w, stack_h)
-			preview_traits_root.z_index = 102
+			preview_traits_root.z_index = 502
 			preview_traits_root.visible = true
 			_set_preview_click_through(preview_traits_root)
 			# Next-frame correction: real height after RichTextLabel layout can differ by ~10-20px, causing 1-frame high offset
