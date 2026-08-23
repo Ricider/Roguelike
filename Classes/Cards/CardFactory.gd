@@ -248,13 +248,13 @@ static func random_modifier_offer() -> Array:
 	return offer
 
 static func make_insurgents_player() -> AIPlayer:
-	var p := AIPlayer.new(120, 120, 10, 1, "Insurgents", "Sparse mountain village", 10)
+	var p := AIPlayer.new(120, 120, 10, 1, "Insurgents", "Sparse mountain village", 20)
 	p.DrawPile = make_insurgents_deck()
-	p.Modifiers = [Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 100% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 25)]
+	p.Modifiers = [Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 40% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 25)]
 	return p
 
 static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(180, 100, 20, 2, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 20)
+	var p := AIPlayer.new(180, 100, 20, 2, "State Troops", "Middle Eastern town, add some mosques around, don't make the entire thing a desert", 30)
 	# Back row is furthest from enemy: row 3 for human (bottom), row 0 for AI (top)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
@@ -272,7 +272,7 @@ static func make_state_troops_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_fundamentalists_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(150, 60, 60, 3, "Fundamentalists", "Cyberpunk Skyrises", 50)
+	var p := AIPlayer.new(150, 60, 60, 3, "Fundamentalists", "Medieval village", 40)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -285,11 +285,11 @@ static func make_fundamentalists_player(for_human: bool = false) -> AIPlayer:
 	p.Board[back_row].Squares[positions[1]].place(h2)
 	p.apply_hitpoints_modifier(h2)
 	p.DrawPile = make_fundamentalists_deck()
-	p.Modifiers = [Modifier.new("Fanaticism", "Your buildings have 50% less HP, but Units have 100% more", 30)]
+	p.Modifiers = [Modifier.new("Fanaticism", "Your buildings have 50% less HP, but Units have 40% more", 30)]
 	return p
 
 static func make_mercenaries_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(130, 60, 60, 4, "Mercenaries", "Warzone, fires and rubble everywhere", 50)
+	var p := AIPlayer.new(130, 60, 60, 4, "Mercenaries", "Warzone, fires and rubble everywhere", 40)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -306,7 +306,7 @@ static func make_mercenaries_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_peace_keepers_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(90, 20, 80, 5, "Peace Keepers", "United nation tents", 50)
+	var p := AIPlayer.new(90, 20, 80, 5, "Peace Keepers", "United nation tents", 60)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -326,7 +326,7 @@ static func make_peace_keepers_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_horde_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(200, 160, 0, 6, "Horde", "Russian style city, snowy, add few trees", 25)
+	var p := AIPlayer.new(200, 160, 0, 6, "Horde", "Russian style city, snowy, add few trees", 50)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):
@@ -346,7 +346,7 @@ static func make_horde_player(for_human: bool = false) -> AIPlayer:
 	return p
 
 static func make_coalition_army_player(for_human: bool = false) -> AIPlayer:
-	var p := AIPlayer.new(120, 80, 50, 7, "Coalition Army", "City with european style towers", 50)
+	var p := AIPlayer.new(120, 80, 50, 7, "Coalition Army", "City with european style towers", 80)
 	# Board: 2 Housing and 1 Factory randomly placed at back row furthest from enemy - row 3 for human, row 0 for AI
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
@@ -388,7 +388,7 @@ static func make_euro_army_player(for_human: bool = false) -> AIPlayer:
 
 static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 	# Corporate Troops: HitPoints 70, Background Cyberpunk Skyrises, Board 2 Corporation at back row, Diff 8, Bio 10 Money 100 Influence 50
-	var p := AIPlayer.new(70, 10, 100, 8, "Corporate Troops", "Cyberpunk Skyrises", 50)
+	var p := AIPlayer.new(70, 10, 100, 8, "Corporate Troops", "Cyberpunk Skyrises", 60)
 	var back_row: int = p.Board.size() - 1 if for_human else 0
 	var positions: Array = []
 	for c in range(10):

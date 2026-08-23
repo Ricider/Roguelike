@@ -66,7 +66,10 @@ func create_animated_sprite(size: Vector2) -> Control:
 	if card_name == "Infantry" or card_name == "Drone":
 		scale_f *= 0.85
 	asp.scale = Vector2(scale_f, scale_f)
-	asp.position = size * 0.5
+	if card_name == "Interceptor":
+		asp.position = size * 0.5 + Vector2(0, -size.y * 0.25)
+	else:
+		asp.position = size * 0.5
 	container.add_child(asp)
 	asp.play("idle")
 	return container

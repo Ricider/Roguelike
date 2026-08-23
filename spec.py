@@ -251,7 +251,7 @@ Player: Insurgents
     BioSupply=120
     MoneySupply=10
 
-    Influence=10
+    Influence=20
 
     DrawPile: [5 wall, 10 Infantry, 8 Drones, 2 Tank 1 Factory, 3 Housing, 2 Barrack, 2 Anti Aircraft]
     DiscardPile: []
@@ -268,7 +268,7 @@ Player: State Troops
     BioSupply=100
     MoneySupply=20
 
-    Influence=20
+    Influence=30
 
     DrawPile: [10 wall, 10 Infantry, 3 Tank, 3 Artillery, 2 Factory, 2 Housing, 1 Barrack, 3 Anti Aircraft]
     DiscardPile: []
@@ -284,7 +284,7 @@ Player: Fundamentalists
     BioSupply=60
     MoneySupply=60
 
-    Influence=50
+    Influence=40
 
     DrawPile: [5 wall, 15 Infantry, 4 Artillery, 2 Tank, 4 Barrack, 5 Anti Aircraft, 2 Housing, 1 Factory]
     DiscardPile: []
@@ -300,7 +300,7 @@ Player: Mercenaries
     BioSupply=60
     MoneySupply=60
 
-    Influence=50
+    Influence=40
 
     DrawPile: [4 wall, 9 Infantry, 4 Artillery, 4 Tank, 2 Drones, 1 Barrack, 1 Interceptor, 5 Anti Aircraft]
     DiscardPile: []
@@ -316,7 +316,7 @@ Player: Peace Keepers
     BioSupply=20
     MoneySupply=80
 
-    Influence=50
+    Influence=60
 
     DrawPile: [12 wall, 6 Infantry, 5 Drones, 1 Fighter Jet, 1 Corporation, 2 Housing, 2 Barrack, 3 Interceptor, 3 Anti Aircraft]
     DiscardPile: []
@@ -332,7 +332,7 @@ Player: Horde
     BioSupply=160
     MoneySupply=0
 
-    Influence=25
+    Influence=50
 
     DrawPile: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 3 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 3 Anti Aircraft, 3 Special Ops]
     DiscardPile: []
@@ -348,7 +348,7 @@ Player: Coalition Army
     BioSupply=80
     MoneySupply=50
 
-    Influence=50
+    Influence=80
 
     DrawPile: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 1 Corporation, 2 Special Ops, 1 Interceptor]
     DiscardPile: []
@@ -364,7 +364,7 @@ Player: Corporate Troops
     BioSupply=10
     MoneySupply=100
 
-    Influence=50
+    Influence=60
 
     DrawPile: [8 wall, 4 Infantry, 12 Drones, 3 Fighter Jet, 1 Corporation, 1 Housing, 2 Barrack, 3 Rocket Launcher, 2 Interceptor]
     DiscardPile: []
@@ -386,7 +386,7 @@ Modifier: State of emergency
     InfluenceCost: 20
 
 Modifier: Fanaticism
-    Effect=Your buildings have 50% less HP, but Units have 100% more
+    Effect=Your buildings have 50% less HP, but Units have 40% more
     InfluenceCost: 30
 
 Modifier: Corruption

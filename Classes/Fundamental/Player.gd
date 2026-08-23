@@ -242,14 +242,14 @@ func effective_hitpoints_for(card: Card) -> int:
 			hp = int(hp * 0.5)
 			if hp < 1:
 				hp = 1
-	# Fanaticism: buildings 50% less, units 100% more (double)
+	# Fanaticism: buildings 50% less, units 40% more
 	if has_modifier("Fanaticism"):
 		if card is Building:
 			hp = int(hp * 0.5)
 			if hp < 1:
 				hp = 1
 		elif card is Unit:
-			hp = hp * 2
+			hp = int(hp * 1.4)
 	# Corruption: buildings 50% less HP
 	if has_modifier("Corruption"):
 		if card is Building:
