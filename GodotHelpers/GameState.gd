@@ -102,6 +102,10 @@ func start_tutorial():
 	selected_enemy = "Insurgents"
 	run_player = make_player_by_name("State Troops", true)
 	run_enemies = [make_player_by_name("Insurgents") as AIPlayer]
+	# Tutorial: Insurgents have 20 HP total only in tutorial (normal 120)
+	if run_enemies.size() > 0 and run_enemies[0] != null:
+		run_enemies[0].HitPoints = 20
+		run_enemies[0].MaxHitPoints = 20
 	run_enemy_index = 0
 	run_started = true
 	shop_offer.clear()

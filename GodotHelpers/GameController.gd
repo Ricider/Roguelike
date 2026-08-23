@@ -240,8 +240,8 @@ func _setup_tutorial():
 	# Add 2 filler cards to make hand look full but not needed for tutorial
 	human.Hand.append(Wall.new())
 	human.Hand.append(Tank.new())
-	ai_player.HitPoints = 100
-	ai_player.MaxHitPoints = 100
+	ai_player.HitPoints = 20
+	ai_player.MaxHitPoints = 20
 	ai_player.BioSupply = 150
 	ai_player.MoneySupply = 150
 	ai_player.Board = []
