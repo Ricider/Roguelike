@@ -86,6 +86,43 @@ var tutorial_step: int = 0
 var tutorial_overlay: PanelContainer = null
 var tutorial_label: RichTextLabel = null
 var tutorial_highlight_tween: Tween = null
+# Mighty Bear Tutorial Revamp (Best Friends Cafe) — Learning to Teach
+# Identify the need: fresh playtest without onboarding showed pain points = upgrade/modifier confusion, adjacency buff, HasRange/Flying; intuitive = drag-to-place. Focus tutorial there.
+# Toolset (simple + consistent): 3 tools only — (1) Text box (tutorial_overlay RichTextLabel), (2) Highlight (hand/board/EndTurn glow + tween), (3) Custom level (preset AI Drones/Wall). Miro-style flow planned before code.
+# Context: board-game rulebook style — goal first, then explain as it comes up. Player trusts tutorial, files unknowns as 'later'. Don't dump shop/modifiers here.
+# Iteration setup: sequences = trigger + actions editable by designers without engineering. Below TUTORIAL_SEQUENCES table drives messages + highlights; triggers are card selections/placements.
+# Break it until it works: each trigger logs analytics if expected but missed; custom levels preset so Bugs from limiting input are caught.
+# Do it all over again: not every pain point gets flow — VFX (damage numbers), UI weight already fixed elsewhere.
+const TUTORIAL_SEQUENCES: Array = [
+	# Goal first — before any mechanic, anchor why we learn (Simonas: explain goal ASAP)
+	{"step": 0, "trigger": "select_Housing", "highlight": "hand:Housing", "title": "Step 1/9 - Resources", "text": "[b]Goal:[/b] Defeat the [color=#ff8888]Insurgents (20 HP)[/color] — bring them to 0 before your own HP falls.\n\n[b]Resources:[/b] Click [color=#ffcc66]Housing[/color] in hand. It costs [color=#88ff88]30 Bio[/color]+[color=#ffd700]20 Money[/color], gives 50 HP and +2 Money/turn. Bio=green, Money=gold, Influence=yellow for Shop (explained later when needed)."},
+	{"step": 1, "trigger": "place_any", "highlight": "board:empty", "title": "Step 2/9 - Placement", "text": "[b]Step 2/9 - Placement:[/b] Click any [color=#88ff88]empty square[/color] on your field (bottom 4 rows). Your board is 4x10 facing enemy (8x10 total). One card per square."},
+	{"step": 2, "trigger": "end_turn", "highlight": "endturn", "title": "Step 3/9 - End Turn", "text": "[b]Step 3/9 - End Turn:[/b] Click [color=#ffcc66]End Turn[/color]. This triggers Economy (+Bio/+Money) then opponent plays."},
+	{"step": 3, "trigger": "auto_drones", "highlight": "none", "title": "Enemy Turn", "text": "[b]Enemy Turn:[/b] Insurgents played [color=#ff8888]2 Drones[/color] (6 HP, 3 DMG, Flying) front and hit Housing! Drones are cheap Flying harassers."},
+	{"step": 4, "trigger": "select_Infantry", "highlight": "hand:Infantry", "title": "Step 4/9 - Health & Damage", "text": "[b]Step 4/9 - Health & Damage:[/b] Click [color=#ffcc66]Infantry[/color]. 12 HP, 2 DMG, costs 5 Bio+15 Money. HP=survives, Damage=hits each Combat."},
+	{"step": 5, "trigger": "place_any", "highlight": "board:empty", "title": "Step 5/9 - Targeting", "text": "[b]Step 5/9 - Targeting:[/b] Place Infantry anywhere. Units hit [color=#88ff88]closest enemy[/color] by Manhattan distance. Non-HasRange hits front row only; HasRange hits any row. Flying takes half vs non-ranged."},
+	{"step": 6, "trigger": "end_turn", "highlight": "endturn", "title": "Step 6/9 - Watch", "text": "[b]Step 6/9 - Watch Targeting:[/b] Click [color=#ffcc66]End Turn[/color] and watch Infantry target the closest Drone."},
+	{"step": 7, "trigger": "auto_wall", "highlight": "none", "title": "Enemy Turn", "text": "[b]Enemy Turn:[/b] Insurgents placed [color=#aaaaaa]Wall[/color] (20 HP, 10 Money) front to block."},
+	{"step": 8, "trigger": "select_Barracks", "highlight": "hand:Barracks", "title": "Step 7/9 - Special", "text": "[b]Step 7/9 - Special:[/b] Click [color=#ffcc66]Barracks[/color]. 30 HP +2 Income, costs 20 Money+25 Bio. Effect: [color=#88ff88]adjacent friends +2 Damage[/color] (8 neighbours)."},
+	{"step": 9, "trigger": "place_adjacent_Infantry", "highlight": "board:adjacent:Infantry", "title": "Step 8/9 - Adjacency", "text": "[b]Step 8/9 - Adjacency:[/b] Place Barracks [color=#88ff88]next to Infantry[/color] (highlighted). Includes diagonals."},
+	{"step": 10, "trigger": "end_turn", "highlight": "endturn", "title": "Step 9/9 - Good luck!", "text": "[b]Step 9/9 - Good luck![/b] Click [color=#ffcc66]End Turn[/color] — boosted Infantry (4 DMG) helps drop the 20 HP Insurgents!"},
+	{"step": 11, "trigger": "free_play", "highlight": "none", "title": "Tutorial Complete!", "text": "[b]Tutorial Complete![/b] Free play — keep building and defeat the Insurgents!"},
+]
+
+func _tutorial_sequence_for_step(s: int) -> Dictionary:
+	for seq in TUTORIAL_SEQUENCES:
+		if seq["step"] == s:
+			return seq
+	return {}
+
+func _log_tutorial_analytics(event: String, step: int, expected: String, got: String = ""):
+	# Break-it analytics: if a trigger should have fired but didn't, log for diagnosis (Simonas: analytics for missing sequences)
+	if OS.is_debug_build():
+		print("[TutorialAnalytics] step %d %s expected=%s got=%s" % [step, event, expected, got])
+
+# ---
+
+
 
 func _style_round_button(btn: Button, primary: bool = true):
 	var sb := StyleBoxFlat.new()
@@ -310,34 +347,14 @@ func _setup_tutorial_overlay():
 func _update_tutorial_message():
 	if tutorial_label == null or not is_instance_valid(tutorial_label):
 		return
-	var msg: String = ""
-	match tutorial_step:
-		0:
-			msg = "[b]Step 1/9 - Resources:[/b] Click the [color=#ffcc66]Housing[/color] card in your hand.\nHousing costs [color=#88ff88]30 Bio[/color] + [color=#ffd700]20 Money[/color], gives [color=#ff8888]50 HP[/color] and [color=#ffd700]+2 Money[/color] income each Economy phase.\nBioSupply (green) and MoneySupply (gold) pay costs. Influence (yellow) is for the Shop."
-		1:
-			msg = "[b]Step 2/9 - Placement:[/b] Click any [color=#88ff88]empty square[/color] on your field (bottom 4 rows).\nYour board is 4×10, facing the enemy's board (8×10 total). Cards occupy one square."
-		2:
-			msg = "[b]Step 3/9 - End Turn:[/b] Click [color=#ffcc66]End Turn[/color] to end your build phase.\nThis triggers Economy (+Bio/+Money) then your opponent will play."
-		3:
-			msg = "[b]Enemy Turn:[/b] Insurgents played [color=#ff8888]2 Drones[/color] (6 HP, 3 DMG, Flying) at the front and attacked your Housing!\nDrones are cheap Flying harassers. Watch your Housing HP drop."
-		4:
-			msg = "[b]Step 4/9 - Health & Damage:[/b] Click [color=#ffcc66]Infantry[/color] in hand.\nInfantry: [color=#ff8888]12 HP[/color], [color=#ff6666]2 Damage[/color], costs 5 Bio + 15 Money. HP is health, Damage is attack each Combat."
-		5:
-			msg = "[b]Step 5/9 - Targeting:[/b] Place Infantry on an empty square.\nUnits attack the [color=#88ff88]closest enemy[/color] by Manhattan distance. Without HasRange they only hit the front row; with HasRange they hit any row. Flying takes half damage from non-ranged."
-		6:
-			msg = "[b]Step 6/9 - Watch Targeting:[/b] Click [color=#ffcc66]End Turn[/color] and watch your Infantry target the closest Drone."
-		7:
-			msg = "[b]Enemy Turn:[/b] Insurgents placed a [color=#aaaaaa]Wall[/color] (20 HP, 0 Income, 10 Money) at the front to block."
-		8:
-			msg = "[b]Step 7/9 - Special Effects:[/b] Click [color=#ffcc66]Barracks[/color] in hand.\nBarracks: 30 HP, +2 Income, costs 20 Money + 25 Bio. Effect: [color=#88ff88]Friendly adjacent units get +2 Damage[/color] (8 neighbours)."
-		9:
-			msg = "[b]Step 8/9 - Adjacency:[/b] Place Barracks on a square [color=#88ff88]next to your Infantry[/color] (highlighted).\nAdjacency includes diagonals - 8 surrounding squares."
-		10:
-			msg = "[b]Step 9/9 - Good luck![/b] Click [color=#ffcc66]End Turn[/color] to continue. Your boosted Infantry (4 DMG) will help drop the AI to 0 HP!"
-		11:
-			msg = "[b]Tutorial Complete![/b] Free play now — keep building and defeat the Insurgents!"
-		_:
-			msg = ""
+	# Iteration-friendly: designers edit TUTORIAL_SEQUENCES table, no code dive (Best Friends Cafe sequences = trigger + actions)
+	var seq := _tutorial_sequence_for_step(tutorial_step)
+	var msg: String = seq.get("text", "") as String
+	if msg == "":
+		msg = ""
+	# Analytics: if sequence missing where we expected one, log (“should have started but wasn’t able”)
+	if seq.is_empty() and tutorial_step <= 11:
+		_log_tutorial_analytics("missing_sequence", tutorial_step, "has_message", "")
 	tutorial_label.text = msg
 	_apply_kraj_efficient_ui()
 	_highlight_tutorial()
@@ -346,21 +363,23 @@ func _highlight_tutorial():
 	_clear_tutorial_highlights()
 	if tutorial_overlay == null:
 		return
-	# Highlight based on step
-	if tutorial_step == 0:
-		_highlight_hand_card("Housing")
-	elif tutorial_step == 1:
+	# Simple + consistent toolset: only highlights as glow (Miro plan: keep 3 tools, same format). Designers change via TUTORIAL_SEQUENCES highlight field.
+	var seq := _tutorial_sequence_for_step(tutorial_step)
+	var hl: String = seq.get("highlight", "") as String
+	if hl == "":
+		return
+	if hl.begins_with("hand:"):
+		_highlight_hand_card(hl.substr(5))
+	elif hl == "board:empty":
 		_highlight_board_empty()
-	elif tutorial_step == 2 or tutorial_step == 6 or tutorial_step == 10:
+	elif hl == "endturn":
 		_highlight_end_turn()
-	elif tutorial_step == 4:
-		_highlight_hand_card("Infantry")
-	elif tutorial_step == 5:
-		_highlight_board_empty()
-	elif tutorial_step == 8:
-		_highlight_hand_card("Barracks")
-	elif tutorial_step == 9:
-		_highlight_board_adjacent_to("Infantry")
+	elif hl.begins_with("board:adjacent:"):
+		_highlight_board_adjacent_to(hl.substr(15))
+	elif hl == "none":
+		pass
+	else:
+		_log_tutorial_analytics("unknown_highlight", tutorial_step, hl, "")
 
 func _clear_tutorial_highlights():
 	if tutorial_highlight_tween != null and is_instance_valid(tutorial_highlight_tween):
@@ -550,7 +569,9 @@ func _apply_kraj_efficient_ui():
 		overlay.color = Color(0.04, 0.04, 0.08, 0.38)
 
 func _tutorial_advance():
+	var prev: int = tutorial_step
 	tutorial_step += 1
+	_log_tutorial_analytics("advance", prev, "to_%d" % tutorial_step, "")
 	_update_tutorial_message()
 	_highlight_tutorial()
 	if tutorial_step == 3:
@@ -3150,6 +3171,7 @@ func _on_hand_click(idx: int):
 		elif tutorial_step == 8:
 			expected = "Barracks"
 		if expected != "" and (human.Hand[idx] as Card).card_name != expected:
+			_log_tutorial_analytics("wrong_card_tap", tutorial_step, expected, (human.Hand[idx] as Card).card_name)
 			message_label.text = "Tutorial: Please click %s" % expected
 			tutorial_label.text = "Please click the [color=#ffcc66]%s[/color] card!" % expected
 			return
@@ -3189,6 +3211,7 @@ func _on_board_click(r: int, c: int):
 				var dr: int = abs(r - infantry_pos["r"])
 				var dc: int = abs(c - infantry_pos["c"])
 				if not (dr <=1 and dc <=1 and not (dr==0 and dc==0)):
+					_log_tutorial_analytics("wrong_placement", tutorial_step, "adjacent_Infantry", "%d,%d" % [r,c])
 					message_label.text = "Tutorial: Place Barracks next to Infantry!"
 					tutorial_label.text = "Place [color=#ffcc66]Barracks[/color] on a square [color=#88ff88]adjacent[/color] to Infantry (highlighted)."
 					return
