@@ -402,7 +402,7 @@ func _setup_gauge_grid_background():
 	# Only bound the gauge side, not the board: shrink to LeftGauges content
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	panel.clip_contents = true
+	panel.clip_contents = false
 	panel.custom_minimum_size = Vector2(0, 0)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
@@ -433,6 +433,15 @@ func _setup_gauge_grid_background():
 	asp.centered = true
 	asp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	asp.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
+	# Blurry soft edges: shader fades+blurs texture within 18% of border
+	if ResourceLoader.exists("res://Assets/Shaders/gauge_blur.gdshader"):
+		var shd := load("res://Assets/Shaders/gauge_blur.gdshader") as Shader
+		if shd != null:
+			var mat := ShaderMaterial.new()
+			mat.shader = shd
+			mat.set_shader_parameter("edge_soft", 0.18)
+			mat.set_shader_parameter("blur_radius", 0.012)
+			asp.material = mat
 	bg_control.add_child(asp)
 	gauge_grid_bg_sprite = asp
 	panel.add_child(bg_control)
