@@ -3192,8 +3192,14 @@ func _refresh_hand():
 	for child in hand_container.get_children():
 		hand_container.remove_child(child)
 		child.queue_free()
-	for idx in range(human.Hand.size()):
-		var card: Card = human.Hand[idx]
+	# Display sorted alphabetically, but keep Hand's random draw order intact
+	var hand_sorted: Array = []
+	for i in range(human.Hand.size()):
+		hand_sorted.append({"card": human.Hand[i], "idx": i})
+	hand_sorted.sort_custom(func(a, b): return (a["card"].card_name if a["card"] is Card else str(a["card"])) < (b["card"].card_name if b["card"] is Card else str(b["card"])))
+	for entry in hand_sorted:
+		var idx: int = entry["idx"] as int
+		var card: Card = entry["card"] as Card
 		var btn := Button.new()
 		btn.clip_contents = false
 		btn.custom_minimum_size = Vector2(108, 68)
@@ -4358,6 +4364,10 @@ func _inspect_ai_full_deck():
 	full.sort_custom(func(a,b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
 	_inspect_pile("AI Deck (Full)", full)
 func _inspect_pile(title: String, pile: Array):
+	# Sort view alphabetically, keep actual pile order (draw order) untouched
+	var view_pile: Array = pile.duplicate()
+	view_pile.sort_custom(func(a, b): return (a.card_name if a is Card else str(a)) < (b.card_name if b is Card else str(b)))
+	var pile_sorted: Array = view_pile
 	inspect_title.text = "%s (%d)" % [title, pile.size()]
 	# Clear previous grid
 	for child in inspect_grid.get_children():
@@ -4378,7 +4388,7 @@ func _inspect_pile(title: String, pile: Array):
 		# cap visible columns to avoid absurd width; ScrollContainer will scroll
 		inspect_grid.columns = cols
 		# Row 1: titles
-		for card in pile:
+		for card in pile_sorted:
 			var cname: String = card.card_name if card is Card else str(card)
 			var lbl := Label.new()
 			lbl.text = cname
@@ -4390,7 +4400,7 @@ func _inspect_pile(title: String, pile: Array):
 			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			inspect_grid.add_child(lbl)
 		# Row 2: art
-		for card in pile:
+		for card in pile_sorted:
 			var cname2: String = card.card_name if card is Card else str(card)
 			var art_center := CenterContainer.new()
 			art_center.custom_minimum_size = Vector2(110, 56)
@@ -4403,7 +4413,7 @@ func _inspect_pile(title: String, pile: Array):
 			art_center.add_child(art)
 			inspect_grid.add_child(art_center)
 		# Row 3: stats
-		for card in pile:
+		for card in pile_sorted:
 			var c3: Card = card as Card if card is Card else null
 			var stats := Label.new()
 			if c3 is Unit:
@@ -4419,7 +4429,7 @@ func _inspect_pile(title: String, pile: Array):
 			stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			inspect_grid.add_child(stats)
 		# Row 4: desc (SpecialEffect)
-		for card in pile:
+		for card in pile_sorted:
 			var c4: Card = card as Card if card is Card else null
 			var desc := RichTextLabel.new()
 			desc.bbcode_enabled = true
