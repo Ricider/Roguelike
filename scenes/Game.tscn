@@ -41,7 +41,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.04, 0.04, 0.08, 0.55)
+color = Color(0.04, 0.04, 0.08, 0.38)
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -68,7 +68,7 @@ size_flags_vertical = 3
 alignment = 0
 
 [node name="LeftGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(124, 0)
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
@@ -102,7 +102,7 @@ alignment = 1
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="AIHPIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
@@ -111,11 +111,11 @@ layout_mode = 2
 text = ""
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
-theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.92, 0.92, 0.90, 1)
 
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -134,7 +134,7 @@ layout_mode = 2
 text = "100/100"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
@@ -149,7 +149,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="AIBioIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
@@ -158,11 +158,11 @@ layout_mode = 2
 text = ""
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -181,7 +181,7 @@ layout_mode = 2
 text = "100/200"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
@@ -196,7 +196,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="AIMoneyIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
@@ -205,11 +205,11 @@ layout_mode = 2
 text = "+0"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -228,7 +228,7 @@ layout_mode = 2
 text = "20/200"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoneyIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
@@ -303,7 +303,7 @@ alignment = 1
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerHPIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
@@ -312,11 +312,11 @@ layout_mode = 2
 text = ""
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -335,7 +335,7 @@ layout_mode = 2
 text = "100/100"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHPIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
@@ -350,7 +350,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerBioIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
@@ -359,11 +359,11 @@ layout_mode = 2
 text = ""
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -382,7 +382,7 @@ layout_mode = 2
 text = "100/200"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBioIcon" type="TextureRect" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
@@ -397,7 +397,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(68, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerMoneyIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
@@ -406,11 +406,11 @@ layout_mode = 2
 text = "+0"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(26, 180)
+custom_minimum_size = Vector2(18, 150)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -429,7 +429,7 @@ layout_mode = 2
 text = "20/200"
 horizontal_alignment = 1
 size_flags_horizontal = 0
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 
@@ -544,7 +544,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="RightGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(124, 0)
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
@@ -555,7 +555,7 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 text = "Discard"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIDiscard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]

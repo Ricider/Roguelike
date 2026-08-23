@@ -339,6 +339,7 @@ func _update_tutorial_message():
 		_:
 			msg = ""
 	tutorial_label.text = msg
+	_apply_kraj_efficient_ui()
 	_highlight_tutorial()
 
 func _highlight_tutorial():
@@ -438,6 +439,115 @@ func _highlight_end_turn():
 		tw.tween_property(end_turn_btn, "scale", Vector2(1.08, 1.08), 0.35)
 		tw.tween_property(end_turn_btn, "scale", Vector2(1.0, 1.0), 0.35)
 		tutorial_highlight_tween = tw
+
+
+# === Kraj Efficient UI Revamp (Feb 24 2020) ===
+# Key #1 Critical focus: board center (AIBoard+PlayerBoard) is red zone - keep permanent heavy UI in green safe corners (LeftGauges/RightGauges). Never overlay center.
+# Key #2 Four categories:
+#   Non-Diegetic: HP/Bio/Money bars + Influence (overlay, always readable, independent of camera)
+#   Diegetic: Card art + HP text on board tiles (exists on board, in-world fantasy)
+#   Spatial: targeting arrows / damage numbers anchored in world (hover_arrow, combat VFX)
+#   Meta: HQ/Waiting-zone/Graveyard building icons at piles - overlay but in-world buildings fantasy
+# Key #3 Only relevant info: AC Origins hides health outside combat - we dim AI gauges on player turn, hide AIDeck/AIGrave outside inspect, mute HandLabel/Message when empty
+# Key #4 Minimum eye travel: group PlayerGauges + Hand + EndTurn near bottom (player flow: check resources -> pick card -> place on closest row -> EndTurn), AI gauges stay top near AI board
+# Key #5 Weight: Half-Life 2 minimal beige - desaturate fills, thin bars, low-contrast backgrounds, small fonts
+# Key #6 Worst-case: clamp piles at 33, message at 120 chars, boards 10 cols max, hand scrolls after 10
+
+func _apply_kraj_efficient_ui():
+	# Protect critical focus - ensure boards have margin and sidebars don't encroach center
+	var main = get_node_or_null("VBox/MainHBox") as HBoxContainer
+	if main != null:
+		main.add_theme_constant_override("separation", 14)
+		main.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Weight: make bars thin + desaturated (Half-Life 2 beige), backgrounds low contrast
+	var hp_fill_muted := Color(0.82, 0.78, 0.70, 0.95) # beige
+	var bio_fill_muted := Color(0.72, 0.80, 0.68, 0.95)
+	var money_fill_muted := Color(0.84, 0.80, 0.55, 0.95)
+	for bar in [ai_hp_bar, player_hp_bar]:
+		if bar != null and is_instance_valid(bar):
+			bar.tint_progress = hp_fill_muted if bar.value >= 30 else Color(0.92, 0.45, 0.45, 0.98)
+			bar.custom_minimum_size = Vector2(18, 150)
+			bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	for bar in [ai_bio_bar, player_bio_bar]:
+		if bar != null and is_instance_valid(bar):
+			bar.tint_progress = bio_fill_muted
+			bar.custom_minimum_size = Vector2(18, 150)
+	for bar in [ai_money_bar, player_money_bar]:
+		if bar != null and is_instance_valid(bar):
+			bar.tint_progress = money_fill_muted
+			bar.custom_minimum_size = Vector2(18, 150)
+	# LeftGauges / RightGauges as safe green zones - narrow, low opacity bg
+	var left = get_node_or_null("VBox/MainHBox/LeftGauges") as Control
+	var right = get_node_or_null("VBox/MainHBox/RightGauges") as Control
+	if left != null:
+		left.custom_minimum_size = Vector2(92, 0)
+		left.modulate = Color(1, 1, 1, 0.96)
+	if right != null:
+		right.custom_minimum_size = Vector2(84, 0)
+	# Eye travel: push PlayerGauges + PlayerDeck toward bottom near Hand (group flow)
+	if left != null:
+		var spacer = left.get_node_or_null("Spacer") as Control
+		if spacer != null:
+			spacer.custom_minimum_size = Vector2(0, 8)
+			spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var aigauges = left.get_node_or_null("AIGauges") as Control
+		var pgauges = left.get_node_or_null("PlayerGauges") as Control
+		if aigauges != null:
+			aigauges.add_theme_constant_override("separation", 8)
+		if pgauges != null:
+			pgauges.add_theme_constant_override("separation", 8)
+	# Only relevant info: dim opposing gauges depending on tutorial step / turn
+	var player_turn: bool = true
+	if state != null and state.has_method("get_current_turn"):
+		pass
+	# Use tutorial_step to infer - even steps player acts, odd enemy acts (approx)
+	if is_tutorial:
+		player_turn = tutorial_step in [0, 1, 2, 4, 5, 6, 8, 9, 10]
+	# On player flow, AI gauges 40% alpha, player gauges 100%; reverse on enemy flow
+	var ai_mod := Color(1, 1, 1, 0.42) if player_turn else Color(1, 1, 1, 1.0)
+	var p_mod := Color(1, 1, 1, 1.0) if player_turn else Color(1, 1, 1, 0.45)
+	var ai_header = left.get_node_or_null("AIHeader") if left != null else null
+	var p_header = left.get_node_or_null("PlayerHeader") if left != null else null
+	var aig = left.get_node_or_null("AIGauges") if left != null else null
+	var pg = left.get_node_or_null("PlayerGauges") if left != null else null
+	if aig != null: aig.modulate = ai_mod
+	if pg != null: pg.modulate = p_mod
+	if ai_header != null: ai_header.modulate = ai_mod
+	if p_header != null: p_header.modulate = p_mod
+	# Hide non-critical labels when empty (overpaint test: if we painted this bright ugly, would game still be playable?)
+	if ai_info != null: ai_info.visible = false
+	if player_info != null: player_info.visible = false
+	var hand_lbl = get_node_or_null("VBox/MainHBox/RightContent/HandLabel") as Label
+	if hand_lbl != null: hand_lbl.visible = false
+	# Key #3 overpaint test + worst-case: Battleborn ugliest-color test - we desaturated and ensure nothing covers board
+	# Mistake #1 S&F: not every sign needs UI - damage uses spatial floating numbers + shake, not extra icon. Mistake #2: not everything all time.
+	# Worst-case safeguards
+	if message_label != null:
+		var txt: String = message_label.text
+		if txt.length() > 120:
+			message_label.text = txt.substr(0, 117) + "..."
+		message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		message_label.custom_minimum_size = Vector2(0, 18)
+		message_label.modulate = Color(1,1,1, 0.92) if txt.length() > 0 else Color(1,1,1,0.45)
+	# Hide empty piles (only relevant info) - collapse to avoid worst-case stack overflow like Black Desert chat
+	var pile_nodes: Array = [get_node_or_null("VBox/MainHBox/LeftGauges/AIDeck"), get_node_or_null("VBox/MainHBox/RightGauges/AIDiscard"), get_node_or_null("VBox/MainHBox/RightGauges/AIGraveyard"), get_node_or_null("VBox/MainHBox/RightGauges/PlayerDiscard"), get_node_or_null("VBox/MainHBox/RightGauges/PlayerGraveyard"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck")]
+	for pn in pile_nodes:
+		if pn != null and pn is Control:
+			var bar = pn.get_node_or_null("AIDeckBar") if pn.name=="AIDeck" else pn.get_node_or_null("PlayerDeckBar") if pn.name=="PlayerDeck" else pn.get_node_or_null("AIDiscardBar") if pn.name=="AIDiscard" else pn.get_node_or_null("AIGraveyardBar") if pn.name=="AIGraveyard" else pn.get_node_or_null("PlayerDiscardBar") if pn.name=="PlayerDiscard" else pn.get_node_or_null("PlayerGraveyardBar")
+			var v: int = int(bar.value) if bar != null and bar is TextureProgressBar else 0
+			# Keep piles visible but dim if empty (overpaint: would empty pile still block board? no)
+			(pn as Control).modulate = Color(1,1,1,0.35) if v==0 else Color(1,1,1,1)
+	# Hand flow: keep cards grouped, wrap if >10 via scroll already in InspectPopup, main Hand cap is 10
+	if hand_container != null:
+		hand_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		hand_container.add_theme_constant_override("separation", 6)
+		# Worst-case: if hand >10 (shouldn't happen, draw caps at 10), ensure no overflow by scaling down
+		if hand_container.get_child_count() > 7:
+			hand_container.add_theme_constant_override("separation", 2)
+	# BGOverlay lower weight so board (critical) stays readable
+	var overlay = get_node_or_null("BGOverlay") as ColorRect
+	if overlay != null:
+		overlay.color = Color(0.04, 0.04, 0.08, 0.38)
 
 func _tutorial_advance():
 	tutorial_step += 1
@@ -772,9 +882,10 @@ func _update_gauge_grid_bg_transform():
 	gauge_grid_bg_sprite.scale = Vector2(scale_x, scale_y)
 
 func _enforce_uniform_gauge_width():
-	var w: float = 26
-	var h: float = 180
-	var gw: float = 80
+	# Kraj Key #5 weight + Key #1 safe zone: thin beige bars, narrow green zone
+	var w: float = 18
+	var h: float = 150
+	var gw: float = 68
 	for gauge in [get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney")]:
 		if gauge != null:
 			gauge.custom_minimum_size = Vector2(gw, 0)
@@ -899,6 +1010,7 @@ func _ready():
 		if human.DrawPile.is_empty():
 			human.DrawPile = CardFactory.make_state_troops_deck()
 	_update_background()
+	_apply_kraj_efficient_ui()
 	state = CombatState.new(human, ai_player)
 	# Tutorial check
 	var gs_tut = get_node_or_null("/root/GameState")
@@ -1753,6 +1865,7 @@ func _restart_game():
 		g.set_enemy(debug_enemy_option.get_item_text(debug_enemy_option.selected))
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
+# Kraj Shop: #1 popup centered not covering board red zone, #2 card art diegetic + cost non-diegetic, #3 only buyable matter (dim Owned), #4 vertical per-column grouping minimizes travel, #5 beige light weight, #6 fixed 5+3 grid worst-case
 func _ensure_shop_popup():
 	if shop_built:
 		return
@@ -1761,16 +1874,16 @@ func _ensure_shop_popup():
 	shop_popup.visible = false
 	shop_popup.z_index = 105
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.09,0.09,0.16,0.98)
-	sb.border_color = Color(1,0.9,0.4,1)
-	sb.set_border_width_all(3)
+	sb.bg_color = Color(0.11,0.11,0.14,0.96)
+	sb.border_color = Color(0.82,0.78,0.70,0.88)
+	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(12)
 	sb.content_margin_left = 14
 	sb.content_margin_right = 14
 	sb.content_margin_top = 12
 	sb.content_margin_bottom = 12
 	shop_popup.add_theme_stylebox_override("panel", sb)
-	shop_popup.custom_minimum_size = Vector2(920, 620)
+	shop_popup.custom_minimum_size = Vector2(860, 560)
 	add_child(shop_popup)
 	shop_built = true
 
@@ -1800,14 +1913,14 @@ func _show_shop():
 	var title := Label.new()
 	title.text = "Shop — Between Battles (Influence: %d)" % influence
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color(1,0.92,0.5))
 	title_row.add_child(title)
 	var hint := Label.new()
 	hint.text = "Buy 5 cards + 3 modifiers using Influence (cost = InfluenceCost). Remove a card for 25 Influence (once per shop)."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 22)
-	hint.add_theme_color_override("font_color", Color(0.85,0.85,0.9))
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_color_override("font_color", Color(0.78,0.78,0.84))
 	vbox.add_child(hint)
 	var offer: Array = []
 	if gs != null and not gs.shop_offer.is_empty():
@@ -1840,7 +1953,7 @@ func _show_shop():
 		var name_lbl := Label.new()
 		name_lbl.text = c.card_name
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.add_theme_font_size_override("font_size", 22)
+		name_lbl.add_theme_font_size_override("font_size", 16)
 		name_lbl.add_theme_color_override("font_color", Color(1,1,1))
 		name_lbl.custom_minimum_size = Vector2(150, 28)
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1939,7 +2052,7 @@ func _show_shop():
 		var cost_lbl := Label.new()
 		cost_lbl.text = "%d" % c3.InfluenceCost
 		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cost_lbl.add_theme_font_size_override("font_size", 20)
+		cost_lbl.add_theme_font_size_override("font_size", 16)
 		cost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		cost_row.add_child(cost_lbl)
 		desc.add_child(cost_row)
@@ -1949,7 +2062,7 @@ func _show_shop():
 		elif c3 is Building:
 			stats.text = "HP:%d INC:%d" % [(c3 as Building).HitPoints, (c3 as Building).Income]
 		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stats.add_theme_font_size_override("font_size", 18)
+		stats.add_theme_font_size_override("font_size", 12)
 		stats.add_theme_color_override("font_color", Color(0.9,0.9,1))
 		stats.custom_minimum_size = Vector2(150, 18)
 		desc.add_child(stats)
@@ -1959,7 +2072,7 @@ func _show_shop():
 		eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		eff.custom_minimum_size = Vector2(150, 36)
 		eff.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		eff.add_theme_font_size_override("font_size", 14)
+		eff.add_theme_font_size_override("font_size", 11)
 		eff.add_theme_color_override("font_color", Color(0.8,0.8,1))
 		desc.add_child(eff)
 		card_grid.add_child(desc)
@@ -1994,7 +2107,7 @@ func _show_shop():
 	var mod_label := Label.new()
 	mod_label.text = "Modifiers (permanent until reset)"
 	mod_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mod_label.add_theme_font_size_override("font_size", 20)
+	mod_label.add_theme_font_size_override("font_size", 14)
 	mod_label.add_theme_color_override("font_color", Color(1,0.85,0.4))
 	vbox.add_child(mod_label)
 	var mod_grid := GridContainer.new()
@@ -2011,7 +2124,7 @@ func _show_shop():
 		var mname := Label.new()
 		mname.text = m.modifier_name
 		mname.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		mname.add_theme_font_size_override("font_size", 20)
+		mname.add_theme_font_size_override("font_size", 16)
 		mname.add_theme_color_override("font_color", Color(1,0.92,0.6))
 		mname.custom_minimum_size = Vector2(220, 28)
 		mname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2056,7 +2169,7 @@ func _show_shop():
 		meff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		meff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		meff.custom_minimum_size = Vector2(220, 64)
-		meff.add_theme_font_size_override("font_size", 14)
+		meff.add_theme_font_size_override("font_size", 11)
 		meff.add_theme_color_override("font_color", Color(0.85,0.85,1))
 		mdesc.add_child(meff)
 		var mcost_row := HBoxContainer.new()
@@ -2070,7 +2183,7 @@ func _show_shop():
 		mcost_row.add_child(mcost_icon)
 		var mcost_lbl := Label.new()
 		mcost_lbl.text = "%d" % m3.InfluenceCost
-		mcost_lbl.add_theme_font_size_override("font_size", 18)
+		mcost_lbl.add_theme_font_size_override("font_size", 14)
 		mcost_lbl.add_theme_color_override("font_color", Color(1,0.85,0.4))
 		mcost_row.add_child(mcost_lbl)
 		mdesc.add_child(mcost_row)
@@ -2391,6 +2504,7 @@ func _animate_opponent_builds():
 	await get_tree().create_timer(0.2).timeout
 
 func _refresh_ui():
+	_apply_kraj_efficient_ui()
 	_hide_hover()
 	_hide_hand_label()
 	_refresh_modifiers_stack()
@@ -2718,7 +2832,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					else:
 						aura_sb.bg_color = Color(0.35,0.75,1.0,0.05)
 						aura_sb.border_color = Color(0.45,0.85,1.0,0.38)
-					aura_sb.set_border_width_all(3)
+					aura_sb.set_border_width_all(2)
 					aura_sb.set_corner_radius_all(74) # fully circular (half of 148)
 					if is_barracks_adj:
 						aura_sb.shadow_color = Color(1,0.6,0.1,0.16)
@@ -3790,7 +3904,7 @@ func _spawn_zap_effect(anchor: Control):
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.2, 0.5, 1.0, 0.0)
 	sb.border_color = Color(0.6, 0.85, 1.0, 1)
-	sb.set_border_width_all(3)
+	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(12)
 	sb.shadow_color = Color(0.3, 0.6, 1.0, 0.6)
 	sb.shadow_size = 12

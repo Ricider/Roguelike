@@ -1,3 +1,4 @@
+# Kraj Main Menu: Key #1 center Play is red zone protected by BGOverlay 0.38; Key #2 spatial battle behind, non-diegetic buttons overlay; Key #3 only relevant chooser shown in menu context; Key #4 eye travel grouped Play->Chooser->Tutorial minimal; Key #5 beige muted weight; Key #6 capped projectiles
 extends Control
 
 # Main Menu with Player chooser per Main Game Rules: any Player, State Troops recommended with border
@@ -297,7 +298,7 @@ func _style_menu_buttons():
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
-		_style_pill_button(b, Color(0.16,0.16,0.26,1), Color(0.22,0.22,0.34,1), Color(0.9,0.85,0.4,0.9))
+		_style_pill_button(b, Color(0.16,0.16,0.26,1), Color(0.22,0.22,0.34,1), Color(0.82,0.78,0.70,0.85))
 
 func _style_pill_button(btn: Button, bg: Color, hover_bg: Color, border: Color):
 	var sb := StyleBoxFlat.new()
@@ -315,7 +316,7 @@ func _style_pill_button(btn: Button, bg: Color, hover_bg: Color, border: Color):
 	btn.add_theme_stylebox_override("normal", sb)
 	var sb_h := StyleBoxFlat.new()
 	sb_h.bg_color = hover_bg
-	sb_h.border_color = Color(1,0.92,0.55,1)
+	sb_h.border_color = Color(0.88,0.84,0.72,1)
 	sb_h.set_border_width_all(2)
 	sb_h.set_corner_radius_all(24)
 	sb_h.content_margin_left = 18
@@ -350,7 +351,7 @@ func _add_tutorial_button():
 	tbtn.text = "Tutorial"
 	tbtn.custom_minimum_size = Vector2(340, 72)
 	tbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	tbtn.add_theme_font_size_override("font_size", 30)
+	tbtn.add_theme_font_size_override("font_size", 26)
 	tbtn.pressed.connect(_on_tutorial_pressed)
 	# Insert after PlayButton, before QuitButton/PlayerChooser
 	var play = vbox.get_node_or_null("PlayButton")
@@ -388,7 +389,7 @@ func _build_player_chooser():
 	var chooser := VBoxContainer.new()
 	chooser.name = "PlayerChooser"
 	chooser.alignment = BoxContainer.ALIGNMENT_CENTER
-	chooser.add_theme_constant_override("separation", 6)
+	chooser.add_theme_constant_override("separation", 4)
 	var lbl := Label.new()
 	lbl.text = "Choose your faction:"
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -397,18 +398,18 @@ func _build_player_chooser():
 	chooser.add_child(lbl)
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 18)
-	grid.add_theme_constant_override("v_separation", 14)
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 8)
 	var center_wrap := CenterContainer.new()
 	center_wrap.add_child(grid)
 	chooser.add_child(center_wrap)
 	for name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Coalition Army", "Corporate Troops"]:
 		var entry := VBoxContainer.new()
 		entry.alignment = BoxContainer.ALIGNMENT_CENTER
-		entry.add_theme_constant_override("separation", 6)
+		entry.add_theme_constant_override("separation", 4)
 		entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var flag := TextureRect.new()
-		flag.custom_minimum_size = Vector2(84, 84)
+		flag.custom_minimum_size = Vector2(68, 68)
 		flag.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		flag.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		var flag_path := "res://Assets/Players/%s/flag.png" % name
@@ -461,23 +462,23 @@ func _select_player(name: String):
 		if n == name:
 			var sb := StyleBoxFlat.new()
 			sb.bg_color = Color(0.18,0.18,0.26,1)
-			sb.border_color = Color(1,0.85,0.2,1)
-			sb.set_border_width_all(3)
+			sb.border_color = Color(0.82,0.78,0.70,1)
+			sb.set_border_width_all(2)
 			sb.set_corner_radius_all(18)
 			sb.content_margin_left = 12
 			sb.content_margin_right = 12
 			sb.content_margin_top = 8
 			sb.content_margin_bottom = 8
 			sb.shadow_color = Color(0,0,0,0.35)
-			sb.shadow_size = 5
+			sb.shadow_size = 3
 			b.add_theme_stylebox_override("normal", sb)
 			var sb_hover := StyleBoxFlat.new()
 			sb_hover.bg_color = Color(0.22,0.22,0.32,1)
-			sb_hover.border_color = Color(1,0.92,0.5,1)
+			sb_hover.border_color = Color(0.88,0.84,0.72,1)
 			sb_hover.set_border_width_all(3)
 			sb_hover.set_corner_radius_all(18)
 			sb_hover.shadow_color = Color(0,0,0,0.4)
-			sb_hover.shadow_size = 6
+			sb_hover.shadow_size = 4
 			b.add_theme_stylebox_override("hover", sb_hover)
 			b.add_theme_stylebox_override("pressed", sb)
 			b.add_theme_stylebox_override("focus", sb)
