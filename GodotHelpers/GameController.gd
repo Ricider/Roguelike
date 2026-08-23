@@ -3416,8 +3416,8 @@ func _refresh_hand():
 		if _stack_count > 1:
 			var _badge_wrap := Control.new()
 			_badge_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_badge_wrap.custom_minimum_size = Vector2(28, 28)
-			_badge_wrap.size = Vector2(28, 28)
+			_badge_wrap.custom_minimum_size = Vector2(36, 28)
+			_badge_wrap.size = Vector2(36, 28)
 			_badge_wrap.z_index = 10
 			# Anchor to bottom-right so it stays pinned when Button stretches horizontally with hand size
 			_badge_wrap.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -3425,15 +3425,15 @@ func _refresh_hand():
 			_badge_wrap.anchor_top = 1.0
 			_badge_wrap.anchor_right = 1.0
 			_badge_wrap.anchor_bottom = 1.0
-			_badge_wrap.offset_left = -28 - 4
+			_badge_wrap.offset_left = -36 - 4
 			_badge_wrap.offset_top = -28 - 4
 			_badge_wrap.offset_right = -4
 			_badge_wrap.offset_bottom = -4
 			_badge_wrap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 			_badge_wrap.grow_vertical = Control.GROW_DIRECTION_BEGIN
 			var _badge_bg := PanelContainer.new()
-			_badge_bg.custom_minimum_size = Vector2(28, 28)
-			_badge_bg.size = Vector2(28, 28)
+			_badge_bg.custom_minimum_size = Vector2(36, 28)
+			_badge_bg.size = Vector2(36, 28)
 			_badge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var _sb := StyleBoxFlat.new()
 			_sb.bg_color = Color(0.92, 0.22, 0.22, 1)
@@ -3442,7 +3442,7 @@ func _refresh_hand():
 			_sb.set_border_width_all(2)
 			_badge_bg.add_theme_stylebox_override("panel", _sb)
 			var _badge_lbl := Label.new()
-			_badge_lbl.text = str(_stack_count)
+			_badge_lbl.text = "X%d" % _stack_count
 			_badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			_badge_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			_badge_lbl.add_theme_font_size_override("font_size", 16)
@@ -4503,13 +4503,13 @@ func _inspect_pile(title: String, pile: Array):
 			if _cnt > 1:
 				var _badge := Control.new()
 				_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				_badge.custom_minimum_size = Vector2(20, 20)
-				_badge.size = Vector2(20, 20)
+				_badge.custom_minimum_size = Vector2(28, 20)
+				_badge.size = Vector2(28, 20)
 				_badge.position = Vector2(36, 36)
 				_badge.z_index = 10
 				var _bg := PanelContainer.new()
-				_bg.custom_minimum_size = Vector2(20, 20)
-				_bg.size = Vector2(20, 20)
+				_bg.custom_minimum_size = Vector2(28, 20)
+				_bg.size = Vector2(28, 20)
 				var _sb2 := StyleBoxFlat.new()
 				_sb2.bg_color = Color(0.92, 0.22, 0.22, 1)
 				_sb2.set_corner_radius_all(10)
@@ -4517,7 +4517,7 @@ func _inspect_pile(title: String, pile: Array):
 				_sb2.set_border_width_all(1)
 				_bg.add_theme_stylebox_override("panel", _sb2)
 				var _lbl2 := Label.new()
-				_lbl2.text = str(_cnt)
+				_lbl2.text = "X%d" % _cnt
 				_lbl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				_lbl2.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 				_lbl2.add_theme_font_size_override("font_size", 12)
