@@ -59,6 +59,44 @@ func _get_wall_behind_squares() -> Array:
 					break
 	return res
 
+func _get_squares_near_aura(empty_squares: Array) -> Array:
+	var res: Array = []
+	if empty_squares.is_empty():
+		return res
+	# Has any Barracks or Interceptor on board?
+	var has_aura: bool = false
+	for row in Board:
+		for sq in (row as Row).Squares:
+			if sq.Inhabitant != null and (sq.Inhabitant is Barracks or sq.Inhabitant is Interceptor):
+				has_aura = true
+				break
+		if has_aura:
+			break
+	if not has_aura:
+		return res
+	for sq in empty_squares:
+		var pos = _find_square_pos(sq)
+		if pos == null:
+			continue
+		var r: int = pos["r"]
+		var c: int = pos["c"]
+		for dr in [-1, 0, 1]:
+			for dc in [-1, 0, 1]:
+				if dr == 0 and dc == 0:
+					continue
+				var nr: int = r + dr
+				var nc: int = c + dc
+				if nr < 0 or nr >= Board.size():
+					continue
+				if nc < 0 or nc >= 10:
+					continue
+				var n_sq: Square = (Board[nr] as Row).Squares[nc]
+				if n_sq.Inhabitant != null and (n_sq.Inhabitant is Barracks or n_sq.Inhabitant is Interceptor):
+					res.append(sq)
+					break
+			# prevent adding same sq twice
+	return res
+
 func _get_best_barracks_square(empty_squares: Array) -> Square:
 	var best: Square = null
 	var best_score: int = -1
@@ -173,16 +211,29 @@ func take_build_turn(opponent: Player = null) -> Array:
 			if front_empty.is_empty():
 				continue # cannot place wall
 			sq = front_empty[rng.randi_range(0, front_empty.size() - 1)]
-		elif card is Barracks:
-			# Rule 4: most neighbors
+		elif card is Barracks or card is Interceptor:
+			# Rule 4: most neighbors (barracks or interceptors)
 			sq = _get_best_barracks_square(empty)
 			if sq == null:
 				sq = empty[rng.randi_range(0, empty.size() - 1)]
 		elif card is Unit:
-			# Rule 2: behind wall
+			# Rule 2+5: behind wall, and if we have Barracks/Interceptor prioritize near them
 			var behind: Array = _get_wall_behind_squares()
-			# Intersect behind with empty (behind already empty by definition)
-			if not behind.is_empty():
+			var near_aura: Array = _get_squares_near_aura(empty)
+			if not near_aura.is_empty():
+				# Prefer squares that are both behind wall and near aura if possible
+				if not behind.is_empty():
+					var intersect: Array = []
+					for s in near_aura:
+						if behind.has(s):
+							intersect.append(s)
+					if not intersect.is_empty():
+						sq = intersect[rng.randi_range(0, intersect.size() - 1)]
+					else:
+						sq = near_aura[rng.randi_range(0, near_aura.size() - 1)]
+				else:
+					sq = near_aura[rng.randi_range(0, near_aura.size() - 1)]
+			elif not behind.is_empty():
 				sq = behind[rng.randi_range(0, behind.size() - 1)]
 			else:
 				sq = empty[rng.randi_range(0, empty.size() - 1)]

@@ -452,5 +452,6 @@ Every player has 3 phases they go through each turn. First player to drop to 0 h
 - If you have less than 10 of either BioSupply or MoneySupply then prioritize playing buildings over units
 - When placing a unit if there is space available behind a vall vertically then place them there
 - Place walls only on the row closest to the opponent
-- When placing barracks chose the square with most neighbors
+- When placing barracks or interceptors chose the square with most neighbors
+- When playing units if you have barracks or interceptors then prioritize placing the unit near them
 - If you have any units that deal extra damage to any of the players units then prioritize playing them
