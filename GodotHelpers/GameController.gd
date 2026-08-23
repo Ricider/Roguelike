@@ -1518,7 +1518,7 @@ func _ensure_preview_popup():
 	if preview_popup.has_method("set_as_top_level"):
 		preview_popup.top_level = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.35) # 50% more transparent than 0.70 -> 0.35 (65% transparent)
+	sb.bg_color = Color(0.08, 0.08, 0.14, 1.0)
 	sb.border_color = Color(0.9, 0.9, 0.95, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(10)
@@ -3797,6 +3797,23 @@ func _refresh_hand():
 		btn.custom_minimum_size = Vector2(108, 68)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		# Opaque grey rounded rect background for cards (0% transparent)
+		var _hand_sb: StyleBoxFlat = StyleBoxFlat.new()
+		_hand_sb.bg_color = Color(0.11, 0.11, 0.14, 1.0)
+		_hand_sb.set_corner_radius_all(12)
+		_hand_sb.border_color = Color(0.28, 0.28, 0.34, 1.0)
+		_hand_sb.set_border_width_all(1)
+		_hand_sb.shadow_color = Color(0, 0, 0, 0.32)
+		_hand_sb.shadow_size = 4
+		btn.add_theme_stylebox_override("normal", _hand_sb)
+		var _hand_hover: StyleBoxFlat = _hand_sb.duplicate() as StyleBoxFlat
+		_hand_hover.bg_color = Color(0.16, 0.16, 0.22, 1.0)
+		btn.add_theme_stylebox_override("hover", _hand_hover)
+		var _hand_pressed: StyleBoxFlat = _hand_sb.duplicate() as StyleBoxFlat
+		_hand_pressed.bg_color = Color(0.09, 0.09, 0.12, 1.0)
+		btn.add_theme_stylebox_override("pressed", _hand_pressed)
+		btn.add_theme_stylebox_override("focus", _hand_sb)
+		btn.add_theme_stylebox_override("disabled", _hand_sb)
 		# Determine effective vs base for coloring (green increased, red decreased)
 		var base_hp: int = 0
 		var base_dmg: int = 0
