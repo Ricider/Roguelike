@@ -80,7 +80,7 @@ var influence_value_label: Label
 var influence_icon_rect: TextureRect
 var hover_arrow: Control = null
 var hover_arrow_target: Control = null
-var modifiers_stack: VBoxContainer = null
+var modifiers_stack: Control = null
 var is_tutorial: bool = false
 var tutorial_step: int = 0
 var tutorial_overlay: PanelContainer = null
@@ -688,11 +688,12 @@ func _tutorial_ai_wall():
 
 
 func _ensure_modifiers_stack():
-	# Top-right of screen, overlay (not inside RightGauges) — vertical stack
+	# Top-right of screen, overlay (not inside RightGauges) — vertical stack (now ScrollContainer)
 	var existing = get_node_or_null("ModifiersTopRight")
-	if existing != null and existing is VBoxContainer:
-		modifiers_stack = existing as VBoxContainer
+	if existing != null and (existing is ScrollContainer or existing is VBoxContainer):
+		modifiers_stack = existing as Control
 		modifiers_stack.visible = true
+		_clamp_modifiers_stack()
 		return
 	# Remove old RightGauges stack if it exists (migration)
 	var right_gauges = get_node_or_null("VBox/MainHBox/RightGauges")
@@ -700,40 +701,80 @@ func _ensure_modifiers_stack():
 		var old = right_gauges.get_node_or_null("ModifiersStack")
 		if old != null:
 			old.queue_free()
+	# Scroll-wrapped top-right stack — 4th modifier no longer pushes first out top (clamped to viewport)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ModifiersTopRight"
+	scroll.custom_minimum_size = Vector2(118, 0)
+	scroll.size_flags_horizontal = Control.SIZE_SHRINK_END
+	scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.clip_contents = true
+	scroll.z_index = 50
+	scroll.z_as_relative = false
+	if scroll.has_method("set_as_top_level"):
+		scroll.top_level = true
+	# Anchor to top-right, clamp height to 70% viewport so 4th stays scrollable inside
+	var vp_h: float = get_viewport_rect().size.y
+	if vp_h < 100:
+		vp_h = 720.0
+	var max_h: float = clamp(vp_h * 0.70, 280.0, 520.0)
+	scroll.anchor_left = 1.0
+	scroll.anchor_top = 0.0
+	scroll.anchor_right = 1.0
+	scroll.anchor_bottom = 0.0
+	scroll.offset_left = -118
+	scroll.offset_top = 12
+	scroll.offset_right = -12
+	scroll.offset_bottom = 12 + max_h
+	scroll.grow_horizontal = 0
+	scroll.grow_vertical = 0
 	var stack := VBoxContainer.new()
-	stack.name = "ModifiersTopRight"
+	stack.name = "ModifiersInner"
 	stack.alignment = BoxContainer.ALIGNMENT_BEGIN
 	stack.add_theme_constant_override("separation", 8)
-	stack.custom_minimum_size = Vector2(118, 0)
-	stack.size_flags_horizontal = Control.SIZE_SHRINK_END
+	stack.custom_minimum_size = Vector2(102, 0)
+	stack.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stack.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stack.z_index = 50
-	stack.z_as_relative = false
-	if stack.has_method("set_as_top_level"):
-		stack.top_level = true
-	# Anchor to top-right of viewport
-	stack.anchor_left = 1.0
-	stack.anchor_top = 0.0
-	stack.anchor_right = 1.0
-	stack.anchor_bottom = 0.0
-	stack.offset_left = -118
-	stack.offset_top = 12
-	stack.offset_right = -12
-	stack.offset_bottom = 360
-	stack.grow_horizontal = 0
-	stack.grow_vertical = 0
-	add_child(stack)
-	stack.visible = true
-	modifiers_stack = stack
+	scroll.add_child(stack)
+	add_child(scroll)
+	scroll.visible = true
+	modifiers_stack = scroll
+	# Keep legacy var pointing to inner for size checks if needed
+	if not has_meta("modifiers_inner"):
+		set_meta("modifiers_inner", stack)
+	else:
+		set_meta("modifiers_inner", stack)
+	# Re-clamp on resize
+	if not has_meta("modifiers_resize_connected"):
+		set_meta("modifiers_resize_connected", true)
+		get_viewport().size_changed.connect(func(): _clamp_modifiers_stack())
+
+func _clamp_modifiers_stack():
+	if modifiers_stack == null or not is_instance_valid(modifiers_stack):
+		return
+	var vp_h: float = get_viewport_rect().size.y
+	if vp_h < 100:
+		vp_h = 720.0
+	var max_h: float = clamp(vp_h * 0.70, 280.0, 520.0)
+	modifiers_stack.offset_bottom = modifiers_stack.offset_top + max_h
 
 func _refresh_modifiers_stack():
 	if modifiers_stack == null or not is_instance_valid(modifiers_stack):
 		_ensure_modifiers_stack()
 		if modifiers_stack == null:
 			return
-	for c in modifiers_stack.get_children():
-		c.queue_free()
+	_clamp_modifiers_stack()
+	var inner := modifiers_stack.get_node_or_null("ModifiersInner") as VBoxContainer
+	if inner == null:
+		# Legacy path where modifiers_stack was VBox directly
+		for c in modifiers_stack.get_children():
+			c.queue_free()
+	else:
+		for c in inner.get_children():
+			c.queue_free()
 	var src: Player = human
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null and gs.run_player != null:
@@ -743,6 +784,9 @@ func _refresh_modifiers_stack():
 		modifiers_stack.visible = false
 		return
 	modifiers_stack.visible = true
+	var target_box: Control = modifiers_stack.get_node_or_null("ModifiersInner") as Control
+	if target_box == null:
+		target_box = modifiers_stack
 	for mod in src.Modifiers:
 		if mod == null:
 			continue
@@ -760,7 +804,7 @@ func _refresh_modifiers_stack():
 		for child in spr.get_children():
 			if child is Control:
 				(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
-		modifiers_stack.add_child(spr)
+		target_box.add_child(spr)
 
 func _hide_hand_label():
 	var hl = get_node_or_null("VBox/MainHBox/RightContent/HandLabel")
