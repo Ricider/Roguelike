@@ -3397,10 +3397,12 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				var _row_for_hover: int = r
 				var _is_player_board: bool = is_human
 				# Invert hover side for middle confrontation rows (closest to center)
+				# Human front row is 0 near middle (distance small), AI front is 3 near middle
 				if is_human and _row_for_hover < 2:
-					_is_player_board = false # top 2 rows of player (near middle) -> pop bottom
-				elif not is_human and _row_for_hover >= 2:
-					_is_player_board = true # lower 2 rows of opponent (near middle) -> pop upwards
+					_is_player_board = false # top 2 rows of player (r=0,1 near middle) -> pop bottom
+				elif not is_human and _row_for_hover >= 1:
+					_is_player_board = true # lower 3 rows of opponent (r=1,2,3 includes second lowest) -> pop upwards
+					# r=1 is second lowest from top (third from bottom) but visual second lowest is r=2; cover both by >=1
 				var _anchor_board: Control = btn
 				btn.mouse_entered.connect(func(): _show_card_preview(_card_prev, _is_player_board, _anchor_board))
 				btn.mouse_exited.connect(func(): _hide_card_preview())

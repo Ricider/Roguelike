@@ -479,6 +479,25 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 alignment = 0
 
+[node name="Controls" type="HBoxContainer" parent="VBox/MainHBox/RightContent"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+alignment = 1
+
+[node name="EndTurn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
+custom_minimum_size = Vector2(150, 40)
+layout_mode = 2
+text = "End Turn"
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="MenuBtn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+text = "Menu"
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
 [node name="AIBoard" type="GridContainer" parent="VBox/MainHBox/RightContent"]
 custom_minimum_size = Vector2(0, 150)
 size_flags_vertical = 3
@@ -522,25 +541,6 @@ layout_mode = 2
 text = "Welcome"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-
-[node name="Controls" type="HBoxContainer" parent="VBox/MainHBox/RightContent"]
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-alignment = 1
-
-[node name="EndTurn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
-custom_minimum_size = Vector2(150, 40)
-layout_mode = 2
-text = "End Turn"
-theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-
-[node name="MenuBtn" type="Button" parent="VBox/MainHBox/RightContent/Controls"]
-custom_minimum_size = Vector2(110, 40)
-layout_mode = 2
-text = "Menu"
-theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="RightGauges" type="VBoxContainer" parent="VBox/MainHBox"]
