@@ -357,7 +357,7 @@ Player: Coalition Army
 
 Player: Corporate Troops
     HitPoints=70
-    Board=2 Corporation randomly placed at back row
+    Board=1 Interceptor randomly placed at back row and 3 Corporations adjacent to it at its left, right and in front
     Difficulty=8
     BackgroundImage=Cyberpunk Skyrises
 
@@ -420,7 +420,7 @@ Modifier: Defensive Doctrine
 - Player starts with as many influence as specified in their influence field
 - Offer 5 Cards to the player to buy from and add to their deck using influence
 - On a separate row offer 3 Modifiers to the player to buy from and add to their deck using influence
-- Player can also use 25 influence to remove a card once per shop
+- Player can also use 15 influence to remove a card once per shop
 
 ## Battle Phases ##
 

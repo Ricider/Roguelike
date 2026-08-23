@@ -106,7 +106,7 @@ func test_decks_johndoe_insurgents_euro():
 	var st := CardFactory.make_state_troops_player()
 	assert_eq(st.display_name, "State Troops", "State Troops name")
 	assert_eq(st.HitPoints, 180, "State Troops HP 180 per latest spec")
-	assert_eq(st.Influence, 20, "State Troops influence 20")
+	assert_eq(st.Influence, 30, "State Troops influence 30")
 	assert_eq(st.Difficulty, 2, "State Troops diff 2")
 	assert_eq(st.BackgroundImage, "Middle Eastern town, add some mosques around, don't make the entire thing a desert", "ST background")
 	var st_back = st.Board[0]
@@ -122,7 +122,7 @@ func test_decks_johndoe_insurgents_euro():
 	var horde := CardFactory.make_horde_player()
 	assert_eq(horde.display_name, "Horde", "Horde name")
 	assert_eq(horde.HitPoints, 200, "Horde HP 200")
-	assert_eq(horde.Influence, 25, "Horde influence 25")
+	assert_eq(horde.Influence, 50, "Horde influence 50")
 	assert_eq(horde.Difficulty, 6, "Horde diff 6 per latest spec")
 	assert_eq(horde.BackgroundImage, "Russian style city, snowy, add few trees", "Horde background")
 	var h_back = horde.Board[0]
@@ -144,7 +144,7 @@ func test_decks_johndoe_insurgents_euro():
 	assert_eq(h_tank,2, "Horde back 2 Tank")
 	var insurg := CardFactory.make_insurgents_player()
 	assert_eq(insurg.HitPoints, 120, "Insurgents HP 120 per new spec")
-	assert_eq(insurg.Influence, 10, "Insurgents influence 10")
+	assert_eq(insurg.Influence, 20, "Insurgents influence 20")
 	assert_eq(insurg.Difficulty, 1, "Insurgents diff 1")
 	# Horde deck size 52 per latest spec (10+15+8+2+2+3+3+1+2+3+3)
 	var horde_deck := CardFactory.make_horde_deck()
@@ -350,7 +350,7 @@ func test_shop_rules_and_influence_gain():
 	var gs = load("res://GodotHelpers/GameState.gd").new()
 	autofree(gs)
 	gs.start_run("State Troops")
-	assert_eq(gs.run_player.Influence, 20, "Start with State Troops influence 20")
+	assert_eq(gs.run_player.Influence, 30, "Start with State Troops influence 30")
 	gs.prepare_shop()
 	assert_eq(gs.shop_offer.size(), 5, "Shop offers 5")
 	for c in gs.shop_offer:

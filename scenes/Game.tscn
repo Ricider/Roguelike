@@ -68,7 +68,7 @@ size_flags_vertical = 3
 alignment = 0
 
 [node name="LeftGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(92, 0)
+custom_minimum_size = Vector2(124, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
@@ -102,7 +102,7 @@ alignment = 1
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="AIHPIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
@@ -115,7 +115,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.92, 0.92, 0.90, 1)
 
 [node name="AIHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -149,7 +149,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="AIBioIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
@@ -162,7 +162,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -196,7 +196,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="AIMoneyIncome" type="Label" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
@@ -209,7 +209,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -303,7 +303,7 @@ alignment = 1
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerHPIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
@@ -316,7 +316,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerHP" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -350,7 +350,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerBioIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
@@ -363,7 +363,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerBio" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -397,7 +397,7 @@ texture_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
 alignment = 1
-custom_minimum_size = Vector2(68, 0)
+custom_minimum_size = Vector2(80, 0)
 size_flags_horizontal = 0
 
 [node name="PlayerMoneyIncome" type="Label" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
@@ -410,7 +410,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerMoney" type="TextureProgressBar" parent="VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney"]
-custom_minimum_size = Vector2(18, 150)
+custom_minimum_size = Vector2(26, 180)
 size_flags_horizontal = 4
 layout_mode = 2
 size_flags_vertical = 3
@@ -544,7 +544,7 @@ theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="RightGauges" type="VBoxContainer" parent="VBox/MainHBox"]
-custom_minimum_size = Vector2(92, 0)
+custom_minimum_size = Vector2(124, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3

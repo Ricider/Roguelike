@@ -68,7 +68,7 @@ func test_e2e_full_run_state_troops():
 	autofree(gs)
 	gs.start_run("State Troops")
 	assert_eq(gs.run_player.display_name, "State Troops", "run player State Troops")
-	assert_eq(gs.run_player.Influence, 20, "starts with 20 influence")
+	assert_eq(gs.run_player.Influence, 30, "starts with 30 influence")
 	assert_eq(gs.run_enemies.size(), 7, "7 enemies excludes self per latest spec with 8 players")
 	assert_eq(gs.run_enemies[0].display_name, "Insurgents", "first is Insurgents")
 	# Simulate sequential battles

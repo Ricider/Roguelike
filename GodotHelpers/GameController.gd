@@ -547,24 +547,24 @@ func _apply_kraj_efficient_ui():
 	for bar in [ai_hp_bar, player_hp_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = hp_fill_muted if bar.value >= 30 else Color(0.92, 0.45, 0.45, 0.98)
-			bar.custom_minimum_size = Vector2(18, 150)
+			bar.custom_minimum_size = Vector2(26, 180)
 			bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for bar in [ai_bio_bar, player_bio_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = bio_fill_muted
-			bar.custom_minimum_size = Vector2(18, 150)
+			bar.custom_minimum_size = Vector2(26, 180)
 	for bar in [ai_money_bar, player_money_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = money_fill_muted
-			bar.custom_minimum_size = Vector2(18, 150)
+			bar.custom_minimum_size = Vector2(26, 180)
 	# LeftGauges / RightGauges as safe green zones - narrow, low opacity bg
 	var left = get_node_or_null("VBox/MainHBox/LeftGauges") as Control
 	var right = get_node_or_null("VBox/MainHBox/RightGauges") as Control
 	if left != null:
-		left.custom_minimum_size = Vector2(92, 0)
+		left.custom_minimum_size = Vector2(124, 0)
 		left.modulate = Color(1, 1, 1, 0.96)
 	if right != null:
-		right.custom_minimum_size = Vector2(84, 0)
+		right.custom_minimum_size = Vector2(124, 0)
 	# Eye travel: push PlayerGauges + PlayerDeck toward bottom near Hand (group flow)
 	if left != null:
 		var spacer = left.get_node_or_null("Spacer") as Control
@@ -966,9 +966,9 @@ func _update_gauge_grid_bg_transform():
 
 func _enforce_uniform_gauge_width():
 	# Kraj Key #5 weight + Key #1 safe zone: thin beige bars, narrow green zone
-	var w: float = 18
-	var h: float = 150
-	var gw: float = 68
+	var w: float = 26
+	var h: float = 180
+	var gw: float = 80
 	for gauge in [get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/AIGauges/AIGaugeMoney"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeHP"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeBio"), get_node_or_null("VBox/MainHBox/LeftGauges/PlayerGauges/PlayerGaugeMoney")]:
 		if gauge != null:
 			gauge.custom_minimum_size = Vector2(gw, 0)

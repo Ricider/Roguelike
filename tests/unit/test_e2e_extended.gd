@@ -64,7 +64,7 @@ func test_e2e_modifiers_economy_and_persistence():
 	var gs = _make_gs()
 	gs.start_run("State Troops")
 	var p: Player = gs.run_player
-	assert_eq(p.Influence, 20, "starts 20 inf")
+	assert_eq(p.Influence, 30, "starts 30 inf")
 	# Starter players have 1 preset modifier per CardFactory (State Troops -> State of emergency)
 	# Clear for isolated modifier tests, but assert starter exists first
 	assert_true(p.Modifiers.size() >= 1, "starts with at least 1 starter modifier")
