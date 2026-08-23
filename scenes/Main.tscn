@@ -50,7 +50,7 @@ alignment = 1
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 78
-text = "ROGUE"
+text = "GEOPOLITICS"
 horizontal_alignment = 1
 
 [node name="SubtitleLabel" type="Label" parent="CenterContainer/VBox"]
