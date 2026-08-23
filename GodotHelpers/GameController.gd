@@ -315,7 +315,7 @@ func _setup_tutorial_overlay():
 	overlay.custom_minimum_size = Vector2(720, 0)
 	overlay.clip_contents = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.35) # 50% more transparent than 0.70 -> 0.35 (65% transparent)
 	sb.border_color = Color(0.9, 0.85, 0.4, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(12)
@@ -904,7 +904,7 @@ func _setup_phase_ui_top_left():
 		phase_panel.top_level = true
 	phase_panel.clip_contents = false
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.35) # 50% more transparent than 0.70 -> 0.35 (65% transparent)
 	sb.set_corner_radius_all(8)
 	sb.border_color = Color(0.6, 0.6, 0.7, 0.9)
 	sb.set_border_width_all(1)
@@ -1392,7 +1392,7 @@ func _ensure_preview_popup():
 	if preview_popup.has_method("set_as_top_level"):
 		preview_popup.top_level = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.35) # 50% more transparent than 0.70 -> 0.35 (65% transparent)
 	sb.border_color = Color(0.9, 0.9, 0.95, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(10)
