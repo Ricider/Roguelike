@@ -88,25 +88,25 @@ var tutorial_label: RichTextLabel = null
 var tutorial_highlight_tween: Tween = null
 # Mighty Bear Tutorial Revamp (Best Friends Cafe) — Learning to Teach
 # Identify the need: fresh playtest without onboarding showed pain points = upgrade/modifier confusion, adjacency buff, HasRange/Flying; intuitive = drag-to-place. Focus tutorial there.
-# Toolset (simple + consistent): 3 tools only — (1) Text box (tutorial_overlay RichTextLabel), (2) Highlight (hand/board/EndTurn glow + tween), (3) Custom level (preset AI Drones/Wall). Miro-style flow planned before code.
+# Toolset (simple + consistent): 3 tools only — (1) Text box (tutorial_overlay RichTextLabel), (2) Highlight (hand/board/EndTurn glow + tween), (3) Custom level (preset enemy placements). Miro-style flow planned before code.
 # Context: board-game rulebook style — goal first, then explain as it comes up. Player trusts tutorial, files unknowns as 'later'. Don't dump shop/modifiers here.
 # Iteration setup: sequences = trigger + actions editable by designers without engineering. Below TUTORIAL_SEQUENCES table drives messages + highlights; triggers are card selections/placements.
 # Break it until it works: each trigger logs analytics if expected but missed; custom levels preset so Bugs from limiting input are caught.
 # Do it all over again: not every pain point gets flow — VFX (damage numbers), UI weight already fixed elsewhere.
 const TUTORIAL_SEQUENCES: Array = [
-	# Goal first — before any mechanic, anchor why we learn (Simonas: explain goal ASAP)
-	{"step": 0, "trigger": "select_Housing", "highlight": "hand:Housing", "title": "Step 1/9 - Resources", "text": "[b]Goal:[/b] Defeat the [color=#ff8888]Insurgents (20 HP)[/color] — bring them to 0 before your own HP falls.\n\n[b]Resources:[/b] Click [color=#ffcc66]Housing[/color] in hand. It costs [color=#88ff88]30 Bio[/color]+[color=#ffd700]20 Money[/color], gives 50 HP and +2 Money/turn. Bio=green, Money=gold, Influence=yellow for Shop (explained later when needed)."},
-	{"step": 1, "trigger": "place_any", "highlight": "board:empty", "title": "Step 2/9 - Placement", "text": "[b]Step 2/9 - Placement:[/b] Click any [color=#88ff88]empty square[/color] on your field (bottom 4 rows). Your board is 4x10 facing enemy (8x10 total). One card per square."},
-	{"step": 2, "trigger": "end_turn", "highlight": "endturn", "title": "Step 3/9 - End Turn", "text": "[b]Step 3/9 - End Turn:[/b] Click [color=#ffcc66]End Turn[/color]. This triggers Economy (+Bio/+Money) then opponent plays."},
-	{"step": 3, "trigger": "auto_drones", "highlight": "none", "title": "Enemy Turn", "text": "[b]Enemy Turn:[/b] Insurgents played [color=#ff8888]2 Drones[/color] (6 HP, 3 DMG, Flying) front and hit Housing! Drones are cheap Flying harassers."},
-	{"step": 4, "trigger": "select_Infantry", "highlight": "hand:Infantry", "title": "Step 4/9 - Health & Damage", "text": "[b]Step 4/9 - Health & Damage:[/b] Click [color=#ffcc66]Infantry[/color]. 12 HP, 2 DMG, costs 5 Bio+15 Money. HP=survives, Damage=hits each Combat."},
-	{"step": 5, "trigger": "place_any", "highlight": "board:empty", "title": "Step 5/9 - Targeting", "text": "[b]Step 5/9 - Targeting:[/b] Place Infantry anywhere. Units hit [color=#88ff88]closest enemy[/color] by Manhattan distance. Non-HasRange hits front row only; HasRange hits any row. Flying takes half vs non-ranged."},
-	{"step": 6, "trigger": "end_turn", "highlight": "endturn", "title": "Step 6/9 - Watch", "text": "[b]Step 6/9 - Watch Targeting:[/b] Click [color=#ffcc66]End Turn[/color] and watch Infantry target the closest Drone."},
-	{"step": 7, "trigger": "auto_wall", "highlight": "none", "title": "Enemy Turn", "text": "[b]Enemy Turn:[/b] Insurgents placed [color=#aaaaaa]Wall[/color] (20 HP, 10 Money) front to block."},
-	{"step": 8, "trigger": "select_Barracks", "highlight": "hand:Barracks", "title": "Step 7/9 - Special", "text": "[b]Step 7/9 - Special:[/b] Click [color=#ffcc66]Barracks[/color]. 30 HP +2 Income, costs 20 Money+25 Bio. Effect: [color=#88ff88]adjacent friends +2 Damage[/color] (8 neighbours)."},
-	{"step": 9, "trigger": "place_adjacent_Infantry", "highlight": "board:adjacent:Infantry", "title": "Step 8/9 - Adjacency", "text": "[b]Step 8/9 - Adjacency:[/b] Place Barracks [color=#88ff88]next to Infantry[/color] (highlighted). Includes diagonals."},
-	{"step": 10, "trigger": "end_turn", "highlight": "endturn", "title": "Step 9/9 - Good luck!", "text": "[b]Step 9/9 - Good luck![/b] Click [color=#ffcc66]End Turn[/color] — boosted Infantry (4 DMG) helps drop the 20 HP Insurgents!"},
-	{"step": 11, "trigger": "free_play", "highlight": "none", "title": "Tutorial Complete!", "text": "[b]Tutorial Complete![/b] Free play — keep building and defeat the Insurgents!"},
+	# Narrator — verbose, goal-first, phases-first — generic, no specific card names (as requested)
+	{"step": 0, "trigger": "select_any", "highlight": "hand:any", "title": "Welcome, commander", "text": "Welcome, commander — settle in. I'm your field narrator and I'll talk you through this war like we're sat across a table.\n\n[b]Your goal is simple and urgent:[/b] the [color=#ff8888]opposing force has exactly 20 HP in this tutorial[/color] — first side to 0 HP loses. You start at 100 HP. Everything we do is to protect yours and grind theirs down.\n\n[b]How a turn flows — three phases, every turn, for both sides:[/b]\n[color=#88ff88]1) Economy[/color] — you collect: [color=#88ff88]Bio = 10% of your current Bio +5, plus 8 for every supply-generating building you own[/color] and [color=#ffd700]Money = 10 plus the sum of all building Incomes[/color] (some buildings give a little Money each turn, others give much more). Then you draw — you always try to hold [color=#88ff88]10 cards[/color]; if your Draw pile empties we shuffle your Discard back in and keep drawing. Finally, some modifiers heal HP here.\n[color=#88ff88]2) Build[/color] — you spend Bio and Money (see the green and gold gauges left side) to play cards from your hand onto your half of the board — bottom four rows, 10 wide, 40 squares. Enemy owns top four; together 8×10. One card per square.\n[color=#ff6666]3) Combat[/color] — automatic. Every card you (and the enemy) have that has Damage fires [color=#ff6666]once[/color] at a random enemy among those [color=#88ff88]closest by Manhattan distance[/color] (rows+columns). If the attacker has [color=#ffd700]HasRange = true[/color] it can pick any row; without it, it can only reach the enemy's front row closest to you. If the target has [color=#88ccff]Flying[/color], it takes [color=#88ff88]half damage[/color] from attackers without HasRange (rounded down, min 1). When a card is destroyed its owner's HP drops by its [color=#88ff88]BioCost[/color] and it goes to Graveyard.\n\nLeave [color=#ffd700]Influence (yellow)[/color] for later — it's the Shop currency between battles.\n\nTo begin supply, tap the [color=#ffcc66]highlighted card[/color] in your hand — it's a building that gives [color=#ff8888]50 HP[/color], [color=#ffd700]+2 Money/turn[/color] and [color=#88ff88]+8 Bio/turn[/color], costing [color=#88ff88]30 Bio[/color] and [color=#ffd700]20 Money[/color]."},
+	{"step": 1, "trigger": "place_any", "highlight": "board:empty", "title": "Where to build — your ground", "text": "Good — card in hand. Listen, placement is permanent until destroyed, so where matters.\n\nYour ground is the [color=#88ff88]bottom four rows[/color] — that's 40 squares just for you, highlighted in soft green. The opposing force mirrors you up top. Combined you make that 8×10 chess-like field. Every card needs its own square; you can't stack, you can't play on the enemy half, and you can't play if you can't pay the Bio/Money cost up front.\n\nPick any glowing empty square down here. Think of it as founding a little settlement — a quiet back row is safest, but anywhere empty will do for this lesson. Tap to place."},
+	{"step": 2, "trigger": "end_turn", "highlight": "endturn", "title": "Close the turn — watch Economy", "text": "That's a settlement planted. To let it tick, you need to close your Build Phase.\n\nHit [color=#ffcc66]End Turn[/color]. Here's what will happen in sequence so you can follow: first [color=#88ff88]your Economy[/color] (10% Bio+5+8 per supply building and 10+incomes — watch your left gauges jump), then [color=#88ff88]enemy Economy[/color] same, then you both [color=#ff6666]Combat[/color] automatically with whatever's on board. After that the enemy gets its own Build where it will place something.\n\nDiscard happens at end of turn too — leftover cards in hand go to Discard and you'll draw back to 10 at next Economy. Ready? End Turn and watch the numbers."},
+	{"step": 3, "trigger": "auto_drones", "highlight": "none", "title": "Enemy contact — what just happened", "text": "Contact — and this is exactly why we went verbose. The opposing force air-dropped [color=#ff8888]two flying units[/color] onto their front row, right across from your new building. Let's read the idea together: each is [color=#ff8888]low HP, modest Damage, Flying = true, HasRange = false[/color], costing [color=#88ff88]0 Bio[/color] and [color=#ffd700]a little Money[/color]. Cheap, fragile, airborne.\n\nIn the Combat that just fired, both flyers were closest to your building, so they each rolled to hit it. Look at the left gauge — your new building just lost HP. Every turn that Combat repeats: each Damaging card fires once, picks a random closest enemy, checks HasRange vs Flying for half-damage, applies adjacency and modifier bonuses, then destroys and bills BioCost to HP. That's the loop. Breathe — we're about to answer it."},
+	{"step": 4, "trigger": "select_any", "highlight": "hand:any", "title": "Meet your troops — read the card fully", "text": "We need a lineholder. Tap the next [color=#ffcc66]highlighted card[/color] in your hand — it's a basic unit. I'm going to read this type fully so there's no ambiguity:\n[color=#ff8888]Moderate HP[/color] — can soak several hits. [color=#ff6666]Low Damage[/color] — hits for a little each Combat (before bonuses). [color=#ffd700]HasRange = false[/color] — only the front row. [color=#88ccff]Flying = false[/color] — takes full damage. Costs [color=#88ff88]some Bio[/color] and [color=#ffd700]a little Money[/color] and can be bought with Influence in the Shop later (not now). No special text on this one.\n\nHP is endurance; Damage is once-per-Combat output. Tap the highlighted card to pick it up."},
+	{"step": 5, "trigger": "place_any", "highlight": "board:empty", "title": "Posting troops — range and targeting, spelled out", "text": "Where you post this unit decides who it can even touch.\n\nWithout HasRange, think [color=#88ff88]frontline only[/color]: your unit looks at the enemy board, finds the smallest Manhattan distance (row steps + column steps) to any enemy card, then can only hit those in the [color=#88ff88]closest row to you[/color] among them — the front. With HasRange that front-row restriction vanishes — any row at minimal distance qualifies. Either way, if several targets tie for closest, the game picks [color=#88ff88]randomly among ties[/color] — not always the same square.\n\nAnd the other side: [color=#88ccff]Flying[/color] targets take [color=#88ff88]half damage (rounded down, minimum 1)[/color] from any attacker that lacks HasRange. So a low-damage unit will plink a flyer for just 1. That's intended. Place your highlighted unit on any glowing empty square — anywhere works for the lesson."},
+	{"step": 6, "trigger": "end_turn", "highlight": "endturn", "title": "See it fire — step by step", "text": "Orders set — now watch the sequence you just learned, in order. Hit [color=#ffcc66]End Turn[/color] and narrate it with me: [color=#88ff88]Economy[/color] ticks (Bio +10%+5+8, Money +10+incomes, draw to 10), then [color=#ff6666]your Combat[/color] — your new unit scans for closest, sees the two flyers tied at distance 4-5, rolls one, fires (halved vs Flying if lacking HasRange), then [color=#ff6666]enemy Combat[/color] — flyers hit your building, then enemy Build. Don't worry about the exact numbers — watch the flash and the HP bars tick. End Turn."},
+	{"step": 7, "trigger": "auto_wall", "highlight": "none", "title": "They wall up — why", "text": "They're digging in — classic defensive play. A [color=#aaaaaa]protective structure[/color] just rose on their front row: read the pattern with me — [color=#ff8888]moderate HP[/color], [color=#ffd700]0 Income[/color], costs [color=#ffd700]a little Money[/color] and [color=#88ff88]0 Bio[/color], no special, cheap in Shop. Why front row always? This type is programmed to only ever occupy the [color=#88ff88]row closest to you[/color] — it's in their AI. Cheap, tough, no punch, but it now sits as the closest target, so your non-HasRange units will be forced to chew through it before they can reach the flyers behind it. That's screening."},
+	{"step": 8, "trigger": "select_any", "highlight": "hand:any", "title": "Force multiplier — adjacency spelled out", "text": "We answer screening with synergy. Tap the next [color=#ffcc66]highlighted card[/color] in hand — it's a support building. Let's be verbose and unambiguous: [color=#ff8888]solid HP, modest Money income each Economy[/color], costs [color=#ffd700]some Money[/color] and [color=#88ff88]some Bio[/color] (paid in Shop with Influence). SpecialEffect verbatim: [color=#88ff88]Friendly units in adjacent squares have +2 damage[/color]. Adjacent means [color=#88ff88]all 8 squares around it — up, down, left, right and the four diagonals[/color]. Not your whole board, not a row — just the ring. If a unit sits in that ring when Combat fires, its base Damage gets +2 that hit. The support itself still hits for 0. Tap the highlighted card."},
+	{"step": 9, "trigger": "place_adjacent_any", "highlight": "board:adjacent:any", "title": "Adjacency — place it right", "text": "This is the precision moment. That +2 only works if the support building ends up [color=#88ff88]immediately next to[/color] the unit it should buff. Your earlier unit is already on the field — the glowing squares are exactly the eight around it. Put the support on any glowing tile (diagonal counts!) and the moment it lands, the neighbouring unit's damage will tick up by 2 in Combat. Miss by one square and the bonus is zero — that's not a bug, it's the rule. Place the highlighted support adjacent."},
+	{"step": 10, "trigger": "end_turn", "highlight": "endturn", "title": "Bring it home — the loop closed", "text": "Beautiful — line held, bonuses linked. Hit [color=#ffcc66]End Turn[/color] and let's close the loop verbosely so you own it: [color=#88ff88]Economy[/color] — your supply building gives +8 Bio, support and supply give +2 Money each, plus 10 and 10% Bio+5; you draw back to 10, shuffled if needed. [color=#ff6666]Combat[/color] — your unit now scans closest, still sees the wall-like structure as closest (front row rule), fires with +2 into it; flyers still halve vs non-HasRange if you later hit them, but the wall isn't Flying so full damage. Keep your eyes left on the gauges ticking, centre on the 8×10 field staying clear — that's your critical focus — and remember destroyed cards bill their BioCost to owner's HP. Grind that 20 HP down."},
+	{"step": 11, "trigger": "free_play", "highlight": "none", "title": "You're clear, commander — go win", "text": "You're clear, commander — [color=#88ff88]tutorial complete[/color]. Verbosely, here's your standing orders for free play: draw to 10 each Economy (10 (+ discard shuffle), not 5), play what you can afford, respect HasRange vs Flying, use support rings, and watch Building incomes stack. You now visualize the three phases — [color=#88ff88]Economy → Build → Combat[/color] — every turn, for both sides, automatic after End Turn. The opposing force is still at 20 HP total in this skirmish; real campaigns go longer and Shop (Influence) appears between battles. You've got this. End Turn when ready and finish the fight — good luck."},
 ]
 
 func _tutorial_sequence_for_step(s: int) -> Dictionary:
@@ -303,7 +303,8 @@ func _setup_tutorial_overlay():
 	if overlay.has_method("set_as_top_level"):
 		overlay.top_level = true
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.custom_minimum_size = Vector2(720, 140)
+	overlay.custom_minimum_size = Vector2(720, 0)
+	overlay.clip_contents = true
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
 	sb.border_color = Color(0.9, 0.85, 0.4, 1)
@@ -324,14 +325,25 @@ func _setup_tutorial_overlay():
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 	vbox.add_child(title)
+	# Scroll wrapper prevents overflow off the top — verbose step 0 (~300 words) stays inside viewport
+	var scroll := ScrollContainer.new()
+	scroll.name = "TutorialScroll"
+	scroll.custom_minimum_size = Vector2(700, 80)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	tutorial_label = RichTextLabel.new()
 	tutorial_label.bbcode_enabled = true
 	tutorial_label.fit_content = true
-	tutorial_label.custom_minimum_size = Vector2(680, 80)
+	tutorial_label.scroll_active = false
+	tutorial_label.custom_minimum_size = Vector2(680, 0)
 	tutorial_label.add_theme_font_size_override("normal_font_size", 15)
 	tutorial_label.add_theme_color_override("default_color", Color(1, 1, 1))
-	vbox.add_child(tutorial_label)
+	scroll.add_child(tutorial_label)
+	vbox.add_child(scroll)
 	add_child(overlay)
+	# Anchor to top-center but clamp height to viewport so it never spills upward
 	overlay.anchor_left = 0.5
 	overlay.anchor_top = 0.02
 	overlay.anchor_right = 0.5
@@ -339,10 +351,31 @@ func _setup_tutorial_overlay():
 	overlay.offset_left = -360
 	overlay.offset_right = 360
 	overlay.offset_top = 12
-	overlay.offset_bottom = 152
+	# Dynamic height: fit content up to 45% of viewport, then scroll. Grow only downward.
+	var vp_h: float = get_viewport_rect().size.y
+	if vp_h < 100:
+		vp_h = 720.0
+	var max_h: float = clamp(vp_h * 0.45, 140.0, 380.0)
+	overlay.offset_bottom = overlay.offset_top + max_h
 	overlay.grow_horizontal = 2
-	overlay.grow_vertical = 2
+	overlay.grow_vertical = 0
 	tutorial_overlay = overlay
+	# Re-clamp on viewport resize
+	if not has_meta("tutorial_resize_connected"):
+		set_meta("tutorial_resize_connected", true)
+		get_viewport().size_changed.connect(func(): _clamp_tutorial_overlay())
+
+func _clamp_tutorial_overlay():
+	if tutorial_overlay == null or not is_instance_valid(tutorial_overlay):
+		return
+	var vp_h2: float = get_viewport_rect().size.y
+	if vp_h2 < 100:
+		vp_h2 = 720.0
+	var max_h2: float = clamp(vp_h2 * 0.45, 140.0, 380.0)
+	tutorial_overlay.offset_bottom = tutorial_overlay.offset_top + max_h2
+	var scroll2 := tutorial_overlay.get_node_or_null("VBox/TutorialScroll") as ScrollContainer
+	if scroll2 != null:
+		scroll2.custom_minimum_size = Vector2(700, clamp(max_h2 - 40.0, 80.0, 340.0))
 
 func _update_tutorial_message():
 	if tutorial_label == null or not is_instance_valid(tutorial_label):
@@ -369,13 +402,42 @@ func _highlight_tutorial():
 	if hl == "":
 		return
 	if hl.begins_with("hand:"):
-		_highlight_hand_card(hl.substr(5))
+		var target: String = hl.substr(5)
+		if target == "any":
+			# Generic: highlight first selectable card in hand (no card name needed)
+			if human.Hand.size() > 0:
+				var any_name: String = (human.Hand[0] as Card).card_name
+				_highlight_hand_card(any_name)
+			elif hand_container.get_child_count() > 0:
+				for child in hand_container.get_children():
+					if child is Button:
+						(child as Button).modulate = Color(1, 0.92, 0.4)
+			else:
+					_highlight_board_empty()
+		else:
+			_highlight_hand_card(target)
 	elif hl == "board:empty":
 		_highlight_board_empty()
 	elif hl == "endturn":
 		_highlight_end_turn()
 	elif hl.begins_with("board:adjacent:"):
-		_highlight_board_adjacent_to(hl.substr(15))
+		var adj_target: String = hl.substr(15)
+		if adj_target == "any":
+			# Generic adjacency: highlight around any existing friendly unit
+			var found: String = ""
+			for row in human.Board:
+				for sq in row.Squares:
+					if sq.Inhabitant != null and sq.Inhabitant is Unit:
+						found = sq.Inhabitant.card_name
+						break
+				if found != "":
+					break
+			if found != "":
+				_highlight_board_adjacent_to(found)
+			else:
+				_highlight_board_empty()
+		else:
+			_highlight_board_adjacent_to(adj_target)
 	elif hl == "none":
 		pass
 	else:
@@ -3163,17 +3225,20 @@ func _on_hand_click(idx: int):
 	if idx < 0 or idx >= human.Hand.size():
 		return
 	if is_tutorial:
+		# Generic tutorial: any highlighted card is acceptable (no specific names)
 		var expected: String = ""
-		if tutorial_step == 0:
-			expected = "Housing"
-		elif tutorial_step == 4:
-			expected = "Infantry"
-		elif tutorial_step == 8:
-			expected = "Barracks"
+		var seq := _tutorial_sequence_for_step(tutorial_step)
+		var trig: String = seq.get("trigger", "") as String
+		if trig == "select_any":
+			expected = ""  # any card allowed
+		elif trig.begins_with("select_"):
+			expected = trig.substr(7)
+			if expected == "any":
+				expected = ""
 		if expected != "" and (human.Hand[idx] as Card).card_name != expected:
 			_log_tutorial_analytics("wrong_card_tap", tutorial_step, expected, (human.Hand[idx] as Card).card_name)
-			message_label.text = "Tutorial: Please click %s" % expected
-			tutorial_label.text = "Please click the [color=#ffcc66]%s[/color] card!" % expected
+			message_label.text = "Tutorial: Please click the highlighted card"
+			tutorial_label.text = "Please tap the [color=#ffcc66]highlighted card[/color] in your hand!"
 			return
 	if selected_card_idx == idx:
 		selected_card = null
@@ -3183,13 +3248,13 @@ func _on_hand_click(idx: int):
 		selected_card = human.Hand[idx]
 		selected_card_idx = idx
 		message_label.text = "Selected %s - click empty square to place" % selected_card.card_name
-		if is_tutorial and tutorial_step == 0 and selected_card.card_name == "Housing":
+		if is_tutorial and tutorial_step == 0:
 			tutorial_step = 1
 			_update_tutorial_message()
-		elif is_tutorial and tutorial_step == 4 and selected_card.card_name == "Infantry":
+		elif is_tutorial and tutorial_step == 4:
 			tutorial_step = 5
 			_update_tutorial_message()
-		elif is_tutorial and tutorial_step == 8 and selected_card.card_name == "Barracks":
+		elif is_tutorial and tutorial_step == 8:
 			tutorial_step = 9
 			_update_tutorial_message()
 	_refresh_hand()
@@ -3200,20 +3265,23 @@ func _on_board_click(r: int, c: int):
 		return
 	if is_tutorial:
 		if tutorial_step == 9:
-			# Must be adjacent to Infantry
-			var infantry_pos = null
+			# Generic adjacency: must be next to any friendly unit already on board
+			var anchor_pos = null
 			for rr in range(human.Board.size()):
 				for cc in range(human.Board[rr].Squares.size()):
 					var sq2: Square = human.Board[rr].Squares[cc]
-					if sq2.Inhabitant != null and sq2.Inhabitant.card_name == "Infantry":
-						infantry_pos = {"r": rr, "c": cc}
-			if infantry_pos != null:
-				var dr: int = abs(r - infantry_pos["r"])
-				var dc: int = abs(c - infantry_pos["c"])
+					if sq2.Inhabitant != null and sq2.Inhabitant is Unit:
+						anchor_pos = {"r": rr, "c": cc}
+						break
+				if anchor_pos != null:
+					break
+			if anchor_pos != null:
+				var dr: int = abs(r - anchor_pos["r"])
+				var dc: int = abs(c - anchor_pos["c"])
 				if not (dr <=1 and dc <=1 and not (dr==0 and dc==0)):
-					_log_tutorial_analytics("wrong_placement", tutorial_step, "adjacent_Infantry", "%d,%d" % [r,c])
-					message_label.text = "Tutorial: Place Barracks next to Infantry!"
-					tutorial_label.text = "Place [color=#ffcc66]Barracks[/color] on a square [color=#88ff88]adjacent[/color] to Infantry (highlighted)."
+					_log_tutorial_analytics("wrong_placement", tutorial_step, "adjacent_any", "%d,%d" % [r,c])
+					message_label.text = "Tutorial: Place next to your unit!"
+					tutorial_label.text = "Place on a [color=#88ff88]glowing adjacent square[/color] next to your unit."
 					return
 			elif tutorial_step not in [1,5,9]:
 				message_label.text = "Tutorial: Not the right step for placement"
@@ -3225,13 +3293,14 @@ func _on_board_click(r: int, c: int):
 		selected_card = null
 		selected_card_idx = -1
 		if is_tutorial:
-			if tutorial_step == 1 and placed_name == "Housing":
+			# Generic placement advance - any card placed at correct generic step
+			if tutorial_step == 1:
 				tutorial_step = 2
 				_update_tutorial_message()
-			elif tutorial_step == 5 and placed_name == "Infantry":
+			elif tutorial_step == 5:
 				tutorial_step = 6
 				_update_tutorial_message()
-			elif tutorial_step == 9 and placed_name == "Barracks":
+			elif tutorial_step == 9:
 				tutorial_step = 10
 				_update_tutorial_message()
 	else:
