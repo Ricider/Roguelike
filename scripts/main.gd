@@ -15,6 +15,7 @@ func _ready():
 		play_btn.grab_focus()
 	_wire_buttons()
 	_build_player_chooser()
+	_add_tutorial_button()
 	_style_menu_buttons()
 	_setup_battle_background()
 
@@ -292,7 +293,7 @@ func _start_battle_loop():
 		_fire_menu_projectile(right2, left2)
 
 func _style_menu_buttons():
-	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton"]:
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton"]:
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
@@ -337,6 +338,38 @@ func _style_pill_button(btn: Button, bg: Color, hover_bg: Color, border: Color):
 	btn.add_theme_stylebox_override("focus", sb_h)
 	btn.add_theme_color_override("font_color", Color(1,1,1))
 	btn.add_theme_color_override("font_hover_color", Color(1,1,1))
+
+func _add_tutorial_button():
+	var vbox = get_node_or_null("CenterContainer/VBox")
+	if vbox == null:
+		return
+	if vbox.has_node("TutorialButton"):
+		return
+	var tbtn := Button.new()
+	tbtn.name = "TutorialButton"
+	tbtn.text = "Tutorial"
+	tbtn.custom_minimum_size = Vector2(340, 72)
+	tbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	tbtn.add_theme_font_size_override("font_size", 30)
+	tbtn.pressed.connect(_on_tutorial_pressed)
+	# Insert after PlayButton, before QuitButton/PlayerChooser
+	var play = vbox.get_node_or_null("PlayButton")
+	var quit = vbox.get_node_or_null("QuitButton")
+	if play != null:
+		vbox.add_child(tbtn)
+		if quit != null:
+			vbox.move_child(tbtn, quit.get_index())
+		else:
+			vbox.move_child(tbtn, play.get_index() + 1)
+	else:
+		vbox.add_child(tbtn)
+	_style_pill_button(tbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
+
+func _on_tutorial_pressed():
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		gs.start_tutorial()
+	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _wire_buttons():
 	var play = get_node_or_null("CenterContainer/VBox/PlayButton")

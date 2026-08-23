@@ -81,6 +81,11 @@ var influence_icon_rect: TextureRect
 var hover_arrow: Control = null
 var hover_arrow_target: Control = null
 var modifiers_stack: VBoxContainer = null
+var is_tutorial: bool = false
+var tutorial_step: int = 0
+var tutorial_overlay: PanelContainer = null
+var tutorial_label: RichTextLabel = null
+var tutorial_highlight_tween: Tween = null
 
 func _style_round_button(btn: Button, primary: bool = true):
 	var sb := StyleBoxFlat.new()
@@ -211,6 +216,283 @@ func _move_player_piles_to_bottom():
 		disc_lbl.visible = false
 	_ensure_modifiers_stack()
 	_refresh_modifiers_stack()
+
+func _setup_tutorial():
+	human.Board = []
+	for i in range(4):
+		human.Board.append(Row.new())
+	ai_player.Board = []
+	for i in range(4):
+		ai_player.Board.append(Row.new())
+	human.HitPoints = 100
+	human.MaxHitPoints = 100
+	human.BioSupply = 150
+	human.MoneySupply = 150
+	human.Influence = 0
+	human.DrawPile.clear()
+	human.DiscardPile.clear()
+	human.Graveyard.clear()
+	human.Hand.clear()
+	# Tutorial hand: Housing, Infantry, Barracks in order - plus 2 filler for spacing
+	human.Hand.append(Housing.new())
+	human.Hand.append(Infantry.new())
+	human.Hand.append(Barracks.new())
+	# Add 2 filler cards to make hand look full but not needed for tutorial
+	human.Hand.append(Wall.new())
+	human.Hand.append(Tank.new())
+	ai_player.HitPoints = 100
+	ai_player.MaxHitPoints = 100
+	ai_player.BioSupply = 150
+	ai_player.MoneySupply = 150
+	ai_player.Board = []
+	for i in range(4):
+		ai_player.Board.append(Row.new())
+	ai_player.Hand.clear()
+	ai_player.DrawPile.clear()
+	ai_player.DiscardPile.clear()
+	tutorial_step = 0
+	_setup_tutorial_overlay()
+	_update_tutorial_message()
+	_refresh_ui()
+	_highlight_tutorial()
+
+func _setup_tutorial_overlay():
+	if tutorial_overlay != null and is_instance_valid(tutorial_overlay):
+		tutorial_overlay.queue_free()
+	var overlay := PanelContainer.new()
+	overlay.name = "TutorialOverlay"
+	overlay.z_index = 300
+	overlay.z_as_relative = false
+	if overlay.has_method("set_as_top_level"):
+		overlay.top_level = true
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.custom_minimum_size = Vector2(720, 140)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+	sb.border_color = Color(0.9, 0.85, 0.4, 1)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	overlay.add_theme_stylebox_override("panel", sb)
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 4)
+	overlay.add_child(vbox)
+	var title := Label.new()
+	title.text = "TUTORIAL"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
+	vbox.add_child(title)
+	tutorial_label = RichTextLabel.new()
+	tutorial_label.bbcode_enabled = true
+	tutorial_label.fit_content = true
+	tutorial_label.custom_minimum_size = Vector2(680, 80)
+	tutorial_label.add_theme_font_size_override("normal_font_size", 15)
+	tutorial_label.add_theme_color_override("default_color", Color(1, 1, 1))
+	vbox.add_child(tutorial_label)
+	add_child(overlay)
+	overlay.anchor_left = 0.5
+	overlay.anchor_top = 0.02
+	overlay.anchor_right = 0.5
+	overlay.anchor_bottom = 0.02
+	overlay.offset_left = -360
+	overlay.offset_right = 360
+	overlay.offset_top = 12
+	overlay.offset_bottom = 152
+	overlay.grow_horizontal = 2
+	overlay.grow_vertical = 2
+	tutorial_overlay = overlay
+
+func _update_tutorial_message():
+	if tutorial_label == null or not is_instance_valid(tutorial_label):
+		return
+	var msg: String = ""
+	match tutorial_step:
+		0:
+			msg = "[b]Step 1/9 - Resources:[/b] Click the [color=#ffcc66]Housing[/color] card in your hand.\nHousing costs [color=#88ff88]30 Bio[/color] + [color=#ffd700]20 Money[/color], gives [color=#ff8888]50 HP[/color] and [color=#ffd700]+2 Money[/color] income each Economy phase.\nBioSupply (green) and MoneySupply (gold) pay costs. Influence (yellow) is for the Shop."
+		1:
+			msg = "[b]Step 2/9 - Placement:[/b] Click any [color=#88ff88]empty square[/color] on your field (bottom 4 rows).\nYour board is 4×10, facing the enemy's board (8×10 total). Cards occupy one square."
+		2:
+			msg = "[b]Step 3/9 - End Turn:[/b] Click [color=#ffcc66]End Turn[/color] to end your build phase.\nThis triggers Economy (+Bio/+Money) then your opponent will play."
+		3:
+			msg = "[b]Enemy Turn:[/b] Insurgents played [color=#ff8888]2 Drones[/color] (6 HP, 3 DMG, Flying) at the front and attacked your Housing!\nDrones are cheap Flying harassers. Watch your Housing HP drop."
+		4:
+			msg = "[b]Step 4/9 - Health & Damage:[/b] Click [color=#ffcc66]Infantry[/color] in hand.\nInfantry: [color=#ff8888]12 HP[/color], [color=#ff6666]2 Damage[/color], costs 5 Bio + 15 Money. HP is health, Damage is attack each Combat."
+		5:
+			msg = "[b]Step 5/9 - Targeting:[/b] Place Infantry on an empty square.\nUnits attack the [color=#88ff88]closest enemy[/color] by Manhattan distance. Without HasRange they only hit the front row; with HasRange they hit any row. Flying takes half damage from non-ranged."
+		6:
+			msg = "[b]Step 6/9 - Watch Targeting:[/b] Click [color=#ffcc66]End Turn[/color] and watch your Infantry target the closest Drone."
+		7:
+			msg = "[b]Enemy Turn:[/b] Insurgents placed a [color=#aaaaaa]Wall[/color] (20 HP, 0 Income, 10 Money) at the front to block."
+		8:
+			msg = "[b]Step 7/9 - Special Effects:[/b] Click [color=#ffcc66]Barracks[/color] in hand.\nBarracks: 30 HP, +2 Income, costs 20 Money + 25 Bio. Effect: [color=#88ff88]Friendly adjacent units get +2 Damage[/color] (8 neighbours)."
+		9:
+			msg = "[b]Step 8/9 - Adjacency:[/b] Place Barracks on a square [color=#88ff88]next to your Infantry[/color] (highlighted).\nAdjacency includes diagonals - 8 surrounding squares."
+		10:
+			msg = "[b]Step 9/9 - Good luck![/b] Click [color=#ffcc66]End Turn[/color] to continue. Your boosted Infantry (4 DMG) will help drop the AI to 0 HP!"
+		11:
+			msg = "[b]Tutorial Complete![/b] Free play now — keep building and defeat the Insurgents!"
+		_:
+			msg = ""
+	tutorial_label.text = msg
+	_highlight_tutorial()
+
+func _highlight_tutorial():
+	_clear_tutorial_highlights()
+	if tutorial_overlay == null:
+		return
+	# Highlight based on step
+	if tutorial_step == 0:
+		_highlight_hand_card("Housing")
+	elif tutorial_step == 1:
+		_highlight_board_empty()
+	elif tutorial_step == 2 or tutorial_step == 6 or tutorial_step == 10:
+		_highlight_end_turn()
+	elif tutorial_step == 4:
+		_highlight_hand_card("Infantry")
+	elif tutorial_step == 5:
+		_highlight_board_empty()
+	elif tutorial_step == 8:
+		_highlight_hand_card("Barracks")
+	elif tutorial_step == 9:
+		_highlight_board_adjacent_to("Infantry")
+
+func _clear_tutorial_highlights():
+	if tutorial_highlight_tween != null and is_instance_valid(tutorial_highlight_tween):
+		tutorial_highlight_tween.kill()
+		tutorial_highlight_tween = null
+	for child in hand_container.get_children():
+		if child is Button:
+			(child as Button).modulate = Color(1,1,1)
+			(child as Button).scale = Vector2(1,1)
+	for cont in [ai_board_container, player_board_container]:
+		if cont != null:
+			for child in cont.get_children():
+				if child is Button:
+					(child as Button).modulate = Color(1,1,1)
+					(child as Button).scale = Vector2(1,1)
+	if end_turn_btn != null:
+		end_turn_btn.modulate = Color(1,1,1)
+		end_turn_btn.scale = Vector2(1,1)
+
+func _highlight_hand_card(card_name: String):
+	if tutorial_highlight_tween != null and is_instance_valid(tutorial_highlight_tween):
+		tutorial_highlight_tween.kill()
+		tutorial_highlight_tween = null
+	for i in range(hand_container.get_child_count()):
+		var child = hand_container.get_child(i)
+		if child is Button:
+			var idx: int = i
+			if idx < human.Hand.size() and (human.Hand[idx] as Card).card_name == card_name:
+				(child as Button).modulate = Color(1, 0.92, 0.4)
+				var tw := create_tween()
+				tw.set_loops()
+				tw.tween_property(child, "scale", Vector2(1.06, 1.06), 0.4)
+				tw.tween_property(child, "scale", Vector2(1.0, 1.0), 0.4)
+				tutorial_highlight_tween = tw
+
+func _highlight_board_empty():
+	for cont in [player_board_container]:
+		if cont == null:
+			continue
+		for child in cont.get_children():
+			if child is Button:
+				var btn := child as Button
+				if btn.text == "" and not btn.disabled:
+					btn.modulate = Color(0.9, 1.0, 0.9)
+
+func _highlight_board_adjacent_to(card_name: String):
+	var infantry_pos = null
+	for r in range(human.Board.size()):
+		for c in range(human.Board[r].Squares.size()):
+			var sq: Square = human.Board[r].Squares[c]
+			if sq.Inhabitant != null and sq.Inhabitant.card_name == card_name:
+				infantry_pos = {"r": r, "c": c}
+				break
+	if infantry_pos == null:
+		_highlight_board_empty()
+		return
+	for r in range(human.Board.size()):
+		for c in range(human.Board[r].Squares.size()):
+			var sq: Square = human.Board[r].Squares[c]
+			if sq.is_empty():
+				var dr: int = abs(r - infantry_pos["r"])
+				var dc: int = abs(c - infantry_pos["c"])
+				if dr <= 1 and dc <= 1 and not (dr==0 and dc==0):
+					var btn := _get_button_for_square(human, sq)
+					if btn != null and is_instance_valid(btn):
+						btn.modulate = Color(0.9, 1.0, 0.9)
+
+func _highlight_end_turn():
+	if end_turn_btn != null:
+		if tutorial_highlight_tween != null and is_instance_valid(tutorial_highlight_tween):
+			tutorial_highlight_tween.kill()
+		end_turn_btn.modulate = Color(1, 0.92, 0.4)
+		end_turn_btn.scale = Vector2(1,1)
+		var tw := create_tween()
+		tw.set_loops()
+		tw.tween_property(end_turn_btn, "scale", Vector2(1.08, 1.08), 0.35)
+		tw.tween_property(end_turn_btn, "scale", Vector2(1.0, 1.0), 0.35)
+		tutorial_highlight_tween = tw
+
+func _tutorial_advance():
+	tutorial_step += 1
+	_update_tutorial_message()
+	_highlight_tutorial()
+	if tutorial_step == 3:
+		# After first placement + end turn, enemy drones - schedule after a short delay
+		await get_tree().create_timer(0.4).timeout
+		_tutorial_ai_drones()
+	elif tutorial_step == 7:
+		await get_tree().create_timer(0.3).timeout
+		_tutorial_ai_wall()
+
+func _tutorial_ai_drones():
+	# Place 2 Drones at AI front row same column as player's Housing to ensure they attack it
+	var housing_pos = null
+	for r in range(human.Board.size()):
+		for c in range(human.Board[r].Squares.size()):
+			var sq: Square = human.Board[r].Squares[c]
+			if sq.Inhabitant != null and sq.Inhabitant is Housing:
+				housing_pos = {"r": r, "c": c}
+	var col: int = 5
+	if housing_pos != null:
+		col = housing_pos["c"]
+	var col2: int = clamp(col+1, 0, 9)
+	var ai_front: int = 3
+	var sq1: Square = ai_player.Board[ai_front].Squares[col]
+	var sq2: Square = ai_player.Board[ai_front].Squares[col2]
+	if sq1.is_empty():
+		sq1.place(Drone.new())
+	if sq2.is_empty():
+		sq2.place(Drone.new())
+	_refresh_ui()
+	_update_tutorial_message()
+	# Message for step 3 already set, next expects Infantry click
+	tutorial_step = 4
+	_update_tutorial_message()
+
+func _tutorial_ai_wall():
+	var front: int = 3
+	var col: int = 5
+	# Place wall at front center
+	var sq: Square = ai_player.Board[front].Squares[col]
+	if sq.is_empty():
+		sq.place(Wall.new())
+	else:
+		for c in range(10):
+			var s2: Square = ai_player.Board[front].Squares[c]
+			if s2.is_empty():
+				s2.place(Wall.new())
+				break
+	_refresh_ui()
+	tutorial_step = 8
+	_update_tutorial_message()
+
 
 func _ensure_modifiers_stack():
 	# Top-right of screen, overlay (not inside RightGauges) — vertical stack
@@ -618,6 +900,11 @@ func _ready():
 			human.DrawPile = CardFactory.make_state_troops_deck()
 	_update_background()
 	state = CombatState.new(human, ai_player)
+	# Tutorial check
+	var gs_tut = get_node_or_null("/root/GameState")
+	if gs_tut != null and gs_tut.is_tutorial:
+		is_tutorial = true
+		_setup_tutorial()
 	end_turn_btn.pressed.connect(_on_end_turn)
 	_style_round_button(end_turn_btn, true)
 	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Main.tscn"))
@@ -1961,6 +2248,11 @@ func _continue_from_shop():
 		end_turn_btn.disabled = false
 
 func _start_new_round():
+	if is_tutorial and tutorial_step <= 10:
+		# Tutorial controls economy/hand manually - just refresh
+		_refresh_ui()
+		_highlight_tutorial()
+		return
 	# Economy phase for both — now owned by Player (via Housing.bio_rate)
 	var human_bio_before: int = human.BioSupply
 	var human_money_before: int = human.MoneySupply
@@ -2735,6 +3027,18 @@ func _refresh_hand():
 func _on_hand_click(idx: int):
 	if idx < 0 or idx >= human.Hand.size():
 		return
+	if is_tutorial:
+		var expected: String = ""
+		if tutorial_step == 0:
+			expected = "Housing"
+		elif tutorial_step == 4:
+			expected = "Infantry"
+		elif tutorial_step == 8:
+			expected = "Barracks"
+		if expected != "" and (human.Hand[idx] as Card).card_name != expected:
+			message_label.text = "Tutorial: Please click %s" % expected
+			tutorial_label.text = "Please click the [color=#ffcc66]%s[/color] card!" % expected
+			return
 	if selected_card_idx == idx:
 		selected_card = null
 		selected_card_idx = -1
@@ -2743,17 +3047,56 @@ func _on_hand_click(idx: int):
 		selected_card = human.Hand[idx]
 		selected_card_idx = idx
 		message_label.text = "Selected %s - click empty square to place" % selected_card.card_name
+		if is_tutorial and tutorial_step == 0 and selected_card.card_name == "Housing":
+			tutorial_step = 1
+			_update_tutorial_message()
+		elif is_tutorial and tutorial_step == 4 and selected_card.card_name == "Infantry":
+			tutorial_step = 5
+			_update_tutorial_message()
+		elif is_tutorial and tutorial_step == 8 and selected_card.card_name == "Barracks":
+			tutorial_step = 9
+			_update_tutorial_message()
 	_refresh_hand()
 
 func _on_board_click(r: int, c: int):
 	if selected_card == null:
 		message_label.text = "Select a card first"
 		return
+	if is_tutorial:
+		if tutorial_step == 9:
+			# Must be adjacent to Infantry
+			var infantry_pos = null
+			for rr in range(human.Board.size()):
+				for cc in range(human.Board[rr].Squares.size()):
+					var sq2: Square = human.Board[rr].Squares[cc]
+					if sq2.Inhabitant != null and sq2.Inhabitant.card_name == "Infantry":
+						infantry_pos = {"r": rr, "c": cc}
+			if infantry_pos != null:
+				var dr: int = abs(r - infantry_pos["r"])
+				var dc: int = abs(c - infantry_pos["c"])
+				if not (dr <=1 and dc <=1 and not (dr==0 and dc==0)):
+					message_label.text = "Tutorial: Place Barracks next to Infantry!"
+					tutorial_label.text = "Place [color=#ffcc66]Barracks[/color] on a square [color=#88ff88]adjacent[/color] to Infantry (highlighted)."
+					return
+			elif tutorial_step not in [1,5,9]:
+				message_label.text = "Tutorial: Not the right step for placement"
+				return
 	var ok: bool = human.play_card(selected_card, r, c)
 	if ok:
 		message_label.text = "Placed %s at [%d,%d]" % [selected_card.card_name, r, c]
+		var placed_name: String = selected_card.card_name
 		selected_card = null
 		selected_card_idx = -1
+		if is_tutorial:
+			if tutorial_step == 1 and placed_name == "Housing":
+				tutorial_step = 2
+				_update_tutorial_message()
+			elif tutorial_step == 5 and placed_name == "Infantry":
+				tutorial_step = 6
+				_update_tutorial_message()
+			elif tutorial_step == 9 and placed_name == "Barracks":
+				tutorial_step = 10
+				_update_tutorial_message()
 	else:
 		message_label.text = "Cannot place there (cost or occupied)"
 	_refresh_ui()
@@ -2832,6 +3175,67 @@ func _refresh_boards_only():
 	_refresh_board(player_board_container, human, true)
 
 func _on_end_turn():
+	if is_tutorial:
+		if tutorial_step == 2:
+			# First End Turn - Housing placed, AI plays 2 drones
+			end_turn_btn.disabled = true
+			selected_card = null
+			selected_card_idx = -1
+			message_label.text = "Ending turn..."
+			tutorial_step = 3
+			_update_tutorial_message()
+			await get_tree().create_timer(0.6).timeout
+			_tutorial_ai_drones()
+			# Combat with drones vs housing
+			var log: Array = await _execute_combat_live()
+			if log.is_empty():
+				message_label.text = "Drones attacked your Housing!"
+			else:
+				message_label.text = "Drones dealt %d attacks!" % log.size()
+			_refresh_ui()
+			# Keep hand (don't discard tutorial cards) - just refresh
+			end_turn_btn.disabled = false
+			return
+		elif tutorial_step == 6:
+			end_turn_btn.disabled = true
+			selected_card = null
+			selected_card_idx = -1
+			message_label.text = "Ending turn... watch Infantry targeting"
+			tutorial_step = 7
+			_update_tutorial_message()
+			# Infantry will attack now, then AI wall
+			var log2: Array = await _execute_combat_live()
+			_refresh_ui()
+			await get_tree().create_timer(0.5).timeout
+			_tutorial_ai_wall()
+			# After wall, don't do combat yet, just refresh
+			end_turn_btn.disabled = false
+			return
+		elif tutorial_step == 10:
+			end_turn_btn.disabled = true
+			selected_card = null
+			selected_card_idx = -1
+			tutorial_step = 11
+			_update_tutorial_message()
+			var log3: Array = await _execute_combat_live()
+			_refresh_ui()
+			if _check_game_over():
+				return
+			# Tutorial complete - switch to free play
+			await get_tree().create_timer(1.0).timeout
+			if tutorial_overlay != null and is_instance_valid(tutorial_overlay):
+				tutorial_overlay.visible = false
+			is_tutorial = false
+			var gs := get_node_or_null("/root/GameState")
+			if gs != null:
+				gs.is_tutorial = false
+			message_label.text = "Tutorial complete! Free play - defeat the Insurgents!"
+			end_turn_btn.disabled = false
+			return
+		else:
+			message_label.text = "Tutorial: Please follow the highlighted steps"
+			_update_tutorial_message()
+			return
 	end_turn_btn.disabled = true
 	selected_card = null
 	selected_card_idx = -1

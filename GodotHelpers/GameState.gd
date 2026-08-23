@@ -8,6 +8,7 @@ var run_player: Player = null # persistent player across battles (deck+influence
 var run_enemies: Array = [] # Player[] remaining enemies sorted
 var run_enemy_index: int = 0
 var run_started: bool = false
+var is_tutorial: bool = false
 var shop_offer: Array = [] # Card[] 5 cards
 var shop_modifier_offer: Array = [] # Modifier[] 3 modifiers
 var shop_remove_used: bool = false
@@ -84,6 +85,7 @@ func background_path_for(player_name: String) -> String:
 	return ""
 
 func start_run(chosen_name: String):
+	is_tutorial = false
 	selected_player_name = chosen_name
 	run_player = make_player_by_name(chosen_name, true)
 	# deep copy? Keep reference as run_player
@@ -93,6 +95,19 @@ func start_run(chosen_name: String):
 	shop_offer.clear()
 	shop_modifier_offer.clear()
 	shop_remove_used = false
+
+func start_tutorial():
+	is_tutorial = true
+	selected_player_name = "State Troops"
+	selected_enemy = "Insurgents"
+	run_player = make_player_by_name("State Troops", true)
+	run_enemies = [make_player_by_name("Insurgents") as AIPlayer]
+	run_enemy_index = 0
+	run_started = true
+	shop_offer.clear()
+	shop_modifier_offer.clear()
+	shop_remove_used = false
+	# Tutorial deck will be set by TutorialController, keep minimal
 
 func get_current_enemy() -> AIPlayer:
 	if run_enemies.is_empty():
