@@ -57,6 +57,9 @@ var selected_card_idx: int = -1
 @onready var player_graveyard_icon: Button = $VBox/MainHBox/RightGauges/PlayerGraveyard/PlayerGraveyardIcon
 @onready var ai_discard_icon: Button = $VBox/MainHBox/RightGauges/AIDiscard/AIDiscardIcon
 @onready var ai_graveyard_icon: Button = $VBox/MainHBox/RightGauges/AIGraveyard/AIGraveyardIcon
+var phase_label: Label = null
+var phase_panel: PanelContainer = null
+var _current_phase: String = "Player Build Phase"
 var gauge_grid_bg_sprite: AnimatedSprite2D
 @onready var inspect_popup: PanelContainer = $InspectPopup
 @onready var inspect_title: Label = $InspectPopup/VBox/InspectTitle
@@ -312,7 +315,7 @@ func _setup_tutorial_overlay():
 	overlay.custom_minimum_size = Vector2(720, 0)
 	overlay.clip_contents = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
 	sb.border_color = Color(0.9, 0.85, 0.4, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(12)
@@ -886,6 +889,170 @@ func _setup_influence_at_draw_pile():
 				influence_value_label = _find_influence_label(ib)
 	_refresh_influence_display()
 
+func _setup_phase_ui_top_left():
+	if phase_panel != null and is_instance_valid(phase_panel):
+		return
+	# Create traffic light panel at very top left with 10px margin — extended 2x width for 6 AI+Player lights
+	phase_panel = PanelContainer.new()
+	phase_panel.name = "PhasePanelTopLeft"
+	phase_panel.custom_minimum_size = Vector2(248, 110)
+	phase_panel.size = Vector2(248, 110)
+	phase_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	phase_panel.z_index = 300
+	phase_panel.z_as_relative = false
+	if phase_panel.has_method("set_as_top_level"):
+		phase_panel.top_level = true
+	phase_panel.clip_contents = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
+	sb.set_corner_radius_all(8)
+	sb.border_color = Color(0.6, 0.6, 0.7, 0.9)
+	sb.set_border_width_all(1)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	phase_panel.add_theme_stylebox_override("panel", sb)
+	var vbox := VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 6)
+	phase_panel.add_child(vbox)
+	var title := Label.new()
+	title.text = "Phase"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 12)
+	title.add_theme_color_override("font_color", Color(0.8, 0.8, 0.9, 1))
+	vbox.add_child(title)
+	var lights := HBoxContainer.new()
+	lights.name = "Lights"
+	lights.alignment = BoxContainer.ALIGNMENT_CENTER
+	lights.add_theme_constant_override("separation", 10)
+	vbox.add_child(lights)
+	# 6 lights: Player Economy/Build/Combat + AI Economy/Build/Combat (Blue=Economy, Green=Build, Red=Combat)
+	for _cname in ["P_Blue", "P_Green", "P_Red", "AI_Blue", "AI_Green", "AI_Red"]:
+		var light := PanelContainer.new()
+		light.name = _cname
+		light.custom_minimum_size = Vector2(28, 28)
+		light.size = Vector2(28, 28)
+		light.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		light.tooltip_text = _cname.replace("P_", "Player ").replace("AI_", "AI ").replace("Blue", "Economy").replace("Green", "Build").replace("Red", "Combat")
+		var s := StyleBoxFlat.new()
+		if _cname.ends_with("Blue"):
+			s.bg_color = Color(0.12, 0.18, 0.45, 1)
+			s.border_color = Color(0.18, 0.28, 0.7, 0.8)
+		elif _cname.ends_with("Red"):
+			s.bg_color = Color(0.35, 0.12, 0.12, 1)
+			s.border_color = Color(0.7, 0.2, 0.2, 0.8)
+		else:
+			s.bg_color = Color(0.12, 0.35, 0.12, 1)
+			s.border_color = Color(0.2, 0.7, 0.2, 0.8)
+		s.set_border_width_all(2)
+		s.set_corner_radius_all(14)
+		s.shadow_color = Color(0,0,0,0.4)
+		s.shadow_size = 4
+		light.add_theme_stylebox_override("panel", s)
+		lights.add_child(light)
+	phase_label = Label.new()
+	phase_label.name = "Label"
+	phase_label.text = _current_phase
+	phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_label.add_theme_font_size_override("font_size", 13)
+	phase_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	phase_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	phase_label.custom_minimum_size = Vector2(232, 0)
+	phase_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(phase_label)
+	add_child(phase_panel)
+	# Position 10px from left and top of screen — 2x width to right
+	phase_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	phase_panel.anchor_left = 0.0
+	phase_panel.anchor_top = 0.0
+	phase_panel.anchor_right = 0.0
+	phase_panel.anchor_bottom = 0.0
+	phase_panel.offset_left = 10.0
+	phase_panel.offset_top = 10.0
+	phase_panel.offset_right = 258.0
+	phase_panel.offset_bottom = 120.0
+	phase_panel.position = Vector2(10, 10)
+	phase_panel.size = Vector2(248, 110)
+	_update_phase_traffic_lights()
+	# Move gauge directly underneath traffic light 20px down
+	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges") as VBoxContainer
+	if left_gauges != null:
+		if left_gauges.get_node_or_null("TopGaugeSpacer") == null:
+			var sp := Control.new()
+			sp.name = "TopGaugeSpacer"
+			sp.custom_minimum_size = Vector2(0, 20)
+			sp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			left_gauges.add_child(sp)
+			left_gauges.move_child(sp, 0)
+
+func _set_phase(text: String):
+	_current_phase = text
+	if phase_label != null and is_instance_valid(phase_label):
+		phase_label.text = text
+	if phase_panel != null and is_instance_valid(phase_panel):
+		phase_panel.visible = true
+	_update_phase_traffic_lights()
+
+func _update_phase_traffic_lights():
+	if phase_panel == null or not is_instance_valid(phase_panel):
+		return
+	var lights = phase_panel.get_node_or_null("VBox/Lights") as HBoxContainer
+	if lights == null:
+		return
+	# 6 individual lights for Player/AI Economy/Build/Combat — only current phase lights up
+	for c in lights.get_children():
+		if not (c is PanelContainer):
+			continue
+		var pc := c as PanelContainer
+		var s := StyleBoxFlat.new()
+		s.set_border_width_all(2)
+		s.set_corner_radius_all(14)
+		s.shadow_size = 4
+		var is_active: bool = false
+		if pc.name == "P_Blue":
+			is_active = _current_phase == "Player Economy Phase"
+		elif pc.name == "P_Green":
+			is_active = _current_phase == "Player Build Phase"
+		elif pc.name == "P_Red":
+			is_active = _current_phase == "Player Combat Phase"
+		elif pc.name == "AI_Blue":
+			is_active = _current_phase == "AI Economy Phase"
+		elif pc.name == "AI_Green":
+			is_active = _current_phase == "AI Build Phase"
+		elif pc.name == "AI_Red":
+			is_active = _current_phase == "AI Combat Phase"
+		if pc.name.ends_with("Blue"):
+			if is_active:
+				s.bg_color = Color(0.25, 0.45, 1.0, 1)
+				s.border_color = Color(0.5, 0.7, 1.0, 1)
+				s.shadow_color = Color(0.25,0.45,1.0,0.5)
+			else:
+				s.bg_color = Color(0.12, 0.18, 0.45, 1)
+				s.border_color = Color(0.18, 0.28, 0.7, 0.6)
+				s.shadow_color = Color(0,0,0,0.4)
+		elif pc.name.ends_with("Red"):
+			if is_active:
+				s.bg_color = Color(1.0, 0.25, 0.25, 1)
+				s.border_color = Color(1.0, 0.5, 0.5, 1)
+				s.shadow_color = Color(1.0,0.25,0.25,0.5)
+			else:
+				s.bg_color = Color(0.35, 0.12, 0.12, 1)
+				s.border_color = Color(0.7, 0.2, 0.2, 0.6)
+				s.shadow_color = Color(0,0,0,0.4)
+		else:
+			if is_active:
+				s.bg_color = Color(0.25, 1.0, 0.4, 1)
+				s.border_color = Color(0.5, 1.0, 0.6, 1)
+				s.shadow_color = Color(0.25,1.0,0.4,0.5)
+			else:
+				s.bg_color = Color(0.12, 0.35, 0.12, 1)
+				s.border_color = Color(0.2, 0.7, 0.2, 0.6)
+				s.shadow_color = Color(0,0,0,0.4)
+		pc.add_theme_stylebox_override("panel", s)
+
 func _find_influence_label(node: Node) -> Label:
 	for c in node.get_children():
 		if c is Label and c.text != "Influence":
@@ -1186,6 +1353,8 @@ func _ready():
 	_start_new_round()
 	_move_player_piles_to_bottom()
 	_setup_influence_at_draw_pile()
+	_setup_phase_ui_top_left()
+	_set_phase("Player Build Phase")
 	_hide_hand_label()
 
 func _show_hover(text: String):
@@ -1223,7 +1392,7 @@ func _ensure_preview_popup():
 	if preview_popup.has_method("set_as_top_level"):
 		preview_popup.top_level = true
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.14, 0.96)
+	sb.bg_color = Color(0.08, 0.08, 0.14, 0.70) # 30% transparent
 	sb.border_color = Color(0.9, 0.9, 0.95, 1)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(10)
@@ -2811,6 +2980,7 @@ func _continue_from_shop():
 		end_turn_btn.disabled = false
 
 func _start_new_round():
+	_set_phase("Player Economy Phase")
 	if is_tutorial and tutorial_step <= 10:
 		# Tutorial controls economy/hand manually - just refresh
 		_refresh_ui()
@@ -2824,13 +2994,16 @@ func _start_new_round():
 	var human_hp_before: int = human.HitPoints
 	var ai_hp_before: int = ai_player.HitPoints
 	human.economy_phase()
+	_set_phase("AI Economy Phase")
 	ai_player.economy_phase()
 	_refresh_ui()
 	await _animate_economy_gain(human_bio_before, human_money_before, human_hp_before, ai_bio_before, ai_money_before, ai_hp_before)
+	_set_phase("AI Build Phase")
 	# AI builds with animation
 	end_turn_btn.disabled = true
 	message_label.text = "Opponent's turn..."
 	await _animate_opponent_builds()
+	_set_phase("Player Build Phase")
 	end_turn_btn.disabled = false
 	selected_card = null
 	selected_card_idx = -1
@@ -3946,8 +4119,10 @@ func _on_end_turn():
 	end_turn_btn.disabled = true
 	selected_card = null
 	selected_card_idx = -1
+	_set_phase("Player Combat Phase")
 	# Live combat: damage is applied and UI refreshed per hit, not deferred to end
 	var log: Array = await _execute_combat_live()
+	_set_phase("AI Combat Phase")
 	if log.is_empty():
 		message_label.text = "No attacks this turn"
 	else:
