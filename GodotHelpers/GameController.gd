@@ -185,7 +185,7 @@ func _move_player_piles_to_bottom():
 	if left_gauges != null:
 		var ai_deck = left_gauges.get_node_or_null("AIDeck")
 		if ai_deck != null:
-			ai_deck.visible = false
+			ai_deck.visible = true
 	var ai_discard = right_gauges.get_node_or_null("AIDiscard")
 	if ai_discard != null:
 		ai_discard.visible = false
@@ -248,11 +248,37 @@ func _move_player_piles_to_bottom():
 			old_p2.remove_child(player_graveyard)
 		bottom.add_child(player_graveyard)
 		player_graveyard.visible = true
-	# Also ensure player deck (draw) stays visible on left as HQ
-	if left_gauges != null:
-		var pd = left_gauges.get_node_or_null("PlayerDeck")
+	# Move player draw pile out of gauge area and place on top of discard/graveyard
+	var pd: Node = null
+	# Try several possible current parents for PlayerDeck (handles GaugeGridPanel wrapping)
+	for path in [
+		"VBox/MainHBox/LeftGauges/PlayerDeck",
+		"VBox/MainHBox/GaugeGridPanel/LeftGauges/PlayerDeck",
+		"VBox/MainHBox/RightGauges/PlayerDeck",
+		"VBox/MainHBox/RightGauges/PlayerPilesBottomRight/PlayerDeck"
+	]:
+		pd = get_node_or_null(path)
 		if pd != null:
-			pd.visible = true
+			break
+	if pd == null and left_gauges != null:
+		pd = left_gauges.get_node_or_null("PlayerDeck")
+	if pd == null:
+		# Last resort: search inside GaugeGridPanel
+		var panel = get_node_or_null("VBox/MainHBox/GaugeGridPanel")
+		if panel != null:
+			var lg2 = panel.get_node_or_null("LeftGauges")
+			if lg2 != null:
+				pd = lg2.get_node_or_null("PlayerDeck")
+	if pd != null and pd.get_parent() != bottom:
+		var old_p3 = pd.get_parent()
+		if old_p3 != null:
+			old_p3.remove_child(pd)
+		bottom.add_child(pd)
+		pd.visible = true
+		bottom.move_child(pd, 0)
+	elif pd != null:
+		pd.visible = true
+		bottom.move_child(pd, 0)
 	# Hide old spacer and discard label gaps
 	var spacer = right_gauges.get_node_or_null("Spacer2")
 	if spacer != null:
@@ -1651,8 +1677,8 @@ func _ready():
 	_setup_gauge_and_influence_hovers()
 	_ensure_modifiers_stack()
 	_refresh_modifiers_stack()
-	player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
-	ai_deck_icon.pressed.connect(func(): _inspect_ai_full_deck())
+	player_deck_icon.pressed.connect(_on_player_draw_pressed)
+	ai_deck_icon.pressed.connect(_on_ai_draw_pressed)
 	player_discard_icon.pressed.connect(func(): _inspect_pile("Your Discard Pile", human.DiscardPile))
 	ai_discard_icon.pressed.connect(func(): _inspect_pile("AI Discard Pile", ai_player.DiscardPile))
 	player_graveyard_icon.pressed.connect(func(): _inspect_pile("Your Graveyard", human.Graveyard))
@@ -1660,31 +1686,63 @@ func _ready():
 	_start_new_round()
 	_move_player_piles_to_bottom()
 	_setup_influence_at_draw_pile()
-	# Ensure draw pile buttons remain clickable after UI wrappers - reassert connections
+	# Ensure draw/opp piles are never blocked - keep in layout, raise z but do NOT detach with top_level
 	for _btn in [player_deck_icon, ai_deck_icon]:
 		if _btn != null and is_instance_valid(_btn):
 			_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 			_btn.z_index = 10
+			_btn.z_as_relative = true
+			if _btn.has_method("set_as_top_level"):
+				_btn.top_level = false
 			_btn.clip_contents = false
 			_btn.disabled = false
 			_btn.visible = true
-	# Explicitly ensure draw/opponent pile pressed connections exist
-	if player_deck_icon != null and not player_deck_icon.pressed.is_connected(func(): _inspect_pile("Your Draw Pile", human.DrawPile)):
-		# Use is_connected with callable check - reconnect if needed
-		var conns = player_deck_icon.get_signal_connection_list("pressed")
-		var has_draw = false
-		for c in conns:
-			has_draw = true
-		if not has_draw:
-			player_deck_icon.pressed.connect(func(): _inspect_pile("Your Draw Pile", human.DrawPile))
-	if ai_deck_icon != null:
-		var conns2 = ai_deck_icon.get_signal_connection_list("pressed")
-		if conns2.is_empty():
-			ai_deck_icon.pressed.connect(func(): _inspect_ai_full_deck())
+			_btn.focus_mode = Control.FOCUS_ALL
+			var _par = _btn.get_parent() as Control
+			if _par != null:
+				_par.visible = true
+				_par.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				_par.clip_contents = false
+				_par.z_index = 5
+				_par.z_as_relative = true
+			# Walk ancestors to ensure no clipping/blocking
+			var _anc = _par.get_parent() as Control
+			while _anc != null:
+				_anc.clip_contents = false
+				if _anc.mouse_filter == Control.MOUSE_FILTER_STOP:
+					_anc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				if _anc.name == "VBox":
+					break
+				_anc = _anc.get_parent() as Control
+			if _btn.custom_minimum_size.x < 78:
+				_btn.custom_minimum_size = Vector2(78, 98)
+		# Reconnect if missing (use list, not is_connected with new lambda)
+	if player_deck_icon != null and player_deck_icon.get_signal_connection_list("pressed").is_empty():
+		player_deck_icon.pressed.connect(_on_player_draw_pressed)
+	if ai_deck_icon != null and ai_deck_icon.get_signal_connection_list("pressed").is_empty():
+		ai_deck_icon.pressed.connect(_on_ai_draw_pressed)
+	# Fallback gui_input so even if Button pressed is swallowed, click still inspects - use bound callable to avoid closure capture bug
+	if player_deck_icon != null and not player_deck_icon.has_meta("fb_gui_bound"):
+		player_deck_icon.set_meta("fb_gui_bound", true)
+		player_deck_icon.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				_on_player_draw_pressed()
+				get_viewport().set_input_as_handled()
+		)
+	if ai_deck_icon != null and not ai_deck_icon.has_meta("fb_gui_bound2"):
+		ai_deck_icon.set_meta("fb_gui_bound2", true)
+		ai_deck_icon.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				_on_ai_draw_pressed()
+				get_viewport().set_input_as_handled()
+		)
 	for _btn2 in [player_discard_icon, ai_discard_icon, player_graveyard_icon, ai_graveyard_icon]:
 		if _btn2 != null and is_instance_valid(_btn2):
 			_btn2.mouse_filter = Control.MOUSE_FILTER_STOP
-			_btn2.z_index = 10
+			_btn2.z_index = 90
+			_btn2.z_as_relative = false
+			_btn2.visible = true
+			_btn2.disabled = false
 	_setup_phase_ui_top_left()
 	_set_phase("Player Build Phase")
 	_hide_hand_label()
@@ -5278,6 +5336,14 @@ func _spawn_income_effect(anchor: Control, kind: String, amount: int):
 	atw.tween_property(anchor, "scale", Vector2(1.08,1.08), 0.08).set_trans(Tween.TRANS_BACK)
 	atw.tween_property(anchor, "scale", Vector2(1.0,1.0), 0.14).set_trans(Tween.TRANS_BACK)
 
+
+func _on_player_draw_pressed():
+	print("[PileClick] Your Draw Pile size=", (human.DrawPile.size() if human != null else -1))
+	_inspect_pile("Your Draw Pile", human.DrawPile if human != null else [])
+
+func _on_ai_draw_pressed():
+	print("[PileClick] Opponent Pile")
+	_inspect_ai_full_deck()
 
 func _inspect_ai_full_deck():
 	# Show full deck composition, not remaining DrawPile, so hand cannot be guessed
