@@ -289,7 +289,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "9/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Spacer" type="Control" parent="VBox/MainHBox/LeftGauges"]
@@ -490,7 +490,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "9/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="RightContent" type="VBoxContainer" parent="VBox/MainHBox"]
@@ -587,7 +587,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="AIGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
@@ -618,7 +618,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="Spacer2" type="Control" parent="VBox/MainHBox/RightGauges"]
@@ -653,7 +653,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 
 [node name="PlayerGraveyard" type="VBoxContainer" parent="VBox/MainHBox/RightGauges"]
@@ -684,7 +684,7 @@ custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 text = "0/16"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 [node name="InspectPopup" type="PanelContainer" parent="."]
 visible = false

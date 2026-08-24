@@ -3757,7 +3757,7 @@ func _refresh_ui():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33)
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33)
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33)
-	ai_deck_value.text = "Opponent Pile %d/33" % ai_player.DrawPile.size()
+	ai_deck_value.text = "Opponent %d/33" % ai_player.DrawPile.size()
 	player_deck_value.text = "Draw %d/33" % human.DrawPile.size()
 	ai_discard_value.text = "Discard %d/33" % ai_player.DiscardPile.size()
 	player_discard_value.text = "Discard %d/33" % human.DiscardPile.size()
@@ -3822,11 +3822,11 @@ func _refresh_ui():
 					pass
 		var anim := PileArt.create_sprite_for(pile, Vector2(78, 78))
 		anim.name = "PileAnim"
-		# AI draw pile label should read Opponent Pile instead of Draw
+		# AI draw pile label should read Opponent instead of Draw
 		if pile == "Draw" and btn == ai_deck_icon:
 			for ch in anim.get_children():
 				if ch is Label:
-					(ch as Label).text = "Opponent Pile"
+					(ch as Label).text = "Opponent"
 					(ch as Label).add_theme_font_size_override("font_size", int(78 * 0.10))
 					break
 		anim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -4594,7 +4594,7 @@ func _refresh_gauges_only():
 	player_discard_bar.value = clamp(human.DiscardPile.size(), 0, 33) if human != null else 0
 	ai_graveyard_bar.value = clamp(ai_player.Graveyard.size(), 0, 33) if ai_player != null else 0
 	player_graveyard_bar.value = clamp(human.Graveyard.size(), 0, 33) if human != null else 0
-	ai_deck_value.text = "Opponent Pile %d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
+	ai_deck_value.text = "Opponent %d/33" % (ai_player.DrawPile.size() if ai_player != null else 0)
 	player_deck_value.text = "Draw %d/33" % (human.DrawPile.size() if human != null else 0)
 	ai_discard_value.text = "Discard %d/33" % (ai_player.DiscardPile.size() if ai_player != null else 0)
 	player_discard_value.text = "Discard %d/33" % (human.DiscardPile.size() if human != null else 0)
@@ -4620,7 +4620,7 @@ func _refresh_gauges_only():
 			if pile2 == "Draw" and b2 == ai_deck_icon:
 				for ch in anim2.get_children():
 					if ch is Label:
-						(ch as Label).text = "Opponent Pile"
+						(ch as Label).text = "Opponent"
 						(ch as Label).add_theme_font_size_override("font_size", int(78 * 0.10))
 						break
 			anim2.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -5418,7 +5418,7 @@ func _on_player_draw_pressed():
 	_inspect_pile("Your Draw Pile", human.DrawPile if human != null else [])
 
 func _on_ai_draw_pressed():
-	print("[PileClick] Opponent Pile")
+	print("[PileClick] Opponent")
 	_inspect_ai_full_deck()
 
 func _inspect_ai_full_deck():
