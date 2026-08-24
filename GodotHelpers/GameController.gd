@@ -181,17 +181,14 @@ func _move_player_piles_to_bottom():
 	var left_gauges = get_node_or_null("VBox/MainHBox/LeftGauges")
 	if right_gauges == null:
 		return
-	# Hide opponent piles: AIDeck (left), AIDiscard, AIGraveyard (right)
-	if left_gauges != null:
-		var ai_deck = left_gauges.get_node_or_null("AIDeck")
-		if ai_deck != null:
-			ai_deck.visible = true
+	# Hide opponent discard/graveyard piles, and move opponent draw pile out of gauge to left side (underneath gauge, above influence)
 	var ai_discard = right_gauges.get_node_or_null("AIDiscard")
 	if ai_discard != null:
 		ai_discard.visible = false
 	var ai_graveyard = right_gauges.get_node_or_null("AIGraveyard")
 	if ai_graveyard != null:
 		ai_graveyard.visible = false
+	# Hide opponent discard/graveyard already done; AIDeck move to right side handled later after bottom exists
 	# Clean up old centered bottom container if it exists from previous bottom-center version
 	if right_content != null:
 		var old_bottom = right_content.get_node_or_null("PlayerPilesBottom")
@@ -279,6 +276,45 @@ func _move_player_piles_to_bottom():
 	elif pd != null:
 		pd.visible = true
 		bottom.move_child(pd, 0)
+	# Move opponent draw pile out of gauge area to RIGHT side on top of the other 3 (player draw/discard/graveyard)
+	var ad: Node = null
+	for apath in [
+		"VBox/MainHBox/LeftGauges/AIDeck",
+		"VBox/MainHBox/GaugeGridPanel/LeftGauges/AIDeck",
+		"VBox/MainHBox/RightGauges/AIDeck",
+		"VBox/MainHBox/RightGauges/PlayerPilesBottomRight/AIDeck",
+	]:
+		ad = get_node_or_null(apath)
+		if ad != null:
+			break
+	if ad == null:
+		var lg_try2 = _get_left_gauges()
+		if lg_try2 != null:
+			ad = lg_try2.get_node_or_null("AIDeck")
+	if ad == null:
+		var panel2b = get_node_or_null("VBox/MainHBox/GaugeGridPanel")
+		if panel2b != null:
+			var lg2b = panel2b.get_node_or_null("LeftGauges")
+			if lg2b != null:
+				ad = lg2b.get_node_or_null("AIDeck")
+	if ad != null:
+		if ad.get_parent() != bottom:
+			var old_ap = ad.get_parent()
+			if old_ap != null:
+				old_ap.remove_child(ad)
+			bottom.add_child(ad)
+		ad.visible = true
+		# Place at very top of the 4-pile stack (opponent draw above player piles)
+		bottom.move_child(ad, 0)
+		var ai_btn2 = ad.get_node_or_null("AIDeckIcon") as Control
+		if ai_btn2 != null:
+			ai_btn2.mouse_filter = Control.MOUSE_FILTER_STOP
+			ai_btn2.z_index = 10
+			ai_btn2.z_as_relative = true
+			ai_btn2.clip_contents = false
+			ai_btn2.visible = true
+			if ai_btn2 is Button:
+				(ai_btn2 as Button).disabled = false
 	# Hide old spacer and discard label gaps
 	var spacer = right_gauges.get_node_or_null("Spacer2")
 	if spacer != null:
