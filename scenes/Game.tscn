@@ -54,7 +54,7 @@ grow_vertical = 2
 alignment = 0
 
 [node name="TopSpacer" type="Control" parent="VBox"]
-custom_minimum_size = Vector2(0, 10)
+custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 
 [node name="Controls" type="HBoxContainer" parent="VBox"]
@@ -530,6 +530,10 @@ layout_mode = 2
 text = ""
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="HandSpacer" type="Control" parent="VBox/MainHBox/RightContent"]
+custom_minimum_size = Vector2(0, 5)
+layout_mode = 2
 
 [node name="Hand" type="HBoxContainer" parent="VBox/MainHBox/RightContent"]
 custom_minimum_size = Vector2(0, 80)
