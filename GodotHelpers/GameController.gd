@@ -853,34 +853,42 @@ func _setup_influence_at_draw_pile():
 	var left: Control = _get_left_gauges()
 	if left == null:
 		left = get_node_or_null("VBox/MainHBox/LeftGauges") as Control
-	var pd: Control = left.get_node_or_null("PlayerDeck") as Control if left != null else null
-	if pd == null:
-		pd = get_node_or_null("VBox/MainHBox/LeftGauges/PlayerDeck") as Control
-	if pd == null and left != null:
-		# Also check BottomRow already
-		var br2: Control = left.get_node_or_null("BottomRow") as Control
-		if br2 != null:
-			pd = br2.get_node_or_null("PlayerDeck") as Control
-	if left == null or pd == null:
+	if left == null:
+		var panel = get_node_or_null("VBox/MainHBox/GaugeGridPanel")
+		if panel != null:
+			left = panel.get_node_or_null("LeftGauges") as Control
+	if left == null:
 		return
 	# Hide old player_info (was center)
 	var old_info = get_node_or_null("VBox/MainHBox/RightContent/PlayerInfo")
 	if old_info != null:
 		old_info.visible = false
-	# Create bottom row HBox at very bottom of left column, right side of draw pile
-	var bottom_row = left.get_node_or_null("BottomRow")
-	if bottom_row == null:
-		bottom_row = HBoxContainer.new()
-		bottom_row.name = "BottomRow"
-		bottom_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		bottom_row.add_theme_constant_override("separation", 10)
-		left.add_child(bottom_row)
-		# Move PlayerDeck into bottom row (keep its VBox vertical)
-		if pd.get_parent() == left:
-			left.remove_child(pd)
-			bottom_row.add_child(pd)
-		# Create influence box to the right of draw pile, at very bottom
-		var inf_box := HBoxContainer.new()
+	# Place InfluenceBox right underneath the gauge (PlayerGauges) in left column
+	var gauges = left.get_node_or_null("PlayerGauges") as Control
+	# Find existing InfluenceBox anywhere (left BottomRow, right piles, etc.) to reuse
+	var existing: Node = null
+	for cpath in [
+		"VBox/MainHBox/LeftGauges/InfluenceBox",
+		"VBox/MainHBox/GaugeGridPanel/LeftGauges/InfluenceBox",
+		"VBox/MainHBox/LeftGauges/BottomRow/InfluenceBox",
+		"VBox/MainHBox/RightGauges/PlayerPilesBottomRight/DrawInfluenceRow/InfluenceBox",
+		"VBox/MainHBox/RightGauges/PlayerPilesBottomRight/InfluenceBox",
+	]:
+		existing = get_node_or_null(cpath)
+		if existing != null:
+			break
+	if existing == null and left != null:
+		var br = left.get_node_or_null("BottomRow")
+		if br != null:
+			existing = br.get_node_or_null("InfluenceBox")
+		if existing == null:
+			# Also check DrawInfluenceRow if somehow there
+			var dir = get_node_or_null("VBox/MainHBox/RightGauges/PlayerPilesBottomRight/DrawInfluenceRow")
+			if dir != null:
+				existing = dir.get_node_or_null("InfluenceBox")
+	var inf_box: Control = existing as Control
+	if inf_box == null or not is_instance_valid(inf_box):
+		inf_box = HBoxContainer.new()
 		inf_box.name = "InfluenceBox"
 		inf_box.alignment = BoxContainer.ALIGNMENT_CENTER
 		inf_box.add_theme_constant_override("separation", 6)
@@ -913,15 +921,47 @@ func _setup_influence_at_draw_pile():
 		influence_value_label.add_theme_font_size_override("font_size", 26)
 		influence_value_label.add_theme_color_override("font_color", Color(1,1,1))
 		h_row.add_child(influence_value_label)
-		bottom_row.add_child(inf_box)
+		# Insert right after gauges (underneath gauge) or at end if gauges not found
+		if gauges != null:
+			var idx = left.get_children().find(gauges)
+			left.add_child(inf_box)
+			left.move_child(inf_box, idx + 1)
+		else:
+			left.add_child(inf_box)
 	else:
-		# Already exists, just ensure influence label exists
-		var ib = bottom_row.get_node_or_null("InfluenceBox")
-		if ib != null:
-			influence_value_label = ib.get_node_or_null("VBox/HBox/Label") as Label
-			if influence_value_label == null:
-				# fallback find by recursion
-				influence_value_label = _find_influence_label(ib)
+		# Move existing to be directly underneath gauges
+		if inf_box.get_parent() != left:
+			var old_p = inf_box.get_parent()
+			if old_p != null:
+				old_p.remove_child(inf_box)
+			if gauges != null:
+				var idx = left.get_children().find(gauges)
+				left.add_child(inf_box)
+				left.move_child(inf_box, idx + 1)
+			else:
+				left.add_child(inf_box)
+		else:
+			if gauges != null:
+				var idx2 = left.get_children().find(gauges)
+				var cur = left.get_children().find(inf_box)
+				if cur != idx2 + 1:
+					left.move_child(inf_box, idx2 + 1)
+		inf_box.visible = true
+		# Ensure label refs
+		var found = _find_influence_label(inf_box)
+		if found != null:
+			influence_value_label = found
+		for ch in inf_box.get_children():
+			if ch is VBoxContainer:
+				for ch2 in ch.get_children():
+					if ch2 is HBoxContainer:
+						for ch3 in ch2.get_children():
+							if ch3 is TextureRect:
+								influence_icon_rect = ch3 as TextureRect
+		# Clean up empty BottomRow Drawer leftover: if BottomRow now only has influence or empty, keep influence moved, remove empty row
+		var old_br = left.get_node_or_null("BottomRow")
+		if old_br != null and old_br.get_child_count() == 0:
+			old_br.queue_free()
 	_refresh_influence_display()
 
 func _setup_phase_ui_top_left():
