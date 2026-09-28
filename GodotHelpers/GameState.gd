@@ -12,6 +12,10 @@ var is_tutorial: bool = false
 var shop_offer: Array = [] # Card[] 5 cards
 var shop_modifier_offer: Array = [] # Modifier[] 3 modifiers
 var shop_remove_used: bool = false
+# World-map campaign: same battles/shop as a run, but wars are chosen on the map.
+var map_campaign: MapCampaign = null
+var map_mode: bool = false
+var map_war_target: String = ""
 
 func set_player(name: String):
 	if name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Euro Army", "Coalition Army", "Corporate Troops"]:
@@ -86,6 +90,9 @@ func background_path_for(player_name: String) -> String:
 
 func start_run(chosen_name: String):
 	is_tutorial = false
+	map_mode = false
+	map_campaign = null
+	map_war_target = ""
 	selected_player_name = chosen_name
 	run_player = make_player_by_name(chosen_name, true)
 	# deep copy? Keep reference as run_player
@@ -98,6 +105,9 @@ func start_run(chosen_name: String):
 
 func start_tutorial():
 	is_tutorial = true
+	map_mode = false
+	map_campaign = null
+	map_war_target = ""
 	selected_player_name = "State Troops"
 	selected_enemy = "Insurgents"
 	run_player = make_player_by_name("State Troops", true)
@@ -112,6 +122,35 @@ func start_tutorial():
 	shop_modifier_offer.clear()
 	shop_remove_used = false
 	# Tutorial deck will be set by TutorialController, keep minimal
+
+func start_map_campaign(chosen_name: String):
+	is_tutorial = false
+	selected_player_name = chosen_name
+	run_player = make_player_by_name(chosen_name, true)
+	run_enemies = []
+	run_enemy_index = 0
+	run_started = true
+	map_mode = true
+	map_war_target = ""
+	map_campaign = MapCampaign.new(chosen_name)
+	shop_offer.clear()
+	shop_modifier_offer.clear()
+	shop_remove_used = false
+
+func start_map_battle(target_name: String):
+	map_war_target = target_name
+	# Fresh deck/supplies/board for the war (also cleans up an abandoned one).
+	reset_player_for_new_encounter()
+	run_enemies = [make_player_by_name(target_name)]
+	run_enemy_index = 0
+
+func end_map_battle():
+	map_war_target = ""
+	run_enemies = []
+	run_enemy_index = 0
+
+func map_battle_active() -> bool:
+	return map_mode and map_war_target != ""
 
 func get_current_enemy() -> AIPlayer:
 	if run_enemies.is_empty():
@@ -302,6 +341,10 @@ func save_game() -> bool:
 		if m is Modifier:
 			shop_mods.append((m as Modifier).modifier_name)
 	data["shop_modifier_offer"] = shop_mods
+	data["map_mode"] = map_mode
+	data["map_war_target"] = map_war_target
+	if map_campaign != null:
+		data["map_campaign"] = map_campaign.to_data()
 	var json_str: String = JSON.stringify(data)
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
@@ -330,6 +373,13 @@ func load_game() -> bool:
 	run_started = bool(data.get("run_started", false))
 	is_tutorial = bool(data.get("is_tutorial", false))
 	shop_remove_used = bool(data.get("shop_remove_used", false))
+	map_mode = bool(data.get("map_mode", false))
+	map_war_target = str(data.get("map_war_target", ""))
+	var mc = data.get("map_campaign", null)
+	if mc is Dictionary:
+		map_campaign = MapCampaign.from_data(mc as Dictionary)
+	else:
+		map_campaign = null
 	# Deserialize player
 	var pd = data.get("run_player", null)
 	if pd is Dictionary:

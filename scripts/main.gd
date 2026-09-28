@@ -18,6 +18,7 @@ func _ready():
 	_build_player_chooser()
 	_add_tutorial_button()
 	_add_resume_button()
+	_add_world_map_button()
 	_enforce_menu_order()
 	_style_menu_buttons()
 	_stylize_title()
@@ -342,7 +343,7 @@ func _stylize_title():
 	tw.tween_property(title, "modulate", Color(0.96, 0.97, 1.0, 1), 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _style_menu_buttons():
-	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton"]:
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton", "CenterContainer/VBox/WorldMapButton"]:
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
@@ -430,12 +431,42 @@ func _on_tutorial_pressed():
 		gs.start_tutorial()
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
+func _add_world_map_button():
+	var vbox = get_node_or_null("CenterContainer/VBox")
+	if vbox == null:
+		return
+	if vbox.has_node("WorldMapButton"):
+		return
+	var wbtn := Button.new()
+	wbtn.name = "WorldMapButton"
+	wbtn.text = "World Map"
+	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
+	var _w: float = 340
+	var _h: float = 72
+	if _play_ref != null:
+		_w = _play_ref.custom_minimum_size.x
+		_h = _play_ref.custom_minimum_size.y
+	wbtn.custom_minimum_size = Vector2(_w, _h)
+	wbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	wbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	wbtn.add_theme_font_size_override("font_size", 26)
+	wbtn.pressed.connect(_on_world_map_pressed)
+	vbox.add_child(wbtn)
+	_style_pill_button(wbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
+	_enforce_menu_order()
+
+func _on_world_map_pressed():
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		gs.set_player(_selected_player)
+	get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
+
 func _enforce_menu_order():
 	var vbox = get_node_or_null("CenterContainer/VBox")
 	if vbox == null:
 		return
-	# Desired order top→bottom: New Game (Play), Resume, Tutorial, Quit (Exit) at bottom - all 340x72
-	var order = ["PlayButton", "ResumeButton", "TutorialButton", "QuitButton"]
+	# Desired order top→bottom: New Game (Play), Resume, Tutorial, World Map, Quit (Exit) at bottom - all 340x72
+	var order = ["PlayButton", "ResumeButton", "TutorialButton", "WorldMapButton", "QuitButton"]
 	var to_place: Array = []
 	for name in order:
 		var btn = vbox.get_node_or_null(name)
@@ -517,7 +548,10 @@ func _on_resume_pressed():
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null and gs.has_method("load_game"):
 		if gs.load_game():
-			get_tree().change_scene_to_file("res://scenes/Game.tscn")
+			if gs.map_mode and not gs.map_battle_active():
+				get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
+			else:
+				get_tree().change_scene_to_file("res://scenes/Game.tscn")
 		else:
 			var msg = get_node_or_null("CenterContainer/VBox/MessageLabel") as Label
 			if msg != null:

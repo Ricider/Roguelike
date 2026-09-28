@@ -3506,6 +3506,14 @@ func _show_remove_dialog():
 func _continue_from_shop():
 	shop_popup.visible = false
 	var gs = get_node_or_null("/root/GameState")
+	if gs != null and gs.map_mode and gs.map_campaign != null:
+		# Map campaign: same deck/supply reset as between run battles, then
+		# back to the map to choose the next war (territory already transferred).
+		gs.reset_player_for_new_encounter()
+		gs.end_map_battle()
+		human = gs.run_player
+		get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
+		return
 	if gs != null and gs.run_started:
 		# Reset player deck/bio/money/board at start of each different encounter per request
 		# _clear_board(human) is now handled via reset_player_for_new_encounter (clears and repopulates starting board)
@@ -5596,6 +5604,14 @@ func _check_game_over() -> bool:
 	var gs = get_node_or_null("/root/GameState")
 	var is_run: bool = gs != null and gs.run_started
 	if human.HitPoints <= 0 and ai_player.HitPoints <= 0:
+		if is_run and gs.map_mode:
+			human.HitPoints = human.MaxHitPoints
+			message_label.text = "Draw! Both fell. No territory changes hands."
+			gs.prepare_shop()
+			_refresh_ui()
+			_show_shop()
+			end_turn_btn.disabled = true
+			return true
 		message_label.text = "Draw! Both fell. [Menu] to restart"
 		end_turn_btn.disabled = true
 		return true
@@ -5605,6 +5621,16 @@ func _check_game_over() -> bool:
 			# Gain starting influence per Main Game Rules
 			gs.gain_influence(gained)
 			human.Influence = gs.run_player.Influence
+			if gs.map_mode and gs.map_campaign != null:
+				var tiles_won: int = gs.map_campaign.conquer(gs.selected_player_name, ai_player.display_name, human.HitPoints)
+				message_label.text = "VICTORY! Defeated %s! Gained %d Influence and %d territory. Influence: %d" % [ai_player.display_name, gained, tiles_won, human.Influence]
+				if gs.map_campaign.has_won():
+					message_label.text += " — WORLD CONQUERED!"
+				gs.prepare_shop()
+				_refresh_ui()
+				_show_shop()
+				end_turn_btn.disabled = true
+				return true
 			message_label.text = "VICTORY! Defeated %s! Gained %d Influence. Influence: %d" % [ai_player.display_name, gained, human.Influence]
 			# Prepare next enemy index (next battle)
 			gs.advance_enemy()
@@ -5624,6 +5650,17 @@ func _check_game_over() -> bool:
 			end_turn_btn.disabled = true
 			return true
 	elif human.HitPoints <= 0:
+		if is_run and gs.map_mode and gs.map_campaign != null:
+			var tiles_lost: int = gs.map_campaign.conquer(ai_player.display_name, gs.selected_player_name, ai_player.HitPoints)
+			human.HitPoints = human.MaxHitPoints
+			message_label.text = "DEFEAT! You fell to %s and ceded %d territory. Your army rebuilds." % [ai_player.display_name, tiles_lost]
+			if gs.map_campaign.has_lost():
+				message_label.text += " — ELIMINATED!"
+			gs.prepare_shop()
+			_refresh_ui()
+			_show_shop()
+			end_turn_btn.disabled = true
+			return true
 		message_label.text = "DEFEAT! You fell. [Menu] to restart"
 		end_turn_btn.disabled = true
 		if is_run:
