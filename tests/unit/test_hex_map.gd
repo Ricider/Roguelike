@@ -30,3 +30,19 @@ func test_pixel_to_hex_roundtrip():
 			var c: Vector2 = view.hex_center(x, y, m)
 			assert_eq(view.tile_at_point(c), Vector2i(x, y), "centre of (%d,%d) picks itself" % [x, y])
 	assert_eq(view.tile_at_point(Vector2(-50, -50)), Vector2i(-1, -1), "outside map picks nothing")
+
+func test_picking_after_zoom_pan_and_wrap():
+	var view := WorldMapView.new()
+	add_child_autofree(view)
+	view.size = Vector2(1400, 800)
+	view.center_on(Vector2i(2, 10), 2.5) # near the seam: the view shows both ends of the world
+	view.pan_by(Vector2(333, -41))
+	var m: Array = view.metrics()
+	for t in [Vector2i(0, 10), Vector2i(59, 10), Vector2i(3, 11), Vector2i(58, 9)]:
+		var p: Vector2 = view.screen_pos(t, m)
+		if p.x > 0 and p.x < view.size.x and p.y > 0 and p.y < view.size.y:
+			assert_eq(view.tile_at_point(p), t, "wrapped copy of %s picks itself" % t)
+	view.zoom_by(10.0)
+	assert_eq(view.zoom, WorldMapView.ZOOM_MAX, "zoom clamps at max")
+	view.zoom_by(0.001)
+	assert_eq(view.zoom, WorldMapView.ZOOM_MIN, "zoom clamps at min")

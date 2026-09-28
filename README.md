@@ -14,15 +14,15 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
 - **Gamepad**: D-Pad / Left Stick to move, any face button to wait
 - **Touch / Mouse**: Tap a neighboring tile to move there, tap player to wait. On-screen D-pad (bottom right) also works on mobile/web
 
-## World Map campaign (Civ-style)
-- Main menu -> **World Map**: Earth on a 60x30 hex grid (pointy-top hexes, odd rows offset half a hex; every tile has 6 neighbors) (ocean, grassland, desert, mountain, snow, jungle). Pick your nation in the chooser first.
-- Every nation starts with connected territory around its capital (Antarctica/NZ are unclaimed wilderness; the map wraps east-west at the Bering Strait).
-- Tap a tile to inspect it. You can only declare war on **neighbors** (shared border).
-- Each war is one normal card battle, then a shop, then back to the map. Winner takes **1 tile per 10 HP left** (min 1) from the shared border; the loser stays connected when possible, so no border gore. Lose and you cede land but your army rebuilds.
-- Win by conquering all claimed land; lose if you hold nothing. Sequential runs via New Game still work as before.
-- Tiles use generated art per terrain (4 variants each, no asset files); nation borders draw in each nation's color.
-- The map highlights nations you can attack with pulsing red front-line tiles. Hovering shows tile details under the map, and clicking a nation in the side list jumps to its capital.
-- Save from the map (Save Campaign) or mid-battle; Resume returns to the map between wars or straight back into an ongoing battle. Flags move to stay inside friendly borders if a capital tile falls.
+## World Map campaign (hex war)
+- Main menu -> **World Map**: Earth on a 60x30 hex grid (pointy-top hexes, odd rows offset half a hex; every hex has 6 neighbors, and the map wraps east-west at the Bering Strait). Pick your nation in the chooser first.
+- **The map is the battlefield.** Turns go one nation at a time: you first, then every AI nation. On its turn a nation collects income (Money/Bio from its buildings on the map), draws back up to 10 cards, deploys cards onto its own empty hexes, and then every one of its units fires.
+- **Targeting:** units without Range hit the closest enemy card anywhere on the map (hex distance). Units with Range hit a random card belonging to the closest enemy nation. If there are no enemy cards anywhere, units strike the closest enemy nation's HP directly.
+- Card rules carry over from battles: Rocket Launcher/Howitzer fire 4 times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half from non-ranged, Barracks give +2 to adjacent units, Interceptors halve ranged/flying hits on neighbors, Fighter Jets splash.
+- A destroyed card costs its owner HP equal to its BioCost. **A nation at 0 HP cedes border hexes** (1 per 10 HP the victor has left) to whoever damaged it most, loses the cards on those hexes, then rebuilds to full HP. Hold every claimed hex to win; lose your last hex and you're out.
+- Controls: click a card in the hand bar, then a glowing hex (Esc cancels). Space or End Turn ends your turn. Speed toggles 1x/2x/4x for the AI turns. Hover any hex for its owner, card, HP and damage.
+- Camera: the map opens zoomed in on your capital. Scroll wheel or trackpad pinch zooms (1x-4x), dragging pans (it wraps east-west like a globe), arrows/WASD pan, +/- zoom, and H or the Home button returns to your capital.
+- Rules live in `Classes/GameBoard/MapWar.gd` (covered by `tests/unit/test_map_war.gd`). Saves include every card on the map, nation HP/Bio/Money and the turn.
 
 ## How to Play (battles)
 - Each turn runs **Economy → Build → Combat** for both sides. Bring the enemy HQ to 0 HP.

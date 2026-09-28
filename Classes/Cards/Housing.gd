@@ -11,6 +11,9 @@ static func count_housing(player: Player) -> int:
 		for sq in row.Squares:
 			if sq.Inhabitant != null and sq.Inhabitant is Housing:
 				n += 1
+	for c in player.MapCards:
+		if c is Housing:
+			n += 1
 	return n
 
 static func extra_bio(player: Player) -> int:

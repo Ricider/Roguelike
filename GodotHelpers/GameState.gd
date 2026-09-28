@@ -16,6 +16,8 @@ var shop_remove_used: bool = false
 var map_campaign: MapCampaign = null
 var map_mode: bool = false
 var map_war_target: String = ""
+var map_war: MapWar = null # hex-map battlefield (units on hexes, all nations fighting)
+var _map_war_data: Dictionary = {} # saved MapWar state waiting to be rebuilt
 
 func set_player(name: String):
 	if name in ["Insurgents", "State Troops", "Fundamentalists", "Mercenaries", "Peace Keepers", "Horde", "Euro Army", "Coalition Army", "Corporate Troops"]:
@@ -133,6 +135,8 @@ func start_map_campaign(chosen_name: String):
 	map_mode = true
 	map_war_target = ""
 	map_campaign = MapCampaign.new(chosen_name)
+	map_war = null
+	_map_war_data = {}
 	shop_offer.clear()
 	shop_modifier_offer.clear()
 	shop_remove_used = false
@@ -143,6 +147,21 @@ func start_map_battle(target_name: String):
 	reset_player_for_new_encounter()
 	run_enemies = [make_player_by_name(target_name)]
 	run_enemy_index = 0
+
+# The hex-map war for the current campaign, created (or restored from a save) on demand.
+func ensure_map_war() -> MapWar:
+	if map_campaign == null:
+		return null
+	if map_war != null and map_war.campaign == map_campaign:
+		return map_war
+	var maker := func(nm: String) -> Player: return make_player_by_name(nm)
+	if not _map_war_data.is_empty():
+		map_war = MapWar.from_data(_map_war_data, map_campaign, maker, run_player)
+		_map_war_data = {}
+	else:
+		map_war = MapWar.new()
+		map_war.setup(map_campaign, maker, run_player)
+	return map_war
 
 func end_map_battle():
 	map_war_target = ""
@@ -345,6 +364,8 @@ func save_game() -> bool:
 	data["map_war_target"] = map_war_target
 	if map_campaign != null:
 		data["map_campaign"] = map_campaign.to_data()
+	if map_war != null:
+		data["map_war"] = map_war.to_data()
 	var json_str: String = JSON.stringify(data)
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
@@ -380,6 +401,9 @@ func load_game() -> bool:
 		map_campaign = MapCampaign.from_data(mc as Dictionary)
 	else:
 		map_campaign = null
+	map_war = null
+	var mw = data.get("map_war", null)
+	_map_war_data = (mw as Dictionary) if mw is Dictionary else {}
 	# Deserialize player
 	var pd = data.get("run_player", null)
 	if pd is Dictionary:

@@ -15,6 +15,9 @@ var Hand: Array = [] # Card[]
 var Graveyard: Array = [] # Card[]
 var Modifiers: Array = [] # Modifier[]
 var display_name: String = ""
+# Cards this player has on the world map (hex war). They count toward income
+# exactly like cards on the 4x10 battle board.
+var MapCards: Array = [] # Card[]
 
 func _init(hp: int = 100, bio: int = 100, money: int = 20, difficulty: int = 0, name: String = "", background: String = "", influence: int = 0):
 	super._init()
@@ -41,6 +44,9 @@ func total_money_income() -> int:
 		for sq in row.Squares:
 			if sq.Inhabitant != null and sq.Inhabitant is Building:
 				income += (sq.Inhabitant as Building).Income
+	for c in MapCards:
+		if c is Building:
+			income += (c as Building).Income
 	return income
 
 func get_all_board_cards() -> Array:

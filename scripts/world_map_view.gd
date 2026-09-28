@@ -1,9 +1,13 @@
-# Civ-style hex renderer for the WorldMap Earth data.
+# Civ-style hex renderer for the WorldMap Earth data, with a zoom/pan camera.
 # Pointy-top hexes in "odd-r" offset layout (odd rows shifted half a hex right),
-# matching MapCampaign's hex adjacency. Pixel-art terrain (TileArt) mapped onto
-# each hex, a shimmering sea, owner tints, crisp nation borders along hex edges
-# and flag-on-pole capitals. Fast-changing bits (front-line pulse, hover,
-# selection) live on a child overlay so the 1800-hex base layer redraws rarely.
+# matching MapCampaign's hex adjacency. The map wraps east-west like a globe:
+# panning sideways scrolls forever and any hex can appear more than once when
+# zoomed out. Pixel-art terrain (TileArt), shimmering sea, owner tints, nation
+# borders along hex edges and flag-on-pole capitals are drawn on the base layer;
+# fast-changing bits (units, FX, hover, selection, placement hints) live on a
+# child overlay so the base layer only redraws on camera moves and map changes.
+# Controls: mouse wheel zooms at the cursor, drag (any button) pans, and
+# zoom_by()/pan_by()/center_on() are public for buttons and keys.
 extends Control
 class_name WorldMapView
 
@@ -22,9 +26,19 @@ const FRAME_PX: float = 6.0
 const SEA_STEP_SEC: float = 0.7
 const PULSE_FPS: float = 20.0
 const SQRT3: float = 1.7320508
+const ZOOM_MIN: float = 1.0 # whole world fits the width
+const ZOOM_MAX: float = 4.0
+const DRAG_THRESHOLD: float = 6.0
+const UNIT_FRAMES := [0, 5, 10, 15]
+const SHOT_COLORS := {
+	"shot_rifle": Color(1.0, 0.9, 0.4), "shot_cannon": Color(1.0, 0.6, 0.2), "shot_rocket": Color(1, 1, 1),
+	"shot_laser": Color(0.4, 0.9, 1.0), "missile": Color(0.95, 0.95, 1.0), "shot_flak": Color(1.0, 0.7, 0.3),
+}
 
 var selected := Vector2i(-1, -1)
 var hovered := Vector2i(-1, -1)
+var zoom: float = 1.0
+var _pan := Vector2.ZERO # map origin offset in pixels (x wraps, y is clamped)
 var _flags: Dictionary = {}
 var _owners: Dictionary = {}
 var _nation_colors: Dictionary = {}
@@ -32,8 +46,9 @@ var _dead: Dictionary = {}
 var _player_nation: String = ""
 var _campaign: MapCampaign = null
 var _edges: Dictionary = {}
+var _edge_map: Dictionary = {} # "x,y" -> [[edge index, colour], ...]
 var _tiles: Dictionary = {}
-var _front: Array = [] # enemy hexes touching the player's border (attackable nations only)
+var _front: Array = [] # enemy hexes touching the player's border (card-battle mode only)
 var _sea_phase: int = 0
 var _sea_clock: float = 0.0
 var _pulse_t: float = 0.0
@@ -41,6 +56,18 @@ var _pulse_clock: float = 0.0
 var _overlay: Control = null
 var _corner_unit: PackedVector2Array = PackedVector2Array()
 var _hex_uvs: PackedVector2Array = PackedVector2Array()
+# Hex war: cards on the map, legal placement hexes, hover ghost and battle FX
+var war: MapWar = null
+var placeable: Dictionary = {} # "x,y" -> true while a hand card is selected
+var ghost_card: String = "" # card name previewed under the cursor
+var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
+var _clock: float = 0.0
+var _fx_clock: float = 0.0
+var _unit_tex: Dictionary = {} # card name -> Array[Texture2D] (32px idle frames)
+# drag-to-pan state
+var _press_pos := Vector2.ZERO
+var _pressed: bool = false
+var _dragging: bool = false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -67,10 +94,15 @@ func _ready() -> void:
 	_overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
-	resized.connect(queue_redraw)
+	resized.connect(_redraw_all)
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
 		_overlay.queue_redraw())
+
+func _redraw_all() -> void:
+	queue_redraw()
+	if _overlay != null:
+		_overlay.queue_redraw()
 
 func set_campaign(campaign: MapCampaign) -> void:
 	_campaign = campaign
@@ -78,6 +110,7 @@ func set_campaign(campaign: MapCampaign) -> void:
 	_nation_colors.clear()
 	_dead.clear()
 	_edges.clear()
+	_edge_map.clear()
 	_player_nation = campaign.player_nation
 	for n in WorldMap.nations():
 		var d := n as Dictionary
@@ -87,10 +120,24 @@ func set_campaign(campaign: MapCampaign) -> void:
 			_dead[nm] = true
 		else:
 			_edges[nm] = campaign.border_edges(nm)
-	_front = _compute_front(campaign)
-	queue_redraw()
-	if _overlay != null:
-		_overlay.queue_redraw()
+	# per-hex edge list so borders draw with their hex (works with wrap + culling)
+	for nm in _edges.keys():
+		var bc: Color = Color(1.0, 0.84, 0.2) if nm == _player_nation else _nation_colors[nm]
+		for e in (_edges[nm] as Array):
+			var entry := e as Array
+			var t := entry[0] as Vector2i
+			var k := MapCampaign.key_of(t.x, t.y)
+			if not _edge_map.has(k):
+				_edge_map[k] = []
+			(_edge_map[k] as Array).append([int(entry[2]), bc])
+	# The pulsing "you can attack here" front line only applies to the old card-battle wars.
+	_front = _compute_front(campaign) if war == null else []
+	_redraw_all()
+
+func set_war(w: MapWar) -> void:
+	war = w
+	_front = []
+	_overlay.queue_redraw()
 
 func _compute_front(campaign: MapCampaign) -> Array:
 	var out: Array = []
@@ -100,8 +147,7 @@ func _compute_front(campaign: MapCampaign) -> Array:
 		var o := str(_owners[key])
 		if o == _player_nation or not campaign.can_attack(o):
 			continue
-		var parts := str(key).split(",")
-		var t := Vector2i(int(parts[0]), int(parts[1]))
+		var t := MapWar.key_to_hex(str(key))
 		for nb in MapCampaign.wrapped_neighbors(t):
 			var nv := nb as Vector2i
 			if str(_owners.get(MapCampaign.key_of(nv.x, nv.y), "")) == _player_nation:
@@ -113,34 +159,121 @@ func _process(delta: float) -> void:
 	_sea_clock += delta
 	_pulse_t += delta
 	_pulse_clock += delta
+	_clock += delta
 	if _sea_clock >= SEA_STEP_SEC:
 		_sea_clock = 0.0
 		_sea_phase = (_sea_phase + 1) % TileArt.VARIANTS
 		queue_redraw()
-	if not _front.is_empty() and _pulse_clock >= 1.0 / PULSE_FPS:
+	var busy := not effects.is_empty() or not placeable.is_empty() or (war != null and not war.units.is_empty())
+	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
 		_overlay.queue_redraw()
+	if not effects.is_empty():
+		_fx_clock += delta
+		if _fx_clock >= 1.0 / 40.0:
+			_fx_clock = 0.0
+			_overlay.queue_redraw()
+		var keep: Array = []
+		for e in effects:
+			if _clock < float(e["t0"]) + float(e["dur"]):
+				keep.append(e)
+		effects = keep
 
 func _variant_for(x: int, y: int) -> int:
 	return absi(x * 73856093 ^ y * 19349663) % TileArt.VARIANTS
 
-# [hex size (centre->corner), origin x, origin y, hex width]
-func metrics() -> Array:
+# ----------------------------------------------------------------- camera
+func _fit_size() -> float:
 	var avail := size - Vector2(FRAME_PX, FRAME_PX) * 2.0
-	var s: float = minf(avail.x / ((WorldMap.GRID_W + 0.5) * SQRT3), avail.y / (1.5 * WorldMap.GRID_H + 0.5))
-	s = maxf(s, 0.0)
+	return maxf(avail.x / (WorldMap.GRID_W * SQRT3), 0.0)
+
+# [hex size (centre->corner), origin x, origin y, hex width, wrap period]
+func metrics() -> Array:
+	var s: float = _fit_size() * clampf(zoom, ZOOM_MIN, ZOOM_MAX)
 	var w: float = SQRT3 * s
-	var map_w: float = (WorldMap.GRID_W + 0.5) * w
+	var period: float = WorldMap.GRID_W * w
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
-	var ox: float = floorf((size.x - map_w) * 0.5)
-	var oy: float = floorf((size.y - map_h) * 0.5)
-	return [s, ox, oy, w]
+	var ox: float = floorf((size.x - period) * 0.5 + _pan.x)
+	var oy: float
+	if map_h + FRAME_PX * 2.0 <= size.y:
+		oy = floorf((size.y - map_h) * 0.5)
+	else:
+		oy = floorf(clampf((size.y - map_h) * 0.5 + _pan.y, size.y - map_h - FRAME_PX, FRAME_PX))
+	return [s, ox, oy, w, period]
 
 func hex_center(x: int, y: int, m: Array) -> Vector2:
 	var s: float = m[0]
 	var w: float = m[3]
 	return Vector2(m[1] + (x + 0.5 * float(y & 1)) * w + w * 0.5, m[2] + y * 1.5 * s + s)
 
+# Screen position of hex t using the wrapped copy nearest the view centre.
+func screen_pos(t: Vector2i, m: Array) -> Vector2:
+	var c := hex_center(t.x, t.y, m)
+	var period: float = m[4]
+	var mid: float = size.x * 0.5
+	c.x = c.x + roundf((mid - c.x) / period) * period
+	return c
+
+# Every wrapped copy of hex t that is on screen (for units and flags).
+func _visible_copies(t: Vector2i, m: Array, margin: float) -> Array:
+	var out: Array = []
+	var period: float = m[4]
+	var c := hex_center(t.x, t.y, m)
+	var k0 := int(floor((-margin - c.x) / period))
+	var k1 := int(ceil((size.x + margin - c.x) / period))
+	for k in range(k0, k1 + 1):
+		var p := Vector2(c.x + k * period, c.y)
+		if p.x >= -margin and p.x <= size.x + margin and p.y >= -margin and p.y <= size.y + margin:
+			out.append(p)
+	return out
+
+func zoom_by(factor: float, anchor: Vector2 = Vector2(-1, -1)) -> void:
+	if anchor.x < 0:
+		anchor = size * 0.5
+	var m := metrics()
+	var old_s: float = m[0]
+	var new_zoom := clampf(zoom * factor, ZOOM_MIN, ZOOM_MAX)
+	if is_equal_approx(new_zoom, zoom):
+		return
+	var new_s: float = _fit_size() * new_zoom
+	# keep the map point under the anchor fixed: origin' = anchor - (anchor - origin) * s'/s
+	var ratio: float = new_s / maxf(old_s, 0.001)
+	var new_ox: float = anchor.x - (anchor.x - float(m[1])) * ratio
+	var new_oy: float = anchor.y - (anchor.y - float(m[2])) * ratio
+	zoom = new_zoom
+	var new_period: float = WorldMap.GRID_W * SQRT3 * new_s
+	var new_map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * new_s
+	_pan.x = new_ox - (size.x - new_period) * 0.5
+	_pan.y = new_oy - (size.y - new_map_h) * 0.5
+	_normalize_pan()
+	_redraw_all()
+
+func pan_by(delta: Vector2) -> void:
+	_pan += delta
+	_normalize_pan()
+	_redraw_all()
+
+func _normalize_pan() -> void:
+	var s: float = _fit_size() * zoom
+	var period: float = WorldMap.GRID_W * SQRT3 * s
+	if period > 0.0:
+		_pan.x = fposmod(_pan.x + period * 0.5, period) - period * 0.5
+	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
+	var slack: float = maxf(0.0, (map_h - size.y) * 0.5 + FRAME_PX)
+	_pan.y = clampf(_pan.y, -slack, slack)
+
+# Put hex t in the middle of the view (optionally at a new zoom).
+func center_on(t: Vector2i, new_zoom: float = -1.0) -> void:
+	if new_zoom > 0.0:
+		zoom = clampf(new_zoom, ZOOM_MIN, ZOOM_MAX)
+	_pan = Vector2.ZERO
+	var m := metrics()
+	var c := hex_center(t.x, t.y, m)
+	_pan = size * 0.5 - c
+	_normalize_pan()
+	_redraw_all()
+
+# ------------------------------------------------------------- picking
 func _hex_points(c: Vector2, s: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	pts.resize(6)
@@ -175,43 +308,85 @@ func tile_at_point(p: Vector2) -> Vector2i:
 	else:
 		rz = -rx - ry
 	var row := int(rz)
-	var col := int(rx) + (row - (row & 1)) / 2
+	var col := posmod(int(rx) + (row - (row & 1)) / 2, WorldMap.GRID_W) # east-west wrap
 	if not WorldMap.in_bounds(col, row):
 		return Vector2i(-1, -1)
 	return Vector2i(col, row)
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_by(1.15, mb.position)
+			accept_event()
+			return
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_by(1.0 / 1.15, mb.position)
+			accept_event()
+			return
+		if mb.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
+			if mb.pressed:
+				_pressed = true
+				_dragging = mb.button_index != MOUSE_BUTTON_LEFT # right/middle always pan
+				_press_pos = mb.position
+			else:
+				var was_click := _pressed and not _dragging and mb.button_index == MOUSE_BUTTON_LEFT
+				_pressed = false
+				_dragging = false
+				if was_click:
+					var t := tile_at_point(mb.position)
+					if t.x >= 0:
+						select_tile(t)
+			return
+	if event is InputEventMagnifyGesture:
+		zoom_by((event as InputEventMagnifyGesture).factor, (event as InputEventMagnifyGesture).position)
+		return
+	if event is InputEventPanGesture:
+		pan_by(-(event as InputEventPanGesture).delta * 12.0)
+		return
 	if event is InputEventMouseMotion:
-		var h := tile_at_point((event as InputEventMouseMotion).position)
+		var mm := event as InputEventMouseMotion
+		if _pressed:
+			if not _dragging and mm.position.distance_to(_press_pos) > DRAG_THRESHOLD:
+				_dragging = true
+			if _dragging:
+				pan_by(mm.relative)
+				return
+		var h := tile_at_point(mm.position)
 		if h != hovered:
 			hovered = h
 			_overlay.queue_redraw()
 			if h.x >= 0:
 				tile_hovered.emit(h.x, h.y)
 		return
-	var clicked := false
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		clicked = mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
-	elif event is InputEventScreenTouch:
-		clicked = (event as InputEventScreenTouch).pressed
-	if clicked:
-		var t := Vector2i(-1, -1)
-		if event is InputEventMouseButton:
-			t = tile_at_point((event as InputEventMouseButton).position)
-		else:
-			t = tile_at_point((event as InputEventScreenTouch).position)
-		if t.x >= 0:
-			select_tile(t)
+	if event is InputEventScreenDrag:
+		pan_by((event as InputEventScreenDrag).relative)
+		return
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		var t2 := tile_at_point((event as InputEventScreenTouch).position)
+		if t2.x >= 0:
+			select_tile(t2)
 
-func select_tile(t: Vector2i) -> void:
+func select_tile(t: Vector2i, emit: bool = true) -> void:
 	selected = t
-	queue_redraw() # selected nation tint lives on the base layer
-	_overlay.queue_redraw()
-	tile_selected.emit(t.x, t.y)
+	_redraw_all() # selected nation tint lives on the base layer
+	if emit:
+		tile_selected.emit(t.x, t.y)
 
-func _draw_hex_tex(c: Vector2, s: float, tex: Texture2D, tint: Color = Color.WHITE) -> void:
-	draw_polygon(_hex_points(c, s), PackedColorArray([tint]), _hex_uvs, tex)
+# ---------------------------------------------------------------- base layer
+func _draw_hex_tex(ci: CanvasItem, c: Vector2, s: float, tex: Texture2D, tint: Color = Color.WHITE) -> void:
+	ci.draw_polygon(_hex_points(c, s), PackedColorArray([tint]), _hex_uvs, tex)
+
+func _visible_range(m: Array) -> Array:
+	var s: float = m[0]
+	var w: float = m[3]
+	var ox: float = m[1]
+	var oy: float = m[2]
+	var x0 := int(floor((-ox) / w)) - 2
+	var x1 := int(ceil((size.x - ox) / w)) + 1
+	var y0 := int(floor((-oy - s) / (1.5 * s))) - 1
+	var y1 := int(ceil((size.y - oy) / (1.5 * s))) + 1
+	return [x0, x1, y0, y1]
 
 func _draw() -> void:
 	var m := metrics()
@@ -219,35 +394,24 @@ func _draw() -> void:
 	var w: float = m[3]
 	if s < 2.0:
 		return
-	var ox: float = m[1]
 	var oy: float = m[2]
-	var map_rect := Rect2(ox, oy, (WorldMap.GRID_W + 0.5) * w, (1.5 * WorldMap.GRID_H + 0.5) * s)
-	# Deep sea hexes fill the letterbox so the map never floats in a void
+	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
+	var vr := _visible_range(m)
 	var ocean_tiles: Array = _tiles.get("ocean", [])
-	if not ocean_tiles.is_empty():
-		var pad_x := int(ceil(ox / w)) + 2
-		var pad_y := int(ceil(oy / (1.5 * s))) + 2
-		for y in range(-pad_y, WorldMap.GRID_H + pad_y):
-			for x in range(-pad_x, WorldMap.GRID_W + pad_x):
-				if WorldMap.in_bounds(x, y):
-					continue
-				var c := hex_center(x, y, m)
-				if c.x < -w or c.x > size.x + w or c.y < -s * 2.0 or c.y > size.y + s * 2.0:
-					continue
-				_draw_hex_tex(c, s + 0.5, ocean_tiles[absi(x + y + _sea_phase) % ocean_tiles.size()] as Texture2D, Color(0.42, 0.47, 0.62))
-	# Pixel bezel around the playable map
-	var fr := map_rect.grow(FRAME_PX)
-	draw_rect(fr, Color8(20, 16, 30), false, 4.0)
-	draw_rect(fr.grow(-3.0), Color8(94, 104, 128), false, 2.0)
-	draw_rect(Rect2(fr.position + Vector2(3, 3), Vector2(fr.size.x - 6, 1)), Color8(190, 200, 216), true)
-	# Hexes: terrain art + translucent owner tint (wilderness keeps pure art)
 	var sel_owner: String = ""
 	if selected.x >= 0:
 		sel_owner = str(_owners.get(MapCampaign.key_of(selected.x, selected.y), ""))
 	var grid_col := Color(0, 0, 0, 0.22)
-	for y in range(WorldMap.GRID_H):
-		for x in range(WorldMap.GRID_W):
-			var c := hex_center(x, y, m)
+	var bw: float = maxf(2.0, floorf(s * 0.22))
+	for y in range(vr[2], vr[3] + 1):
+		for cx in range(vr[0], vr[1] + 1):
+			var c := hex_center(cx, y, m)
+			if y < 0 or y >= WorldMap.GRID_H:
+				# deep sea beyond the poles
+				if not ocean_tiles.is_empty():
+					_draw_hex_tex(self, c, s + 0.5, ocean_tiles[posmod(cx + y + _sea_phase, ocean_tiles.size())] as Texture2D, Color(0.42, 0.47, 0.62))
+				continue
+			var x := posmod(cx, WorldMap.GRID_W)
 			var terrain := WorldMap.terrain_at(x, y)
 			var variants: Array = _tiles.get(terrain, [])
 			# +0.5px overdraw hides hairline seams between neighbouring hexes
@@ -257,34 +421,34 @@ func _draw() -> void:
 				var v := _variant_for(x, y)
 				if terrain == "ocean":
 					v = (v + _sea_phase) % variants.size()
-				_draw_hex_tex(c, s + 0.5, variants[v] as Texture2D)
-			var o: String = str(_owners.get(MapCampaign.key_of(x, y), ""))
+				_draw_hex_tex(self, c, s + 0.5, variants[v] as Texture2D)
+			var key := MapCampaign.key_of(x, y)
+			var o: String = str(_owners.get(key, ""))
 			if o != "" and _nation_colors.has(o):
 				var nc := _nation_colors[o] as Color
 				draw_colored_polygon(_hex_points(c, s + 0.5), Color(nc.r, nc.g, nc.b, 0.46 if o == sel_owner else 0.30))
-	# Faint hex grid
-	for y in range(WorldMap.GRID_H):
-		for x in range(WorldMap.GRID_W):
-			var pts := _hex_points(hex_center(x, y, m), s)
+			var pts := _hex_points(c, s)
 			pts.append(pts[0])
 			draw_polyline(pts, grid_col, 1.0)
-	# Nation borders along hex edges, each with a dark under-stroke
-	var bw: float = maxf(2.0, floorf(s * 0.22))
-	for nm in _edges.keys():
-		var bc := _nation_colors[nm] as Color
-		if nm == _player_nation:
-			bc = Color(1.0, 0.84, 0.2)
-		for e in (_edges[nm] as Array):
-			var entry := e as Array
-			var t := entry[0] as Vector2i
-			var k: int = int(entry[2])
-			var c := hex_center(t.x, t.y, m)
-			# pull the edge slightly inward so neighbouring nations' borders sit side by side
+	# Nation borders along hex edges (second pass so they sit on top of every hex)
+	for y in range(maxi(vr[2], 0), mini(vr[3], WorldMap.GRID_H - 1) + 1):
+		for cx in range(vr[0], vr[1] + 1):
+			var key2 := MapCampaign.key_of(posmod(cx, WorldMap.GRID_W), y)
+			if not _edge_map.has(key2):
+				continue
+			var c2 := hex_center(cx, y, m)
 			var inset := s - bw * 0.5
-			var a := c + _corner_unit[k] * inset
-			var b := c + _corner_unit[(k + 1) % 6] * inset
-			draw_line(a, b, Color(0.05, 0.04, 0.08, 0.85), bw + 2.0)
-			draw_line(a, b, bc, bw)
+			for ed in (_edge_map[key2] as Array):
+				var k: int = int(ed[0])
+				var a := c2 + _corner_unit[k] * inset
+				var b := c2 + _corner_unit[(k + 1) % 6] * inset
+				draw_line(a, b, Color(0.05, 0.04, 0.08, 0.85), bw + 2.0)
+				draw_line(a, b, ed[1] as Color, bw)
+	# Pixel bezel along the polar edges of the map
+	for edge_y in [oy - FRAME_PX, oy + map_h]:
+		if edge_y + FRAME_PX >= 0.0 and edge_y <= size.y:
+			draw_rect(Rect2(0, edge_y, size.x, FRAME_PX), Color8(20, 16, 30), true)
+			draw_rect(Rect2(0, edge_y + 2.0, size.x, 2.0), Color8(94, 104, 128), true)
 	# Capitals: pixel flag on a pole, planted on the capital hex
 	for n in WorldMap.nations():
 		var d := n as Dictionary
@@ -292,37 +456,168 @@ func _draw() -> void:
 		var site := Vector2i(int(d["x"]), int(d["y"]))
 		if _campaign != null:
 			site = _campaign.capital_site(nm)
-		var base := hex_center(site.x, site.y, m) + Vector2(0, s * 0.55)
 		var fs: float = maxf(s * 2.6, 16.0)
-		draw_rect(Rect2(base + Vector2(-fs * 0.2, -2.0), Vector2(fs * 0.4, 3.0)), Color(0, 0, 0, 0.45), true)
-		if _dead.has(nm):
-			var cc := base - Vector2(0, s * 0.6)
-			var r: float = s * 0.45
-			draw_line(cc - Vector2(r, r), cc + Vector2(r, r), Color(0.8, 0.8, 0.85), 2.0)
-			draw_line(cc + Vector2(-r, r), cc + Vector2(r, -r), Color(0.8, 0.8, 0.85), 2.0)
+		for cc in _visible_copies(site, m, fs):
+			var base := (cc as Vector2) + Vector2(0, s * 0.55)
+			draw_rect(Rect2(base + Vector2(-fs * 0.2, -2.0), Vector2(fs * 0.4, 3.0)), Color(0, 0, 0, 0.45), true)
+			if _dead.has(nm):
+				var xc := base - Vector2(0, s * 0.6)
+				var r: float = s * 0.45
+				draw_line(xc - Vector2(r, r), xc + Vector2(r, r), Color(0.8, 0.8, 0.85), 2.0)
+				draw_line(xc + Vector2(-r, r), xc + Vector2(r, -r), Color(0.8, 0.8, 0.85), 2.0)
+				continue
+			if _flags.has(nm):
+				# flag art has its pole at ~x=0.12 of the texture; plant that on the hex centre
+				draw_texture_rect(_flags[nm] as Texture2D, Rect2(base - Vector2(fs * 0.12, fs * 0.9), Vector2(fs, fs)), false)
+			if nm == _player_nation:
+				_draw_star(self, base + Vector2(0, -fs * 0.98), maxf(s * 0.5, 4.0), Color(1.0, 0.86, 0.3))
+
+# ------------------------------------------------------------ units + FX
+# 32px pixel-exact idle frames made once per card (512px art / 16).
+func unit_frames(card_name: String) -> Array:
+	if _unit_tex.has(card_name):
+		return _unit_tex[card_name]
+	var out: Array = []
+	for i in UNIT_FRAMES:
+		var path := "res://Assets/Cards/%s/sprite_%d.png" % [card_name, i]
+		if not ResourceLoader.exists(path):
 			continue
-		if _flags.has(nm):
-			# flag art has its pole at ~x=0.12 of the texture; plant that on the hex centre
-			draw_texture_rect(_flags[nm] as Texture2D, Rect2(base - Vector2(fs * 0.12, fs * 0.9), Vector2(fs, fs)), false)
-		if nm == _player_nation:
-			_draw_star(self, base + Vector2(0, -fs * 0.98), maxf(s * 0.5, 4.0), Color(1.0, 0.86, 0.3))
+		var tex := load(path) as Texture2D
+		if tex == null:
+			continue
+		var img := tex.get_image()
+		if img == null:
+			continue
+		if img.is_compressed():
+			img.decompress()
+		img.resize(32, 32, Image.INTERPOLATE_NEAREST)
+		out.append(ImageTexture.create_from_image(img))
+	_unit_tex[card_name] = out
+	return out
+
+func _draw_card(card_name: String, c: Vector2, s: float, tint: Color = Color.WHITE, frame_offset: int = 0) -> void:
+	var frames := unit_frames(card_name)
+	if frames.is_empty():
+		return
+	var tex: Texture2D = frames[(int(_clock * 4.0) + frame_offset) % frames.size()]
+	var side: float = s * 2.1
+	_overlay.draw_texture_rect(tex, Rect2(c - Vector2(side * 0.5, side * 0.62), Vector2(side, side)), false, tint)
+
+func add_shot(from: Vector2i, to: Vector2i, sfx_kind: String, travel: float) -> void:
+	effects.append({"kind": "shot", "from": from, "to": to, "t0": _clock, "dur": travel, "color": SHOT_COLORS.get(sfx_kind, Color.WHITE)})
+
+func add_boom(at: Vector2i, big: bool, delay: float) -> void:
+	effects.append({"kind": "boom", "to": at, "t0": _clock + delay, "dur": 0.55 if big else 0.3, "big": big})
+
+func add_number(at: Vector2i, text: String, col: Color, delay: float) -> void:
+	effects.append({"kind": "num", "to": at, "t0": _clock + delay, "dur": 0.9, "text": text, "color": col})
+
+func add_wreck(at: Vector2i, card_name: String, owner: String, until_delay: float) -> void:
+	effects.append({"kind": "wreck", "to": at, "t0": _clock, "dur": until_delay, "name": card_name, "owner": owner})
+
+func add_place(at: Vector2i) -> void:
+	effects.append({"kind": "place", "to": at, "t0": _clock, "dur": 0.45})
+
+func _wrap_target(a: Vector2, b: Vector2, m: Array) -> Vector2:
+	# shoot across the east-west seam the short way
+	var period: float = m[4]
+	b.x = b.x + roundf((a.x - b.x) / period) * period
+	return b
+
+func _draw_units(m: Array) -> void:
+	var s: float = m[0]
+	var margin: float = s * 2.0
+	for k in war.units.keys():
+		var info: Dictionary = war.units[k]
+		var t := MapWar.key_to_hex(str(k))
+		var owner := str(info["owner"])
+		var nc: Color = _nation_colors.get(owner, Color.WHITE)
+		var card: Card = info["card"]
+		var hp: int = war.card_hp(card)
+		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
+		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
+		for cp in _visible_copies(t, m, margin):
+			var c := cp as Vector2
+			# owner base: flat ellipse in nation colour under the sprite
+			_overlay.draw_set_transform(c + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
+			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
+			_overlay.draw_circle(Vector2.ZERO, s * 0.6, nc)
+			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y)
+			# HP bar under the unit
+			var bwid: float = s * 1.3
+			var r := Rect2(c + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, maxf(2.0, s * 0.16)))
+			_overlay.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
+			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
+
+func _draw_effects(m: Array) -> void:
+	var s: float = m[0]
+	var font := ThemeDB.fallback_font
+	for e in effects:
+		var age: float = _clock - float(e["t0"])
+		if age < 0.0:
+			continue
+		var k: float = clampf(age / float(e["dur"]), 0.0, 1.0)
+		var to_c := screen_pos(e["to"] as Vector2i, m)
+		match str(e["kind"]):
+			"shot":
+				var a := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.3)
+				var b := _wrap_target(a, to_c, m)
+				var col: Color = e["color"]
+				var head := a.lerp(b, k)
+				var tail := a.lerp(b, maxf(0.0, k - 0.25))
+				_overlay.draw_line(tail, head, Color(col.r, col.g, col.b, 0.55), maxf(1.5, s * 0.12))
+				_overlay.draw_circle(head, maxf(1.5, s * 0.16), col)
+			"boom":
+				var big: bool = e["big"]
+				var rad: float = s * (0.4 + k * (1.6 if big else 0.9))
+				var alpha: float = 1.0 - k
+				_overlay.draw_circle(to_c, rad, Color(1.0, 0.55, 0.15, 0.55 * alpha))
+				_overlay.draw_circle(to_c, rad * 0.6, Color(1.0, 0.92, 0.5, 0.8 * alpha))
+				_overlay.draw_arc(to_c, rad * 1.1, 0.0, TAU, 18, Color(1, 1, 1, 0.6 * alpha), 1.5)
+			"num":
+				var p := to_c + Vector2(-s * 0.5, -s * 0.9 - k * s * 1.4)
+				var col2: Color = e["color"]
+				var fs := int(clampf(s * 0.95, 12.0, 28.0))
+				_overlay.draw_string_outline(font, p, str(e["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.05, 0.04, 0.08, 1.0 - k))
+				_overlay.draw_string(font, p, str(e["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col2.r, col2.g, col2.b, 1.0 - k))
+			"wreck":
+				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k))
+			"place":
+				_overlay.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
 
 func _draw_overlay() -> void:
 	var m := metrics()
 	var s: float = m[0]
 	if s < 2.0:
 		return
-	# Front line: enemy hexes you could win next pulse red with a hatch
+	var margin: float = s * 2.0
+	# Legal placement hexes for the selected card
+	if not placeable.is_empty():
+		var a: float = 0.45 + 0.35 * (0.5 + 0.5 * sin(_clock * 5.0))
+		for key in placeable.keys():
+			for cp in _visible_copies(MapWar.key_to_hex(str(key)), m, margin):
+				var ring := _hex_points(cp as Vector2, s - 1.5)
+				ring.append(ring[0])
+				_overlay.draw_polyline(ring, Color(0.6, 1.0, 0.45, a), 2.0)
+	# Front line (card-battle mode): enemy hexes you could win next pulse red
 	if not _front.is_empty():
 		var pulse: float = 0.30 + 0.25 * (0.5 + 0.5 * sin(_pulse_t * 4.0))
 		for t in _front:
-			var tv := t as Vector2i
-			var c := hex_center(tv.x, tv.y, m)
-			_overlay.draw_colored_polygon(_hex_points(c, s), Color(1.0, 0.18, 0.12, pulse))
-			_overlay.draw_line(c + Vector2(-s * 0.5, s * 0.5), c + Vector2(s * 0.5, -s * 0.5), Color(1, 0.9, 0.8, pulse + 0.2), 2.0)
-			var ring := _hex_points(c, s - 1.5)
-			ring.append(ring[0])
-			_overlay.draw_polyline(ring, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
+			for cp in _visible_copies(t as Vector2i, m, margin):
+				var c := cp as Vector2
+				_overlay.draw_colored_polygon(_hex_points(c, s), Color(1.0, 0.18, 0.12, pulse))
+				var ring2 := _hex_points(c, s - 1.5)
+				ring2.append(ring2[0])
+				_overlay.draw_polyline(ring2, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
+	if war != null:
+		_draw_units(m)
+		_draw_effects(m)
+		if ghost_card != "" and hovered.x >= 0 and placeable.has(MapCampaign.key_of(hovered.x, hovered.y)):
+			var gp := get_local_mouse_position()
+			for cp in _visible_copies(hovered, m, margin):
+				if (cp as Vector2).distance_to(gp) < s * 2.0:
+					_draw_card(ghost_card, cp as Vector2, s, Color(1, 1, 1, 0.55))
 	if hovered.x >= 0 and hovered != selected:
 		_hex_outline(hovered, m, Color(1, 1, 1, 0.6), 2.0)
 	if selected.x >= 0:
@@ -330,9 +625,10 @@ func _draw_overlay() -> void:
 		_hex_outline(selected, m, Color(1.0, 0.86, 0.3), 2.5)
 
 func _hex_outline(t: Vector2i, m: Array, col: Color, width: float) -> void:
-	var pts := _hex_points(hex_center(t.x, t.y, m), m[0])
-	pts.append(pts[0])
-	_overlay.draw_polyline(pts, col, width)
+	for cp in _visible_copies(t, m, m[0] * 2.0):
+		var pts := _hex_points(cp as Vector2, m[0])
+		pts.append(pts[0])
+		_overlay.draw_polyline(pts, col, width)
 
 func _draw_star(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
 	var pts := PackedVector2Array()
