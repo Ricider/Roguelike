@@ -35,6 +35,16 @@ func get_sprite_frames() -> SpriteFrames:
 			var tex := load(fpath) as Texture2D
 			if tex != null:
 				sf.add_frame("idle", tex)
+	# One-shot attack animation (muzzle flash / recoil); played by GameController on each hit
+	sf.add_animation("attack")
+	sf.set_animation_loop("attack", false)
+	sf.set_animation_speed("attack", 24.0)
+	for i in range(20):
+		var apath: String = "res://Assets/Cards/%s/attack_sprite_%d.png" % [card_name, i]
+		if ResourceLoader.exists(apath):
+			var atex := load(apath) as Texture2D
+			if atex != null:
+				sf.add_frame("attack", atex)
 	Card._frames_cache[card_name] = sf
 	return sf
 
@@ -66,10 +76,7 @@ func create_animated_sprite(size: Vector2) -> Control:
 	if card_name == "Infantry" or card_name == "Drone":
 		scale_f *= 0.85
 	asp.scale = Vector2(scale_f, scale_f)
-	if card_name == "Interceptor":
-		asp.position = size * 0.5 + Vector2(0, -size.y * 0.25)
-	else:
-		asp.position = size * 0.5
+	asp.position = size * 0.5
 	container.add_child(asp)
 	asp.play("idle")
 	return container

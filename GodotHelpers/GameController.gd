@@ -103,19 +103,20 @@ var tutorial_highlight_tween: Tween = null
 # Break it until it works: each trigger logs analytics if expected but missed; custom levels preset so Bugs from limiting input are caught.
 # Do it all over again: not every pain point gets flow — VFX (damage numbers), UI weight already fixed elsewhere.
 const TUTORIAL_SEQUENCES: Array = [
-	# Narrator — verbose, goal-first, phases-first — generic, no specific card names (as requested)
-	{"step": 0, "trigger": "select_any", "highlight": "hand:any", "title": "Welcome, commander", "text": "Welcome, commander — settle in. I'm your field narrator and I'll talk you through this war like we're sat across a table.\n\n[b]Your goal is simple and urgent:[/b] the [color=#ff8888]opposing force has exactly 20 HP in this tutorial[/color] — first side to 0 HP loses. You start at 100 HP. Everything we do is to protect yours and grind theirs down.\n\n[b]How a turn flows — three phases, every turn, for both sides:[/b]\n[color=#88ff88]1) Economy[/color] — you collect: [color=#88ff88]Bio = 10% of your current Bio +5, plus 8 for every supply-generating building you own[/color] and [color=#ffd700]Money = 10 plus the sum of all building Incomes[/color] (some buildings give a little Money each turn, others give much more). Then you draw — you always try to hold [color=#88ff88]10 cards[/color]; if your Draw pile empties we shuffle your Discard back in and keep drawing. Finally, some modifiers heal HP here.\n[color=#88ff88]2) Build[/color] — you spend Bio and Money (see the green and gold gauges left side) to play cards from your hand onto your half of the board — bottom four rows, 10 wide, 40 squares. Enemy owns top four; together 8×10. One card per square.\n[color=#ff6666]3) Combat[/color] — automatic. Every card you (and the enemy) have that has Damage fires [color=#ff6666]once[/color] at a random enemy among those [color=#88ff88]closest by Manhattan distance[/color] (rows+columns). If the attacker has [color=#ffd700]HasRange = true[/color] it can pick any row; without it, it can only reach the enemy's front row closest to you. If the target has [color=#88ccff]Flying[/color], it takes [color=#88ff88]half damage[/color] from attackers without HasRange (rounded down, min 1). When a card is destroyed its owner's HP drops by its [color=#88ff88]BioCost[/color] and it goes to Graveyard.\n\nLeave [color=#ffd700]Influence (yellow)[/color] for later — it's the Shop currency between battles.\n\nTo begin supply, tap the [color=#ffcc66]highlighted card[/color] in your hand — it's a building that gives [color=#ff8888]50 HP[/color], [color=#ffd700]+2 Money/turn[/color] and [color=#88ff88]+8 Bio/turn[/color], costing [color=#88ff88]30 Bio[/color] and [color=#ffd700]20 Money[/color]."},
-	{"step": 1, "trigger": "place_any", "highlight": "board:empty", "title": "Where to build — your ground", "text": "Good — card in hand. Listen, placement is permanent until destroyed, so where matters.\n\nYour ground is the [color=#88ff88]bottom four rows[/color] — that's 40 squares just for you, highlighted in soft green. The opposing force mirrors you up top. Combined you make that 8×10 chess-like field. Every card needs its own square; you can't stack, you can't play on the enemy half, and you can't play if you can't pay the Bio/Money cost up front.\n\nPick any glowing empty square down here. Think of it as founding a little settlement — a quiet back row is safest, but anywhere empty will do for this lesson. Tap to place."},
-	{"step": 2, "trigger": "end_turn", "highlight": "endturn", "title": "Close the turn — watch Economy", "text": "That's a settlement planted. To let it tick, you need to close your Build Phase.\n\nHit [color=#ffcc66]End Turn[/color]. Here's what will happen in sequence so you can follow: first [color=#88ff88]your Economy[/color] (10% Bio+5+8 per supply building and 10+incomes — watch your left gauges jump), then [color=#88ff88]enemy Economy[/color] same, then you both [color=#ff6666]Combat[/color] automatically with whatever's on board. After that the enemy gets its own Build where it will place something.\n\nDiscard happens at end of turn too — leftover cards in hand go to Discard and you'll draw back to 10 at next Economy. Ready? End Turn and watch the numbers."},
-	{"step": 3, "trigger": "auto_drones", "highlight": "none", "title": "Enemy contact — what just happened", "text": "Contact — and this is exactly why we went verbose. The opposing force air-dropped [color=#ff8888]two flying units[/color] onto their front row, right across from your new building. Let's read the idea together: each is [color=#ff8888]low HP, modest Damage, Flying = true, HasRange = false[/color], costing [color=#88ff88]0 Bio[/color] and [color=#ffd700]a little Money[/color]. Cheap, fragile, airborne.\n\nIn the Combat that just fired, both flyers were closest to your building, so they each rolled to hit it. Look at the left gauge — your new building just lost HP. Every turn that Combat repeats: each Damaging card fires once, picks a random closest enemy, checks HasRange vs Flying for half-damage, applies adjacency and modifier bonuses, then destroys and bills BioCost to HP. That's the loop. Breathe — we're about to answer it."},
-	{"step": 4, "trigger": "select_any", "highlight": "hand:any", "title": "Meet your troops — read the card fully", "text": "We need a lineholder. Tap the next [color=#ffcc66]highlighted card[/color] in your hand — it's a basic unit. I'm going to read this type fully so there's no ambiguity:\n[color=#ff8888]Moderate HP[/color] — can soak several hits. [color=#ff6666]Low Damage[/color] — hits for a little each Combat (before bonuses). [color=#ffd700]HasRange = false[/color] — only the front row. [color=#88ccff]Flying = false[/color] — takes full damage. Costs [color=#88ff88]some Bio[/color] and [color=#ffd700]a little Money[/color] and can be bought with Influence in the Shop later (not now). No special text on this one.\n\nHP is endurance; Damage is once-per-Combat output. Tap the highlighted card to pick it up."},
-	{"step": 5, "trigger": "place_any", "highlight": "board:empty", "title": "Posting troops — range and targeting, spelled out", "text": "Where you post this unit decides who it can even touch.\n\nWithout HasRange, think [color=#88ff88]frontline only[/color]: your unit looks at the enemy board, finds the smallest Manhattan distance (row steps + column steps) to any enemy card, then can only hit those in the [color=#88ff88]closest row to you[/color] among them — the front. With HasRange that front-row restriction vanishes — any row at minimal distance qualifies. Either way, if several targets tie for closest, the game picks [color=#88ff88]randomly among ties[/color] — not always the same square.\n\nAnd the other side: [color=#88ccff]Flying[/color] targets take [color=#88ff88]half damage (rounded down, minimum 1)[/color] from any attacker that lacks HasRange. So a low-damage unit will plink a flyer for just 1. That's intended. Place your highlighted unit on any glowing empty square — anywhere works for the lesson."},
-	{"step": 6, "trigger": "end_turn", "highlight": "endturn", "title": "See it fire — step by step", "text": "Orders set — now watch the sequence you just learned, in order. Hit [color=#ffcc66]End Turn[/color] and narrate it with me: [color=#88ff88]Economy[/color] ticks (Bio +10%+5+8, Money +10+incomes, draw to 10), then [color=#ff6666]your Combat[/color] — your new unit scans for closest, sees the two flyers tied at distance 4-5, rolls one, fires (halved vs Flying if lacking HasRange), then [color=#ff6666]enemy Combat[/color] — flyers hit your building, then enemy Build. Don't worry about the exact numbers — watch the flash and the HP bars tick. End Turn."},
-	{"step": 7, "trigger": "auto_wall", "highlight": "none", "title": "They wall up — why", "text": "They're digging in — classic defensive play. A [color=#aaaaaa]protective structure[/color] just rose on their front row: read the pattern with me — [color=#ff8888]moderate HP[/color], [color=#ffd700]0 Income[/color], costs [color=#ffd700]a little Money[/color] and [color=#88ff88]0 Bio[/color], no special, cheap in Shop. Why front row always? This type is programmed to only ever occupy the [color=#88ff88]row closest to you[/color] — it's in their AI. Cheap, tough, no punch, but it now sits as the closest target, so your non-HasRange units will be forced to chew through it before they can reach the flyers behind it. That's screening."},
-	{"step": 8, "trigger": "select_any", "highlight": "hand:any", "title": "Force multiplier — adjacency spelled out", "text": "We answer screening with synergy. Tap the next [color=#ffcc66]highlighted card[/color] in hand — it's a support building. Let's be verbose and unambiguous: [color=#ff8888]solid HP, modest Money income each Economy[/color], costs [color=#ffd700]some Money[/color] and [color=#88ff88]some Bio[/color] (paid in Shop with Influence). SpecialEffect verbatim: [color=#88ff88]Friendly units in adjacent squares have +2 damage[/color]. Adjacent means [color=#88ff88]all 8 squares around it — up, down, left, right and the four diagonals[/color]. Not your whole board, not a row — just the ring. If a unit sits in that ring when Combat fires, its base Damage gets +2 that hit. The support itself still hits for 0. Tap the highlighted card."},
-	{"step": 9, "trigger": "place_adjacent_any", "highlight": "board:adjacent:any", "title": "Adjacency — place it right", "text": "This is the precision moment. That +2 only works if the support building ends up [color=#88ff88]immediately next to[/color] the unit it should buff. Your earlier unit is already on the field — the glowing squares are exactly the eight around it. Put the support on any glowing tile (diagonal counts!) and the moment it lands, the neighbouring unit's damage will tick up by 2 in Combat. Miss by one square and the bonus is zero — that's not a bug, it's the rule. Place the highlighted support adjacent."},
-	{"step": 10, "trigger": "end_turn", "highlight": "endturn", "title": "Bring it home — the loop closed", "text": "Beautiful — line held, bonuses linked. Hit [color=#ffcc66]End Turn[/color] and let's close the loop verbosely so you own it: [color=#88ff88]Economy[/color] — your supply building gives +8 Bio, support and supply give +2 Money each, plus 10 and 10% Bio+5; you draw back to 10, shuffled if needed. [color=#ff6666]Combat[/color] — your unit now scans closest, still sees the wall-like structure as closest (front row rule), fires with +2 into it; flyers still halve vs non-HasRange if you later hit them, but the wall isn't Flying so full damage. Keep your eyes left on the gauges ticking, centre on the 8×10 field staying clear — that's your critical focus — and remember destroyed cards bill their BioCost to owner's HP. Grind that 20 HP down."},
-	{"step": 11, "trigger": "free_play", "highlight": "none", "title": "You're clear, commander — go win", "text": "You're clear, commander — [color=#88ff88]tutorial complete[/color]. Verbosely, here's your standing orders for free play: draw to 10 each Economy (10 (+ discard shuffle), not 5), play what you can afford, respect HasRange vs Flying, use support rings, and watch Building incomes stack. You now visualize the three phases — [color=#88ff88]Economy → Build → Combat[/color] — every turn, for both sides, automatic after End Turn. The opposing force is still at 20 HP total in this skirmish; real campaigns go longer and Shop (Influence) appears between battles. You've got this. End Turn when ready and finish the fight — good luck."},
+	# Short, goal-first steps: each explains only the rule the player is about to use.
+	# Formulas and edge cases live in the gauge/phase tooltips instead of here.
+	{"step": 0, "trigger": "select_any", "highlight": "hand:any", "title": "Welcome, commander", "text": "Bring the enemy from [color=#ff8888]20 HP[/color] to 0 before they do the same to you.\n\nFirst, build some supply. Tap the [color=#ffcc66]highlighted card[/color] in your hand."},
+	{"step": 1, "trigger": "place_any", "highlight": "board:empty", "title": "Your ground", "text": "You build on the [color=#88ff88]bottom four rows[/color], one card per square. Tap a glowing square to place it. You can also drag cards onto the board."},
+	{"step": 2, "trigger": "end_turn", "highlight": "endturn", "title": "End the turn", "text": "Press [color=#ffcc66]End Turn[/color] (or Space). You'll collect [color=#88ff88]Bio[/color] and [color=#ffd700]Money[/color], draw back up to 10 cards, and then both armies fight automatically."},
+	{"step": 3, "trigger": "auto_drones", "highlight": "none", "title": "Contact", "text": "The enemy dropped [color=#ff8888]two drones[/color] and they hit your building. Every card with Damage fires once per turn at the [color=#88ff88]closest[/color] enemy. Let's answer that."},
+	{"step": 4, "trigger": "select_any", "highlight": "hand:any", "title": "Recruit", "text": "Tap the [color=#ffcc66]highlighted unit[/color]. HP is how much damage it can take. Damage is what it deals each turn."},
+	{"step": 5, "trigger": "place_any", "highlight": "board:empty", "title": "Range", "text": "Units without [color=#ffd700]Range[/color] can only hit the enemy's front row. [color=#88ccff]Flying[/color] targets take half damage from them. Place your unit on any glowing square."},
+	{"step": 6, "trigger": "end_turn", "highlight": "endturn", "title": "Watch it fire", "text": "Press [color=#ffcc66]End Turn[/color] and watch your unit pick a target. Open [color=#ffcc66]Log[/color] at any time to see every hit."},
+	{"step": 7, "trigger": "auto_wall", "highlight": "none", "title": "They wall up", "text": "A [color=#aaaaaa]Wall[/color] went up on their front row. It's the closest target now, so your short-range units have to break through it first."},
+	{"step": 8, "trigger": "select_any", "highlight": "hand:any", "title": "Force multiplier", "text": "Tap the [color=#ffcc66]highlighted Barracks[/color]. Units in the [color=#88ff88]8 squares around it[/color] (diagonals count) deal [color=#88ff88]+2 damage[/color]."},
+	{"step": 9, "trigger": "place_adjacent_any", "highlight": "board:adjacent:any", "title": "Place it adjacent", "text": "Put the Barracks on a glowing square next to your unit. If you place it even one square too far, there's no bonus."},
+	{"step": 10, "trigger": "end_turn", "highlight": "endturn", "title": "Close the loop", "text": "Press [color=#ffcc66]End Turn[/color]. Your unit now hits for +2. Every turn runs [color=#88ff88]Economy → Build → Combat[/color]."},
+	{"step": 11, "trigger": "free_play", "highlight": "none", "title": "You're clear, commander", "text": "[color=#88ff88]Tutorial complete.[/color] Finish off the enemy. Hover over any gauge or card for details. Keys: [color=#ffcc66]1–0[/color] pick a card, [color=#ffcc66]Space[/color] ends the turn, [color=#ffcc66]Esc[/color] deselects."},
 ]
 
 func _tutorial_sequence_for_step(s: int) -> Dictionary:
@@ -396,40 +397,27 @@ func _setup_tutorial_overlay():
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 	vbox.add_child(title)
-	# Scroll wrapper prevents overflow off the top — verbose step 0 (~300 words) stays inside viewport
-	var scroll := ScrollContainer.new()
-	scroll.name = "TutorialScroll"
-	scroll.custom_minimum_size = Vector2(700, 80)
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# Steps are 1-3 sentences now, so the box simply fits its text (no scroll area)
 	tutorial_label = RichTextLabel.new()
 	tutorial_label.bbcode_enabled = true
 	tutorial_label.fit_content = true
 	tutorial_label.scroll_active = false
 	tutorial_label.custom_minimum_size = Vector2(680, 0)
-	tutorial_label.add_theme_font_size_override("normal_font_size", 15)
+	tutorial_label.add_theme_font_size_override("normal_font_size", 17)
 	tutorial_label.add_theme_color_override("default_color", Color(1, 1, 1))
-	scroll.add_child(tutorial_label)
-	vbox.add_child(scroll)
+	vbox.add_child(tutorial_label)
 	add_child(overlay)
-	# Anchor to top-center but clamp height to viewport so it never spills upward
+	# Anchor top-center just below the control bar; height follows the text
 	overlay.anchor_left = 0.5
-	overlay.anchor_top = 0.02
+	overlay.anchor_top = 0.07
 	overlay.anchor_right = 0.5
-	overlay.anchor_bottom = 0.02
+	overlay.anchor_bottom = 0.07
 	overlay.offset_left = -360
 	overlay.offset_right = 360
 	overlay.offset_top = 12
-	# Dynamic height: fit content up to 45% of viewport, then scroll. Grow only downward.
-	var vp_h: float = get_viewport_rect().size.y
-	if vp_h < 100:
-		vp_h = 720.0
-	var max_h: float = clamp(vp_h * 0.45, 140.0, 380.0)
-	overlay.offset_bottom = overlay.offset_top + max_h
-	overlay.grow_horizontal = 2
-	overlay.grow_vertical = 0
+	overlay.offset_bottom = overlay.offset_top
+	overlay.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	overlay.grow_vertical = Control.GROW_DIRECTION_END
 	tutorial_overlay = overlay
 	# Re-clamp on viewport resize
 	if not has_meta("tutorial_resize_connected"):
@@ -439,14 +427,9 @@ func _setup_tutorial_overlay():
 func _clamp_tutorial_overlay():
 	if tutorial_overlay == null or not is_instance_valid(tutorial_overlay):
 		return
-	var vp_h2: float = get_viewport_rect().size.y
-	if vp_h2 < 100:
-		vp_h2 = 720.0
-	var max_h2: float = clamp(vp_h2 * 0.45, 140.0, 380.0)
-	tutorial_overlay.offset_bottom = tutorial_overlay.offset_top + max_h2
-	var scroll2 := tutorial_overlay.get_node_or_null("VBox/TutorialScroll") as ScrollContainer
-	if scroll2 != null:
-		scroll2.custom_minimum_size = Vector2(700, clamp(max_h2 - 40.0, 80.0, 340.0))
+	# Box fits its text; just re-anchor so it shrinks back after a longer step
+	tutorial_overlay.offset_bottom = tutorial_overlay.offset_top
+	tutorial_overlay.reset_size()
 
 func _update_tutorial_message():
 	if tutorial_label == null or not is_instance_valid(tutorial_label):
@@ -539,7 +522,8 @@ func _highlight_hand_card(card_name: String):
 	for i in range(hand_container.get_child_count()):
 		var child = hand_container.get_child(i)
 		if child is Button:
-			var idx: int = i
+			# Buttons are in display (sorted/stacked) order; map back to the Hand index
+			var idx: int = int(_hand_display_idx[i]) if i < _hand_display_idx.size() else i
 			if idx < human.Hand.size() and (human.Hand[idx] as Card).card_name == card_name:
 				(child as Button).modulate = Color(1, 0.92, 0.4)
 				var tw := create_tween()
@@ -611,13 +595,14 @@ func _apply_kraj_efficient_ui():
 	if main != null:
 		main.add_theme_constant_override("separation", 14)
 		main.alignment = BoxContainer.ALIGNMENT_CENTER
-	# Weight: make bars thin + desaturated (Half-Life 2 beige), backgrounds low contrast
-	var hp_fill_muted := Color(0.82, 0.78, 0.70, 0.95) # beige
-	var bio_fill_muted := Color(0.72, 0.80, 0.68, 0.95)
-	var money_fill_muted := Color(0.84, 0.80, 0.55, 0.95)
+	# Pixel-art fills already carry their own colour (red/green/gold); keep them untinted
+	# so the 8-bit segments read clearly. Low HP flashes a warmer red.
+	var hp_fill_muted := Color(1, 1, 1, 1)
+	var bio_fill_muted := Color(1, 1, 1, 1)
+	var money_fill_muted := Color(1, 1, 1, 1)
 	for bar in [ai_hp_bar, player_hp_bar]:
 		if bar != null and is_instance_valid(bar):
-			bar.tint_progress = hp_fill_muted if bar.value >= 30 else Color(0.92, 0.45, 0.45, 0.98)
+			bar.tint_progress = hp_fill_muted if bar.value >= 30 else Color(1, 0.6, 0.6, 1)
 			bar.custom_minimum_size = Vector2(26, 180)
 			bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for bar in [ai_bio_bar, player_bio_bar]:
@@ -678,8 +663,6 @@ func _apply_kraj_efficient_ui():
 	# Worst-case safeguards
 	if message_label != null:
 		var txt: String = message_label.text
-		if txt.length() > 120:
-			message_label.text = txt.substr(0, 117) + "..."
 		message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		message_label.custom_minimum_size = Vector2(0, 18)
 		message_label.modulate = Color(1,1,1, 0.92) if txt.length() > 0 else Color(1,1,1,0.45)
@@ -1747,6 +1730,7 @@ func _ready():
 	_ensure_debug_popup()
 	_add_save_button()
 	_add_view_deck_button()
+	_add_combat_log_button()
 	_add_debug_button()
 	_ensure_shop_popup()
 	_setup_gauge_grid_background()
@@ -2817,6 +2801,9 @@ func _unhandled_input(event: InputEvent):
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if _handle_shortcut(event as InputEventKey):
+			get_viewport().set_input_as_handled()
+			return
 		var is_backtick: bool = false
 		if event.keycode == KEY_QUOTELEFT:
 			is_backtick = true
@@ -3864,6 +3851,275 @@ func _refresh_ui():
 	# Hand
 	_refresh_hand()
 
+# --- Board tiles, placement hints, drag-to-place, shortcuts, combat log ------
+var _tile_tex_player: Texture2D = null
+var _tile_tex_ai: Texture2D = null
+var _ghost_preview: Control = null
+var _hand_display_idx: Array = [] # hand indices in on-screen order (for 1-9/0 shortcuts)
+var _combat_log: Array = [] # recent combat lines, newest last
+var _combat_log_panel: PanelContainer = null
+var _combat_log_label: RichTextLabel = null
+const COMBAT_LOG_MAX: int = 60
+
+func _tile_stylebox(is_human: bool, tint: Color = Color(1, 1, 1)) -> StyleBoxTexture:
+	if _tile_tex_player == null:
+		_tile_tex_player = load("res://Assets/UI/board_tile_player.png") as Texture2D
+		_tile_tex_ai = load("res://Assets/UI/board_tile_ai.png") as Texture2D
+	var sb := StyleBoxTexture.new()
+	sb.texture = _tile_tex_player if is_human else _tile_tex_ai
+	sb.modulate_color = tint
+	return sb
+
+func _apply_tile_texture(btn: Button, is_human: bool) -> void:
+	# Pixel-art turf under every square: green field on your side, scorched earth on theirs
+	var sb := _tile_stylebox(is_human)
+	for st in ["normal", "pressed", "disabled", "focus"]:
+		btn.add_theme_stylebox_override(st, sb)
+	btn.add_theme_stylebox_override("hover", _tile_stylebox(is_human, Color(1.0, 1.0, 0.85)) if is_human else sb)
+	btn.flat = false
+	btn.focus_mode = Control.FOCUS_NONE
+
+func _selected_affordable() -> bool:
+	if selected_card == null or human == null:
+		return false
+	return human.get_effective_money_cost(selected_card) <= human.MoneySupply and selected_card.BioCost <= human.BioSupply
+
+func _shortfall_text(card: Card) -> String:
+	# "12 more Money and 5 more Bio" — empty when the card is affordable
+	var parts: Array = []
+	var need_m: int = human.get_effective_money_cost(card)
+	if need_m > human.MoneySupply:
+		parts.append("%d more Money" % (need_m - human.MoneySupply))
+	if card.BioCost > human.BioSupply:
+		parts.append("%d more Bio" % (card.BioCost - human.BioSupply))
+	return " and ".join(parts)
+
+func _add_placement_hint(btn: Button) -> void:
+	# Pulsing outline on every square the selected card can legally go
+	var hint := Panel.new()
+	hint.name = "PlacementHint"
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.anchor_right = 1.0
+	hint.anchor_bottom = 1.0
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.55, 1.0, 0.45, 0.10)
+	sb.border_color = Color(0.70, 1.0, 0.50, 0.85)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(4)
+	hint.add_theme_stylebox_override("panel", sb)
+	btn.add_child(hint)
+	var tw := hint.create_tween().set_loops()
+	tw.tween_property(hint, "modulate:a", 0.45, 0.6).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(hint, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_SINE)
+
+func _adjacent_friendly_units(r: int, c: int) -> int:
+	var n: int = 0
+	for dr in [-1, 0, 1]:
+		for dc in [-1, 0, 1]:
+			if dr == 0 and dc == 0:
+				continue
+			var nr: int = r + dr
+			var nc: int = c + dc
+			if nr < 0 or nr >= human.Board.size() or nc < 0 or nc >= 10:
+				continue
+			var occ: Card = (human.Board[nr] as Row).Squares[nc].Inhabitant
+			if occ != null and occ is Unit:
+				n += 1
+	return n
+
+func _on_empty_tile_hover(btn: Button, r: int, c: int) -> void:
+	# Ghost of the selected card + what it would gain/give on this square
+	_clear_ghost()
+	if selected_card == null or is_tutorial or not _selected_affordable():
+		return
+	var gsize := Vector2(96, 96)
+	var ghost := Card.create_sprite_for(selected_card.card_name, gsize)
+	ghost.name = "PlacementGhost"
+	ghost.modulate = Color(1, 1, 1, 0.55)
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost.position = (btn.size - gsize) * 0.5
+	btn.add_child(ghost)
+	_ghost_preview = ghost
+	var sq: Square = (human.Board[r] as Row).Squares[c]
+	var note: String = ""
+	if selected_card is Barracks:
+		var n: int = _adjacent_friendly_units(r, c)
+		note = " (+2 DMG to %d adjacent unit%s)" % [n, "" if n == 1 else "s"]
+	elif selected_card is Unit and Barracks.bonus_if_adjacent(human, sq) > 0:
+		note = " (next to Barracks: +2 DMG)"
+	message_label.text = "Place %s here%s" % [selected_card.card_name, note]
+
+func _clear_ghost() -> void:
+	if _ghost_preview != null and is_instance_valid(_ghost_preview):
+		_ghost_preview.queue_free()
+	_ghost_preview = null
+
+func _start_hand_drag(idx: int) -> Variant:
+	# Drag a hand card onto the board (click-then-click still works)
+	if is_tutorial or idx < 0 or idx >= human.Hand.size() or end_turn_btn.disabled:
+		return null
+	selected_card = human.Hand[idx]
+	selected_card_idx = idx
+	var preview := Card.create_sprite_for(selected_card.card_name, Vector2(96, 96))
+	preview.modulate = Color(1, 1, 1, 0.85)
+	set_drag_preview(preview)
+	_refresh_board(player_board_container, human, true)
+	if not _selected_affordable():
+		message_label.text = "Can't afford %s: need %s" % [selected_card.card_name, _shortfall_text(selected_card)]
+	else:
+		message_label.text = "Drop %s on a highlighted square" % selected_card.card_name
+	return {"type": "hand_card", "idx": idx}
+
+func _can_drop_hand_card(data: Variant) -> bool:
+	return data is Dictionary and (data as Dictionary).get("type", "") == "hand_card" and _selected_affordable()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END and human != null and is_node_ready():
+		_clear_ghost()
+		call_deferred("_refresh_hand")
+
+func _select_hand_slot(slot: int) -> void:
+	if slot < 0 or slot >= _hand_display_idx.size():
+		return
+	_on_hand_click(int(_hand_display_idx[slot]))
+	_refresh_board(player_board_container, human, true)
+
+func _handle_shortcut(ev: InputEventKey) -> bool:
+	# Space/Enter = End Turn, 1-9/0 = pick hand card, Esc = deselect
+	if human == null or end_turn_btn == null:
+		return false
+	if (shop_popup != null and shop_popup.visible) or (inspect_popup != null and inspect_popup.visible):
+		return false
+	if (debug_popup != null and debug_popup.visible):
+		return false
+	match ev.keycode:
+		KEY_SPACE, KEY_ENTER, KEY_KP_ENTER:
+			if not end_turn_btn.disabled:
+				_on_end_turn()
+			return true
+		KEY_ESCAPE:
+			if selected_card != null:
+				selected_card = null
+				selected_card_idx = -1
+				message_label.text = "Deselected"
+				_clear_ghost()
+				_refresh_hand()
+				_refresh_board(player_board_container, human, true)
+				return true
+			return false
+	if ev.keycode >= KEY_1 and ev.keycode <= KEY_9:
+		if not end_turn_btn.disabled:
+			_select_hand_slot(ev.keycode - KEY_1)
+		return true
+	if ev.keycode == KEY_0:
+		if not end_turn_btn.disabled:
+			_select_hand_slot(9)
+		return true
+	return false
+
+func _log_combat(line: String) -> void:
+	_combat_log.append(line)
+	while _combat_log.size() > COMBAT_LOG_MAX:
+		_combat_log.pop_front()
+	if _combat_log_panel != null and _combat_log_panel.visible:
+		_render_combat_log()
+
+func _combat_line(entry: Dictionary) -> String:
+	var atk_card: Card = entry["attacker"]
+	var mine: bool = entry["attacker_player"] == human
+	var who: String = "[color=#8fe08f]You[/color]" if mine else "[color=#ff8a8a]Enemy[/color]"
+	var dmg: int = int(entry["damage"])
+	if bool(entry["is_direct"]):
+		return "%s %s hits HQ for [b]%d[/b]" % [who, atk_card.card_name, dmg]
+	var tgt: Card = entry["target"]
+	var line: String = "%s %s hits %s for [b]%d[/b]" % [who, atk_card.card_name, tgt.card_name if tgt != null else "?", dmg]
+	if bool(entry.get("intercepted", false)):
+		line += " [color=#7fd8ff](intercepted)[/color]"
+	var hp_left: int = 1
+	if tgt is Unit:
+		hp_left = (tgt as Unit).HitPoints
+	elif tgt is Building:
+		hp_left = (tgt as Building).HitPoints
+	if hp_left <= 0:
+		line += " [color=#ffcc66]- destroyed[/color]"
+	return line
+
+func _play_attack_anim(btn: Control) -> void:
+	# Swap the attacker's idle loop for its one-shot attack frames
+	if btn == null or not is_instance_valid(btn):
+		return
+	for n in btn.find_children("*", "AnimatedSprite2D", true, false):
+		var asp := n as AnimatedSprite2D
+		if asp.sprite_frames != null and asp.sprite_frames.has_animation("attack") and asp.sprite_frames.get_frame_count("attack") > 0:
+			if not asp.has_meta("attack_hook"):
+				asp.set_meta("attack_hook", true)
+				asp.animation_finished.connect(func():
+					if asp.animation == "attack":
+						asp.play("idle"))
+			asp.play("attack")
+
+func _render_combat_log() -> void:
+	if _combat_log_label == null:
+		return
+	if _combat_log.is_empty():
+		_combat_log_label.text = "[color=#9a9ab0]No combat yet. Attacks show up here after End Turn.[/color]"
+		return
+	_combat_log_label.text = "\n".join(_combat_log)
+	_combat_log_label.call_deferred("scroll_to_line", _combat_log_label.get_line_count())
+
+func _add_combat_log_button() -> void:
+	var controls = get_node_or_null("VBox/Controls")
+	if controls == null or controls.has_node("LogBtn"):
+		return
+	var lbtn := Button.new()
+	lbtn.name = "LogBtn"
+	lbtn.text = "Log"
+	lbtn.custom_minimum_size = Vector2(100, 40)
+	lbtn.add_theme_font_size_override("font_size", 16)
+	_style_round_button(lbtn, false)
+	lbtn.focus_mode = Control.FOCUS_NONE
+	controls.add_child(lbtn)
+	var menu = controls.get_node_or_null("MenuBtn")
+	if menu:
+		controls.move_child(lbtn, menu.get_index())
+	# Floating panel, top-right under the controls; click Log again to close
+	_combat_log_panel = PanelContainer.new()
+	_combat_log_panel.name = "CombatLogPanel"
+	_combat_log_panel.visible = false
+	_combat_log_panel.z_index = 50
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.07, 0.06, 0.11, 0.94)
+	psb.border_color = Color(0.95, 0.85, 0.4, 0.9)
+	psb.set_border_width_all(2)
+	psb.set_corner_radius_all(6)
+	psb.set_content_margin_all(10)
+	_combat_log_panel.add_theme_stylebox_override("panel", psb)
+	_combat_log_panel.anchor_left = 1.0
+	_combat_log_panel.anchor_right = 1.0
+	_combat_log_panel.offset_left = -520
+	_combat_log_panel.offset_right = -150
+	_combat_log_panel.offset_top = 70
+	_combat_log_panel.offset_bottom = 470
+	var vb := VBoxContainer.new()
+	var title := Label.new()
+	title.text = "Combat Log"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+	vb.add_child(title)
+	_combat_log_label = RichTextLabel.new()
+	_combat_log_label.bbcode_enabled = true
+	_combat_log_label.scroll_following = true
+	_combat_log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_combat_log_label.add_theme_font_size_override("normal_font_size", 14)
+	vb.add_child(_combat_log_label)
+	_combat_log_panel.add_child(vb)
+	add_child(_combat_log_panel)
+	lbtn.pressed.connect(func():
+		_combat_log_panel.visible = not _combat_log_panel.visible
+		if _combat_log_panel.visible:
+			_render_combat_log()
+	)
+
 func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 	_hide_hover()
 	for child in container.get_children():
@@ -3880,15 +4136,18 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 			btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 			if sq.Inhabitant == null:
 				btn.text = ""
-				# Switched grey shades: player tiles (bottom) lighter, AI tiles (top) darker
-				if is_human:
-					btn.modulate = Color(0.32, 0.32, 0.38) # noticeably lighter - player can place
-				else:
-					btn.modulate = Color(0.05, 0.05, 0.08) # noticeably darker - AI side
+				# Pixel-art turf: your side is green field, theirs is scorched earth
+				_apply_tile_texture(btn, is_human)
 				btn.add_theme_font_size_override("font_size", 28)
 				btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				if is_human:
 					btn.pressed.connect(func(): _on_board_click(r, c))
+					var hover_btn: Button = btn
+					btn.mouse_entered.connect(func(): _on_empty_tile_hover(hover_btn, r, c))
+					btn.mouse_exited.connect(func(): _clear_ghost())
+					btn.set_drag_forwarding(Callable(), func(_at, data): return _can_drop_hand_card(data), func(_at, _data): _on_board_click(r, c))
+					if not is_tutorial and _selected_affordable():
+						_add_placement_hint(btn)
 				else:
 					btn.disabled = true
 				btn.tooltip_text = ""
@@ -3920,6 +4179,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 				btn.add_theme_stylebox_override("pressed", trans_sb)
 				btn.add_theme_stylebox_override("disabled", trans_sb)
 				btn.add_theme_stylebox_override("focus", trans_sb)
+				_apply_tile_texture(btn, is_human)
 				# HBox: art extends 2x to right and 2x to bottom beyond tile, indicators on right vertically stacked on top
 				var outer_hbox := HBoxContainer.new()
 				outer_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -4166,7 +4426,12 @@ func _refresh_hand():
 	var hand_sorted: Array = []
 	for i in range(human.Hand.size()):
 		hand_sorted.append({"card": human.Hand[i], "idx": i})
-	hand_sorted.sort_custom(func(a, b): return (a["card"].card_name if a["card"] is Card else str(a["card"])) < (b["card"].card_name if b["card"] is Card else str(b["card"])))
+	hand_sorted.sort_custom(func(a, b):
+		var ua: int = 0 if a["card"] is Unit else 1
+		var ub: int = 0 if b["card"] is Unit else 1
+		if ua != ub:
+			return ua < ub
+		return (a["card"].card_name if a["card"] is Card else str(a["card"])) < (b["card"].card_name if b["card"] is Card else str(b["card"])))
 	# Group identical cards for stacking
 	var hand_grouped: Array = []
 	var _last_name: String = ""
@@ -4182,13 +4447,17 @@ func _refresh_hand():
 			_group["count"] = (_group["count"] as int) + 1
 	if not _group.is_empty():
 		hand_grouped.append(_group)
+	_hand_display_idx.clear()
+	for _g in hand_grouped:
+		_hand_display_idx.append(_g["idx"])
 	for _g in hand_grouped:
 		var idx: int = _g["idx"] as int
 		var card: Card = _g["card"] as Card
 		var _stack_count: int = _g["count"] as int
 		var btn := Button.new()
 		btn.clip_contents = false
-		btn.custom_minimum_size = Vector2(108, 68)
+		btn.custom_minimum_size = Vector2(120, 88)
+		btn.focus_mode = Control.FOCUS_NONE
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		# Opaque grey rounded rect background for cards (0% transparent)
@@ -4238,14 +4507,19 @@ func _refresh_hand():
 		# Right-side layout: sprite left | details right - income always visible
 		var hand_hbox := HBoxContainer.new()
 		hand_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Fill the whole card so the name/stats get the full width (was clipped to min size)
+		hand_hbox.anchor_right = 1.0
+		hand_hbox.anchor_bottom = 1.0
+		hand_hbox.offset_left = 6
+		hand_hbox.offset_right = -6
 		hand_hbox.clip_contents = false
 		hand_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		hand_hbox.add_theme_constant_override("separation", 4)
 		hand_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hand_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(72, 72))
+		var hand_anim := Card.create_sprite_for(card.card_name, Vector2(80, 80))
 		hand_anim.clip_contents = true
-		hand_anim.custom_minimum_size = Vector2(72, 72)
+		hand_anim.custom_minimum_size = Vector2(80, 80)
 		hand_anim.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		hand_anim.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hand_hbox.add_child(hand_anim)
@@ -4357,6 +4631,8 @@ func _refresh_hand():
 		var money_col: Color = Color(1,1,1)
 		if eff_money != base_money:
 			money_col = Color(1, 0.35, 0.35) if eff_money > base_money else Color(0.35, 0.9, 0.35)
+		if eff_money > human.MoneySupply:
+			money_col = Color(1, 0.3, 0.3)
 		m_lbl.add_theme_color_override("font_color", money_col)
 		m_lbl.clip_contents = false
 		m_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -4376,12 +4652,23 @@ func _refresh_hand():
 		var bio_col: Color = Color(1,1,1)
 		if eff_bio != base_bio:
 			bio_col = Color(1, 0.35, 0.35) if eff_bio > base_bio else Color(0.35, 0.9, 0.35)
+		if eff_bio > human.BioSupply:
+			bio_col = Color(1, 0.3, 0.3)
 		b_lbl.add_theme_color_override("font_color", bio_col)
 		b_lbl.clip_contents = false
 		b_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		b_lbl.custom_minimum_size = Vector2(0, 16)
 		hand_costs.add_child(b_lbl)
 		details.add_child(hand_costs)
+		var short_txt: String = _shortfall_text(card)
+		if short_txt != "":
+			var need_lbl := Label.new()
+			need_lbl.text = "Need " + short_txt.replace(" more ", " ")
+			need_lbl.add_theme_font_size_override("font_size", 12)
+			need_lbl.add_theme_color_override("font_color", Color(1, 0.55, 0.55))
+			need_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			need_lbl.custom_minimum_size = Vector2(48, 14)
+			details.add_child(need_lbl)
 		# Magnified preview on hover — hand card art + symbols + text enlarged
 		var _hand_prev: Card = card
 		var _anchor_hand: Control = btn
@@ -4470,6 +4757,7 @@ func _refresh_hand():
 			btn.add_theme_color_override("font_color", Color(1, 1, 1))
 		var captured_idx: int = idx
 		btn.pressed.connect(func(): _on_hand_click(captured_idx))
+		btn.set_drag_forwarding(func(_at): return _start_hand_drag(captured_idx), Callable(), Callable())
 		hand_container.add_child(btn)
 	if human.Hand.is_empty():
 		var lbl := Label.new()
@@ -4499,10 +4787,14 @@ func _on_hand_click(idx: int):
 		selected_card = null
 		selected_card_idx = -1
 		message_label.text = "Deselected"
+		_clear_ghost()
 	else:
 		selected_card = human.Hand[idx]
 		selected_card_idx = idx
-		message_label.text = "Selected %s - click empty square to place" % selected_card.card_name
+		if _selected_affordable():
+			message_label.text = "Selected %s - click or drag to a highlighted square" % selected_card.card_name
+		else:
+			message_label.text = "Can't afford %s: need %s" % [selected_card.card_name, _shortfall_text(selected_card)]
 		if is_tutorial and tutorial_step == 0:
 			tutorial_step = 1
 			_update_tutorial_message()
@@ -4513,6 +4805,7 @@ func _on_hand_click(idx: int):
 			tutorial_step = 9
 			_update_tutorial_message()
 	_refresh_hand()
+	_refresh_board(player_board_container, human, true)
 
 func _on_board_click(r: int, c: int):
 	if selected_card == null:
@@ -4541,7 +4834,13 @@ func _on_board_click(r: int, c: int):
 			elif tutorial_step not in [1,5,9]:
 				message_label.text = "Tutorial: Not the right step for placement"
 				return
+	var fail_reason: String = ""
+	if not (human.Board[r] as Row).Squares[c].is_empty():
+		fail_reason = "That square is taken"
+	elif not _selected_affordable():
+		fail_reason = "Can't afford %s: need %s" % [selected_card.card_name, _shortfall_text(selected_card)]
 	var ok: bool = human.play_card(selected_card, r, c)
+	_clear_ghost()
 	if ok:
 		message_label.text = "Placed %s at [%d,%d]" % [selected_card.card_name, r, c]
 		var placed_name: String = selected_card.card_name
@@ -4559,7 +4858,7 @@ func _on_board_click(r: int, c: int):
 				tutorial_step = 10
 				_update_tutorial_message()
 	else:
-		message_label.text = "Cannot place there (cost or occupied)"
+		message_label.text = fail_reason if fail_reason != "" else "Cannot place there"
 	_refresh_ui()
 
 func _refresh_gauges_only():
@@ -4715,6 +5014,7 @@ func _on_end_turn():
 	selected_card = null
 	selected_card_idx = -1
 	_set_phase("Player Combat Phase")
+	_log_combat("[color=#9a9ab0]--- combat ---[/color]")
 	# Live combat: damage is applied and UI refreshed per hit, not deferred to end
 	var log: Array = await _execute_combat_live()
 	_set_phase("AI Combat Phase")
@@ -4862,6 +5162,8 @@ func _animate_live_entry(entry: Dictionary):
 		tw.tween_property(atk_btn, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.parallel().tween_property(atk_btn, "modulate", Color(1, 1, 1), 0.14)
 		message_label.text = "%s attacks %s for %d" % [attacker_card.card_name, "HP" if is_direct else target_card.card_name, dmg]
+		_play_attack_anim(atk_btn)
+	_log_combat(_combat_line(entry))
 	await get_tree().create_timer(0.24).timeout
 	if is_direct:
 		if tgt_hp_bar != null and is_instance_valid(tgt_hp_bar):
