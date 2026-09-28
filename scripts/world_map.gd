@@ -549,6 +549,10 @@ func _describe(x: int, y: int) -> String:
 	var text := "(%d, %d) %s" % [x, y, WorldMap.terrain_at(x, y).capitalize()]
 	text += " · " + (o if o != "" else ("wilderness" if WorldMap.is_land(x, y) else "open sea"))
 	if _war != null:
+		var holder := c.capital_holder_at(x, y)
+		if holder != "":
+			var hp_p: Player = _war.players[holder]
+			text += " · %s's flag  HP %d/%d (a target: hits here cost %s HP)" % [holder, hp_p.HitPoints, hp_p.MaxHitPoints, holder]
 		var info := _war.unit_at(Vector2i(x, y))
 		if not info.is_empty():
 			var card: Card = info["card"]
@@ -666,7 +670,7 @@ func _nation_attacks(n: String) -> void:
 			var impact: String = "hq_hit" if e["direct"] else ("explosion" if not destroyed.is_empty() else ("intercept" if e["intercepted"] else "hit"))
 			get_tree().create_timer(travel).timeout.connect(func(): _sfx(impact, -5.0))
 			if e["direct"]:
-				_log_line("[color=#%s]%s[/color] %s strikes %s HQ for %d" % [_nation_hex_color(n), n, e["card"], e["victim"], int(e["damage"])])
+				_log_line("[color=#%s]%s[/color] %s hits [color=#%s]%s[/color]'s flag for %d" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], int(e["damage"])])
 			elif not destroyed.is_empty():
 				_log_line("[color=#%s]%s[/color] %s destroys [color=#%s]%s[/color]'s %s" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], e["target_name"]])
 			await _wait(SHOT_GAP)

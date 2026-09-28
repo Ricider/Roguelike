@@ -14,7 +14,7 @@ func test_hex_neighbors_symmetric():
 
 func test_hex_edge_index_points_back():
 	# Edge i of a hex and edge (i+3)%6 of its neighbor are the same shared edge.
-	for t in [Vector2i(10, 4), Vector2i(10, 5), Vector2i(0, 7), Vector2i(59, 8)]:
+	for t in [Vector2i(10, 4), Vector2i(10, 5), Vector2i(0, 7), Vector2i(WorldMap.GRID_W - 1, 8)]:
 		for i in range(6):
 			var n := MapCampaign.hex_neighbor(t, i)
 			assert_eq(MapCampaign.hex_neighbor(n, (i + 3) % 6), t, "edge %d of %s mirrors back" % [i, t])
@@ -38,7 +38,8 @@ func test_picking_after_zoom_pan_and_wrap():
 	view.center_on(Vector2i(2, 10), 2.5) # near the seam: the view shows both ends of the world
 	view.pan_by(Vector2(333, -41))
 	var m: Array = view.metrics()
-	for t in [Vector2i(0, 10), Vector2i(59, 10), Vector2i(3, 11), Vector2i(58, 9)]:
+	var last := WorldMap.GRID_W - 1
+	for t in [Vector2i(0, 10), Vector2i(last, 10), Vector2i(3, 11), Vector2i(last - 1, 9)]:
 		var p: Vector2 = view.screen_pos(t, m)
 		if p.x > 0 and p.x < view.size.x and p.y > 0 and p.y < view.size.y:
 			assert_eq(view.tile_at_point(p), t, "wrapped copy of %s picks itself" % t)

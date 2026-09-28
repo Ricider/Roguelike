@@ -35,7 +35,7 @@ func test_hex_distance():
 	assert_eq(MapWar.hex_distance(Vector2i(10, 4), Vector2i(10, 4)), 0, "same hex")
 	for i in range(6):
 		assert_eq(MapWar.hex_distance(Vector2i(10, 5), MapCampaign.hex_neighbor(Vector2i(10, 5), i)), 1, "neighbor %d is 1 away" % i)
-	assert_eq(MapWar.hex_distance(Vector2i(0, 4), Vector2i(59, 4)), 1, "wraps east-west")
+	assert_eq(MapWar.hex_distance(Vector2i(0, 4), Vector2i(WorldMap.GRID_W - 1, 4)), 1, "wraps east-west")
 	assert_eq(MapWar.hex_distance(Vector2i(10, 10), Vector2i(17, 10)), 7, "along a row")
 
 func test_setup_places_starting_cards_on_own_land():
@@ -80,20 +80,23 @@ func test_melee_hits_closest_enemy_card():
 	assert_eq(log[0]["victim"], B, "closest nation")
 	assert_true(w.units.has(far), "far card untouched")
 
-func test_ranged_hits_random_card_of_closest_nation():
-	var w := _war()
+func test_ranged_hits_random_target_of_closest_nation():
 	var hit_hexes := {}
-	for trial in range(40):
+	var flag_hits := 0
+	for trial in range(60):
 		var t := _war()
 		t.rng.seed = trial
 		var shooter := _drop(t, A, Artilery.new(), 14)
-		_drop(t, B, Wall.new(), 16) # B is the closest nation...
-		_drop(t, B, Wall.new(), 25) # ...and also owns this far card
-		_drop(t, C, Wall.new(), 26) # C's card is closer than B's far one but C is not the closest nation
+		_drop(t, B, Wall.new(), 16) # B is the closest nation (its flag stands at x=25)
+		_drop(t, C, Wall.new(), 26) # C's card is closer than B's flag but C is not the closest nation
 		var log := t.fire(shooter)
 		assert_eq(log[0]["victim"], B, "ranged unit targets the closest nation")
 		hit_hexes[log[0]["to"]] = true
-	assert_true(hit_hexes.has(Vector2i(16, 10)) and hit_hexes.has(Vector2i(25, 10)), "random card of that nation, near or far")
+		if log[0]["direct"]:
+			flag_hits += 1
+	var b_flag: Vector2i = _war().flag_sites()[B]
+	assert_true(hit_hexes.has(Vector2i(16, 10)), "sometimes the card")
+	assert_true(hit_hexes.has(b_flag) and flag_hits > 0, "sometimes the flag")
 	assert_false(hit_hexes.has(Vector2i(26, 10)), "never another nation")
 
 func test_kill_costs_biocost_and_is_credited():
@@ -110,13 +113,25 @@ func test_kill_costs_biocost_and_is_credited():
 	assert_eq(int(w.ledger[B][A]), victim.BioCost, "damage credited to attacker")
 	assert_true((w.players[B] as Player).Graveyard.has(victim), "card goes to graveyard")
 
-func test_direct_hit_when_no_enemy_cards():
+func test_flag_is_a_target_and_hurts_nation_hp():
 	var w := _war()
 	var shooter := _drop(w, A, Tank.new(), 14)
+	var b_flag: Vector2i = w.flag_sites()[B]
 	var log := w.fire(shooter)
-	assert_true(log[0]["direct"], "direct HP hit")
-	assert_eq(log[0]["victim"], B, "closest enemy nation")
-	assert_eq((w.players[B] as Player).HitPoints, 100 - Tank.new().Damage, "HP reduced")
+	assert_true(log[0]["direct"], "flag hit")
+	assert_eq(log[0]["to"], b_flag, "shot lands on B's flag hex")
+	assert_eq(log[0]["victim"], B, "closest enemy flag")
+	assert_eq((w.players[B] as Player).HitPoints, 100 - Tank.new().Damage, "flag damage comes off B's HP")
+	assert_eq(int(w.ledger[B][A]), Tank.new().Damage, "credited to the attacker")
+
+func test_melee_prefers_closer_flag_over_farther_card():
+	var w := _war()
+	var shooter := _drop(w, A, Tank.new(), 14)
+	var b_flag: Vector2i = w.flag_sites()[B]
+	_drop(w, C, Wall.new(), b_flag.x + 3) # a card, but farther than B's flag
+	var log := w.fire(shooter)
+	assert_eq(log[0]["to"], b_flag, "closest target is the flag")
+	assert_true(log[0]["direct"], "flag, not the wall")
 
 func test_rocket_launcher_fires_four_times():
 	var w := _war()

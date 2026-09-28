@@ -268,11 +268,19 @@ func has_lost() -> bool:
 	return player_nation != "" and not is_alive(player_nation)
 
 func to_data() -> Dictionary:
-	return {"player_nation": player_nation, "owner": owner.duplicate()}
+	return {"player_nation": player_nation, "owner": owner.duplicate(), "grid": [WorldMap.GRID_W, WorldMap.GRID_H]}
 
+# Saves from an older map layout (different grid) can't be mapped onto the
+# current world, so they restart the campaign for the same nation.
 static func from_data(d: Dictionary) -> MapCampaign:
+	var nation := str(d.get("player_nation", ""))
+	var grid = d.get("grid", [])
+	if not (grid is Array and grid.size() == 2 and int(grid[0]) == WorldMap.GRID_W and int(grid[1]) == WorldMap.GRID_H):
+		var fresh := MapCampaign.new(nation) if nation != "" else MapCampaign.new()
+		fresh.set_meta("restarted", true)
+		return fresh
 	var c := MapCampaign.new()
-	c.player_nation = str(d.get("player_nation", ""))
+	c.player_nation = nation
 	var o = d.get("owner", {})
 	if o is Dictionary:
 		c.owner = (o as Dictionary).duplicate()

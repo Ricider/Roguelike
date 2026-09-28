@@ -1,11 +1,17 @@
-# WorldMap: Civ-style square-grid Earth for the Geopolitics map view.
+# WorldMap: Civ-style hex Earth for the Geopolitics map view.
 # Scope is map-only: terrain grid + nation start positions, no gameplay rules.
+# ROWS and capitals are generated from real coastlines by tools/make_world.py
+# (equirectangular, pointy-top hexes in odd-r layout, wrapping at the Bering Strait).
 # Legend: '.' ocean, 'g' grassland, 'd' desert, 'm' mountain, 's' snow, 'j' jungle.
 extends RefCounted
 class_name WorldMap
 
-const GRID_W: int = 60
-const GRID_H: int = 30
+const GRID_W: int = 90
+const GRID_H: int = 40
+
+const LON0: float = -169.0 # west edge (Bering Strait); the map wraps east-west here
+const LAT_TOP: float = 80.0
+const LAT_BOT: float = -62.0
 
 const OCEAN: String = "ocean"
 const GRASSLAND: String = "grassland"
@@ -15,36 +21,46 @@ const SNOW: String = "snow"
 const JUNGLE: String = "jungle"
 
 const ROWS: Array[String] = [
-	"............................................................",
-	"........sssss.......sssss...................................",
-	"..sssss.sssssssss.ssssssss............ssssssssssssssssss....",
-	"..sssssssssssssssss..ssss......ssss.sssssssssssssssssssssss.",
-	"ggggggggggggg...gggg..ss......gggggggggggggggggggggggggggggg",
-	"......gggggggggggggg.........ggggggggggggggggggggggggggggg..",
-	".......ggggggggggggg.........gggggggggggggggggggggggggggg...",
-	".........ggggggggggg........ggggggggggggggggggggggg.gg......",
-	".........mmmgggggggg........gg.g.ggggggggmmgggggggg.gg......",
-	"..........dddggggggg........ggggggggggdddggmmmggggg.gg......",
-	"..........ggggg...gg........dddddddddddddggggggggg..........",
-	"...........gggg.............ddddddddddddd.ggg.ggg...........",
-	"..............ggg...........gggggggg......gg..ggg...........",
-	"...............gggg.........gggggggg.......g..gg............",
-	"................gggjjjjj....ggjjjjjg.........jjjjjj.........",
-	"................mmjjjjjj....jjjjjgggg.........jjjj..........",
-	".................mmgggg......gggggggg.g..........gg.........",
-	".................mmgggg......gggggggggg.........gggggg......",
-	".................mgggg.......dddggggg.g.........gdddddg.....",
-	".................gggg.........gggggg............gdddddg.....",
-	".................gggg.........ggggg..............ggggg....g.",
-	".................ggg...............................gg....gg.",
-	".................ggg.....................................g..",
-	".................gg.........................................",
-	".................g..........................................",
-	"............................................................",
-	"............................................................",
-	"............................................................",
-	"............................................................",
-	".....ssssssssssssssssssssssssssssssssssssssssssssssssss.....",
+	"....................sss.ssssssssssssss.......ss....................s......................",
+	"............ss..s.ssss.s...ssssssssss........s.........ss......sssssss......ss............",
+	"...s.......s.sss.ss.sssss....ssssssss........s...s.....s...ssssssssssssssssssssss.........",
+	"sssssssssssssssssssss..sss..ssssss..s........sssssss..ssssssssssssssssssssssssssssssssssss",
+	".sssssssssssssssssss.s..ss...sss.....s......sssssssssssssssssssssssssssssssssssssssssss...",
+	"gggggggmmmgggggggg....gg......s............ggg.gggggggggmgggggggggggggggggggggggg.ggg.....",
+	".........ggggggggggg...gggg..............g..gg..ggggggggmmggggggggggggggggggg....gg.......",
+	".........ggmmmmgggggg.gggggg...........g.g.gggggggggggggmgggggggggggggggggggg....g........",
+	"..........ggmmmmggggggggggggg............ggggggggggggggggggggggggggggggggggggg............",
+	"...........mmmmgggggggggggg..............ggmmgggggggggggggggggggdddddddggggg..............",
+	"...........gmmmmggggggggg...............ggg..gggg...mmgddddgggggdddddddgggg..g............",
+	"...........mmmmgggggggg................ggg.....ggggggggdddggdddddddddddggg................",
+	"............gddddgggggg.................g.ggg......gggmmdddgmmmmmmmggggg..ggg.............",
+	"............ddddgggggg.................gmmgggg.g..gggmmddddgmmmmmmmggggg..g...............",
+	".............ddddg...g.................ddddddddddddddd.ddddgmmmmmmmgggggg.................",
+	"...............gg....g................dddddddddddddddddd..gggggggggggggg..................",
+	"................gg..g.g...............ddddddddddddddddddd...gggg.ggggg....................",
+	"................gggj..j...............ddddddddddddd.dddd....ggg..jjj......................",
+	"...................jjj.g..............ggggggggggggggggg......j.....jjj....................",
+	"....................j..gg.............gggggggggggggmggg......j......j.....................",
+	".......................ggggg...........ggggggggggggmmgg.......g....jj....j................",
+	"......................mmjjjjj...............jjjjjggmgg............jj..j...................",
+	"......................mmjjjjjj..............jjjjjjgmm..............jjjjj..................",
+	".....................gmmjjjjjjjg............jjjjjggm...............j..jj...jjj............",
+	"......................mmjjjjjjjggg...........jjjjjgg.................jj....j.jj...........",
+	"......................mmjjjjjjjgg............ggggggg......................g...............",
+	".......................mggggggggg............ggggggggjj...................gg..............",
+	"........................mggggggg.............dddggg..j..................gggggg............",
+	".........................mgggggg..............ddggg..j.................gddddddgg..........",
+	"........................mggggg...............dddgg...g................gddddddggg..........",
+	"........................mmgggg................gggg.....................gddddddggg.........",
+	"........................mgggg.................ggg......................ddddddggg..........",
+	"........................mmgg.................................................ggg..........",
+	".......................gmgg..........................................................g....",
+	"........................gg..........................................................gg....",
+	".......................gg..........................................................g......",
+	".......................gg.................................................................",
+	".......................gg.................................................................",
+	"..........................................................................................",
+	"........sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.........",
 ]
 
 # Sample nations mapped to real-world regions matching their spec descriptions
@@ -52,45 +68,53 @@ const ROWS: Array[String] = [
 const NATIONS: Array = [
 	{
 		"name": "Insurgents", "capital": "Kabul", "region": "Central Asia (Hindu Kush)",
-		"x": 41, "y": 9, "color": "b5651d",
+		"x": 59, "y": 12, "color": "b5651d",
 		"blurb": "Sparse mountain village + Guerilla Warfare -> Afghan mountains.",
 	},
 	{
 		"name": "State Troops", "capital": "Baghdad", "region": "Middle East",
-		"x": 37, "y": 9, "color": "c9a227",
+		"x": 52, "y": 13, "color": "c9a227",
 		"blurb": "Middle Eastern town with mosques -> Mesopotamia.",
 	},
 	{
 		"name": "Fundamentalists", "capital": "London", "region": "British Isles",
-		"x": 29, "y": 6, "color": "7d3c98",
+		"x": 42, "y": 8, "color": "7d3c98",
 		"blurb": "Medieval village + Fanaticism -> old-world Europe.",
 	},
 	{
 		"name": "Mercenaries", "capital": "Kinshasa", "region": "Central Africa (Congo)",
-		"x": 33, "y": 14, "color": "922b21",
+		"x": 45, "y": 23, "color": "922b21",
 		"blurb": "Warzone rubble + Corruption -> Congo basin.",
 	},
 	{
 		"name": "Peace Keepers", "capital": "New York", "region": "North America (East Coast)",
-		"x": 18, "y": 8, "color": "2e86c1",
+		"x": 23, "y": 10, "color": "2e86c1",
 		"blurb": "United Nation tents + Defensive Doctrine -> UN HQ (NYC).",
 	},
 	{
 		"name": "Horde", "capital": "Moscow", "region": "Russia",
-		"x": 36, "y": 6, "color": "cb4335",
+		"x": 51, "y": 6, "color": "cb4335",
 		"blurb": "Snowy Russian-style city + Conscription -> Russia.",
 	},
 	{
 		"name": "Coalition Army", "capital": "Paris", "region": "Western Europe",
-		"x": 30, "y": 7, "color": "1e8449",
+		"x": 43, "y": 8, "color": "1e8449",
 		"blurb": "European-style towers + Aerial Supremacy -> NATO heartland.",
 	},
 	{
 		"name": "Corporate Troops", "capital": "Tokyo", "region": "East Asia (Japan)",
-		"x": 53, "y": 9, "color": "17a589",
+		"x": 76, "y": 12, "color": "17a589",
 		"blurb": "Cyberpunk skyrises + Advanced Robotics -> tech-hub Japan.",
 	},
 ]
+
+# Hex containing a real-world latitude/longitude (same projection as make_world.py).
+static func hex_for_latlon(lat: float, lon: float) -> Vector2i:
+	var fy: float = (LAT_TOP - lat) / (LAT_TOP - LAT_BOT)
+	var y: int = clampi(int(fy * GRID_H), 0, GRID_H - 1)
+	var fx: float = fposmod(lon - LON0, 360.0) / 360.0
+	var x: int = posmod(int(fx * GRID_W - 0.5 * float(y & 1)), GRID_W)
+	return Vector2i(x, y)
 
 static func in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < GRID_W and y < GRID_H

@@ -404,6 +404,8 @@ func load_game() -> bool:
 	map_war = null
 	var mw = data.get("map_war", null)
 	_map_war_data = (mw as Dictionary) if mw is Dictionary else {}
+	if map_campaign != null and map_campaign.has_meta("restarted"):
+		_map_war_data = {} # old map layout: the war restarts with the campaign
 	# Deserialize player
 	var pd = data.get("run_player", null)
 	if pd is Dictionary:

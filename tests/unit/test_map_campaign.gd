@@ -18,11 +18,22 @@ func test_starting_territory_valid():
 
 func test_wilderness_and_bering_bridge():
 	var c := MapCampaign.new("Horde")
-	assert_eq(c.owner_of(30, 29), "", "Antarctica is unclaimed wilderness")
-	assert_eq(c.owner_of(58, 21), "", "New Zealand is unclaimed wilderness")
-	assert_true(c.owner_of(0, 4) != "", "Bering bridge west owned")
-	assert_eq(c.owner_of(0, 4), c.owner_of(59, 4), "Bering wraps east-west")
-	assert_true(MapCampaign.wrapped_neighbors(Vector2i(0, 4)).has(Vector2i(59, 4)), "wrap adjacency")
+	var last := WorldMap.GRID_W - 1
+	assert_true(WorldMap.is_land(30, WorldMap.GRID_H - 1), "Antarctic shelf is land")
+	assert_eq(c.owner_of(30, WorldMap.GRID_H - 1), "", "Antarctica is unclaimed wilderness")
+	var nz := WorldMap.hex_for_latlon(-42.0, 172.5)
+	assert_true(WorldMap.is_land(nz.x, nz.y), "New Zealand is land")
+	assert_eq(c.owner_of(nz.x, nz.y), "", "New Zealand is unclaimed wilderness")
+	# the Bering land bridge: a row where both map edges are land
+	var by := -1
+	for y in range(WorldMap.GRID_H):
+		if WorldMap.is_land(0, y) and WorldMap.is_land(last, y):
+			by = y
+			break
+	assert_true(by >= 0, "Bering bridge exists at the wrap seam")
+	assert_true(c.owner_of(0, by) != "", "Bering bridge west owned")
+	assert_eq(c.owner_of(0, by), c.owner_of(last, by), "Bering wraps east-west")
+	assert_true(MapCampaign.wrapped_neighbors(Vector2i(0, by)).has(Vector2i(last, by)), "wrap adjacency")
 
 func test_neighbors_symmetric_and_sane():
 	var c := MapCampaign.new("State Troops")
@@ -191,3 +202,10 @@ func test_serialize_roundtrip():
 	assert_eq(c2.player_nation, "Mercenaries", "nation survives")
 	assert_eq(c2.owner, c.owner, "ownership survives")
 	assert_eq(c2.tile_count("Mercenaries"), c.tile_count("Mercenaries"), "counts survive")
+
+func test_old_grid_save_restarts_campaign():
+	var old := {"player_nation": "Horde", "owner": {"36,6": "Horde"}} # 60x30-era save, no grid info
+	var c := MapCampaign.from_data(old)
+	assert_eq(c.player_nation, "Horde", "same nation")
+	assert_true(c.has_meta("restarted"), "flagged as restarted")
+	assert_eq(c.alive_nations().size(), 8, "fresh world, not the stale layout")

@@ -4,7 +4,8 @@
 #     east-west wrap), random among ties.
 #   - Units with Range (random-target units) pick the closest enemy *nation*
 #     (owner of the closest enemy card) and hit a random card of that nation.
-#   - With no enemy cards anywhere, units hit the closest enemy nation's HP directly.
+#   - Every living nation's capital flag is a target too (on its capital hex):
+#     damage to a flag goes straight to that nation's HP.
 # Card rules carry over from the 4x10 battles: Rocket Launcher/Howitzer fire 4
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
 # from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
@@ -248,8 +249,22 @@ func effective_damage(nation: String, unit: Unit, t: Vector2i) -> int:
 	var p: Player = players[nation]
 	return p.effective_damage_for(unit, null) + _barracks_bonus(nation, t)
 
-# {} when nothing to shoot; {"key": String} for a card; {"direct": nation, "hex": Vector2i} for an HP hit.
-func pick_target(nation: String, from: Vector2i, ranged: bool) -> Dictionary:
+# Where each living nation's flag stands (its capital, or the owned hex nearest it).
+func flag_sites() -> Dictionary:
+	var out: Dictionary = {}
+	for n in WorldMap.nations():
+		var nm := str((n as Dictionary)["name"])
+		if alive(nm):
+			out[nm] = campaign.capital_site(nm)
+	return out
+
+# {} when nothing to shoot; {"key": String} for a card; {"flag": nation, "hex": Vector2i} for a flag.
+# Targets are enemy cards plus enemy flags. Units without Range take the closest
+# (random among ties); ranged units find the closest enemy nation and pick a random
+# target of that nation (any of its cards or its flag).
+func pick_target(nation: String, from: Vector2i, ranged: bool, flags: Dictionary = {}) -> Dictionary:
+	if flags.is_empty():
+		flags = flag_sites()
 	var best: int = 1 << 30
 	var closest: Array = []
 	for k in units.keys():
@@ -260,33 +275,34 @@ func pick_target(nation: String, from: Vector2i, ranged: bool) -> Dictionary:
 		var d := hex_distance(from, key_to_hex(str(k)))
 		if d < best:
 			best = d
-			closest = [k]
+			closest = [{"key": k, "owner": o}]
 		elif d == best:
-			closest.append(k)
+			closest.append({"key": k, "owner": o})
+	for fnation in flags.keys():
+		if str(fnation) == nation:
+			continue
+		var site: Vector2i = flags[fnation]
+		var d2 := hex_distance(from, site)
+		var cand := {"flag": str(fnation), "hex": site, "owner": str(fnation)}
+		if d2 < best:
+			best = d2
+			closest = [cand]
+		elif d2 == best:
+			closest.append(cand)
 	if closest.is_empty():
-		# No enemy cards anywhere: strike the closest enemy nation's HP directly.
-		var best_hex := Vector2i(-1, -1)
-		var bd: int = 1 << 30
-		for k in campaign.owner.keys():
-			if str(campaign.owner[k]) == nation:
-				continue
-			var d2 := hex_distance(from, key_to_hex(str(k)))
-			if d2 < bd:
-				bd = d2
-				best_hex = key_to_hex(str(k))
-		if best_hex.x < 0:
-			return {}
-		return {"direct": campaign.owner_of(best_hex.x, best_hex.y), "hex": best_hex}
-	var pick: String = closest[rng.randi_range(0, closest.size() - 1)]
+		return {}
+	var pick: Dictionary = closest[rng.randi_range(0, closest.size() - 1)]
 	if not ranged:
-		return {"key": pick}
-	# Ranged: a random card of the closest enemy nation.
-	var victim := str(units[pick]["owner"])
+		return pick
+	# Ranged: a random target (card or flag) of the closest enemy nation.
+	var victim := str(pick["owner"])
 	var pool: Array = []
 	for k in cards_of(victim):
 		if card_hp(units[k]["card"]) > 0:
-			pool.append(k)
-	return {"key": pool[rng.randi_range(0, pool.size() - 1)]}
+			pool.append({"key": k, "owner": victim})
+	if flags.has(victim):
+		pool.append({"flag": victim, "hex": flags[victim], "owner": victim})
+	return pool[rng.randi_range(0, pool.size() - 1)]
 
 func _hurt_nation(victim: String, attacker: String, amount: int) -> void:
 	var p: Player = players[victim]
@@ -345,18 +361,28 @@ func fire(k: String) -> Array:
 	var from := key_to_hex(k)
 	var shots: int = 4 if (unit is RocketLauncher or unit is Howitzer) else 1
 	var ranged: bool = (players[nation] as Player).has_range_for(unit)
+	var flags := flag_sites()
 	for s in range(shots):
 		if not units.has(k) or unit.HitPoints <= 0:
 			break
-		var tgt := pick_target(nation, from, ranged)
+		var tgt := pick_target(nation, from, ranged, flags)
 		if tgt.is_empty():
 			break
 		var dmg := effective_damage(nation, unit, from)
-		if tgt.has("direct"):
-			var victim := str(tgt["direct"])
+		if tgt.has("flag"):
+			# Flag hit: the damage goes to the nation's HP (Fighter Jets still splash around it).
+			var victim := str(tgt["flag"])
+			var site: Vector2i = tgt["hex"]
 			_hurt_nation(victim, nation, dmg)
-			log.append({"from": from, "to": tgt["hex"], "attacker": nation, "card": unit.card_name, "target_name": victim + " HQ",
-				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": [], "splash": []})
+			var fsplash: Array = []
+			if unit is FighterJet:
+				for nb in MapCampaign.wrapped_neighbors(site):
+					var ninfo := unit_at(nb as Vector2i)
+					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
+						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), dmg)
+						fsplash.append(nb)
+			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
+				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash})
 			continue
 		var tk := str(tgt["key"])
 		var tinfo: Dictionary = units[tk]

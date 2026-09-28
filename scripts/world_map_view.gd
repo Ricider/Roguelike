@@ -550,6 +550,22 @@ func _draw_units(m: Array) -> void:
 			_overlay.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
 			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
 
+# Capital flags are targets: show each living nation's HP under its flag.
+func _draw_flag_hp(m: Array) -> void:
+	var s: float = m[0]
+	for nm in war.players.keys():
+		if _dead.has(nm) or _campaign == null or not _campaign.is_alive(str(nm)):
+			continue
+		var p: Player = war.players[nm]
+		var frac: float = clampf(float(p.HitPoints) / float(maxi(p.MaxHitPoints, 1)), 0.0, 1.0)
+		var nc: Color = _nation_colors.get(nm, Color.WHITE)
+		for cp in _visible_copies(_campaign.capital_site(str(nm)), m, s * 3.0):
+			var bw: float = s * 2.0
+			var r := Rect2((cp as Vector2) + Vector2(-bw * 0.5, s * 1.0), Vector2(bw, maxf(3.0, s * 0.2)))
+			_overlay.draw_rect(r.grow(1.5), Color8(20, 16, 30), true)
+			_overlay.draw_rect(r.grow(0.5), Color(1.0, 0.86, 0.35), false, 1.0)
+			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), nc.lightened(0.15), true)
+
 func _draw_effects(m: Array) -> void:
 	var s: float = m[0]
 	var font := ThemeDB.fallback_font
@@ -612,6 +628,7 @@ func _draw_overlay() -> void:
 				_overlay.draw_polyline(ring2, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
 	if war != null:
 		_draw_units(m)
+		_draw_flag_hp(m)
 		_draw_effects(m)
 		if ghost_card != "" and hovered.x >= 0 and placeable.has(MapCampaign.key_of(hovered.x, hovered.y)):
 			var gp := get_local_mouse_position()
