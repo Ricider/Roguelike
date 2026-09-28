@@ -12,9 +12,13 @@
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
 # cedes border hexes (1 per 10 HP the victor has left) to whoever damaged it
-# most, loses the cards on those hexes, then rebuilds to full HP.
+# most, loses the cards on those hexes, then rebuilds to full HP. The winner earns
+# INFLUENCE_PER_HEX Influence per hex taken (spent in the shop).
 extends RefCounted
 class_name MapWar
+
+# Influence (the shop currency) a nation earns per hex it takes.
+const INFLUENCE_PER_HEX: int = 5
 
 var campaign: MapCampaign = null
 var players: Dictionary = {} # nation -> Player
@@ -437,10 +441,14 @@ func resolve_collapses() -> Array:
 			var t := key_to_hex(k)
 			if campaign.owner_of(t.x, t.y) != loser:
 				_remove(k)
+		var gained: int = 0
+		if winner != "":
+			gained = moved * INFLUENCE_PER_HEX
+			(players[winner] as Player).Influence += gained
 		var lp: Player = players[loser]
 		lp.HitPoints = lp.MaxHitPoints
 		ledger[loser] = {}
-		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser)})
+		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser), "influence": gained})
 	return events
 
 # --------------------------------------------------------------- save/load

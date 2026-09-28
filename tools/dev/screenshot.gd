@@ -2,7 +2,7 @@
 # godot --path . -s tools/dev/screenshot.gd -- <scene> <out.png> [frames] [setup]
 # setup: "battle" starts a run first, "battle_select" also selects the first hand card
 # and hovers a square, "battle_endturn" plays one full combat turn,
-# "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round.
+# "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round.
 extends SceneTree
 
 func _initialize() -> void:
@@ -27,6 +27,35 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 	for i in range(frames):
 		await process_frame
 	var gc = current_scene
+	if setup == "map_conquer" and gc != null and gc.has_method("_resolve_collapses"):
+		# force a neighbour to collapse with all its damage credited to the player
+		var me: String = gc._me()
+		var victim := ""
+		for n in gc._war.turn_order():
+			if n != me and gc._campaign().is_neighbor(me, n):
+				victim = n
+				break
+		var inf0: int = gc._human().Influence
+		(gc._war.players[victim] as Player).HitPoints = 0
+		gc._war.ledger[victim] = {me: 50}
+		gc._resolve_collapses()
+		for i in range(40):
+			await process_frame
+		print("conquer victim=", victim, " influence ", inf0, " -> ", gc._human().Influence, " label=", gc._inf_label.text)
+	if setup == "map_shop" and gc != null and gc.has_method("_open_shop"):
+		gc._human().Influence = 120
+		gc._refresh_player_card()
+		gc._open_shop()
+		for i in range(10):
+			await process_frame
+		var gs2 = root.get_node("GameState")
+		var before: int = gc._human().Influence
+		var bought: bool = gs2.buy_card(gs2.shop_offer[0]) if not gs2.shop_offer.is_empty() else false
+		gc._after_purchase()
+		gc._build_shop(false)
+		print("shop bought=", bought, " influence ", before, " -> ", gc._human().Influence, " drawpile=", gc._human().DrawPile.size())
+		for i in range(20):
+			await process_frame
 	if setup.begins_with("map_turn") and gc != null and gc.has_method("_on_end_turn"):
 		# each round: deploy every affordable card on free own hexes, End Turn, let all AIs play (4x)
 		gc._speed_idx = 2

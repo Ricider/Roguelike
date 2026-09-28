@@ -30,9 +30,11 @@ var _status: Label = null
 var _legend: VBoxContainer = null
 var _player_flag: TextureRect = null
 var _player_name: Label = null
-var _stat_hp: Label = null
-var _stat_bio: Label = null
-var _stat_money: Label = null
+var _gauges: Dictionary = {} # "hp"/"bio"/"money" -> {bar, value, income}
+var _inf_label: Label = null
+var _inf_box: Control = null
+var _shop_btn: Button = null
+var _shop_panel: PanelContainer = null
 var _stat_tiles: Label = null
 var _hover_bar: Label = null
 var _hand_box: HBoxContainer = null
@@ -222,42 +224,78 @@ func _build_ui() -> void:
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
 	side.add_child(title)
-	# Player card: flag, name, HP / Bio / Money / hexes
+	# Player card: flag + name, then pixel gauges (HP / Bio / Money) and Influence + Shop
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"GoldPanel"
 	side.add_child(card)
+	var card_v := VBoxContainer.new()
+	card_v.add_theme_constant_override("separation", 6)
+	card.add_child(card_v)
 	var card_row := HBoxContainer.new()
 	card_row.add_theme_constant_override("separation", 10)
-	card.add_child(card_row)
+	card_v.add_child(card_row)
 	_player_flag = TextureRect.new()
-	_player_flag.custom_minimum_size = Vector2(64, 64)
+	_player_flag.custom_minimum_size = Vector2(52, 52)
 	_player_flag.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_player_flag.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_player_flag.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	card_row.add_child(_player_flag)
 	var card_col := VBoxContainer.new()
-	card_col.add_theme_constant_override("separation", 2)
+	card_col.add_theme_constant_override("separation", 0)
 	card_row.add_child(card_col)
 	_player_name = Label.new()
 	_player_name.add_theme_font_size_override("font_size", 22)
 	_player_name.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	card_col.add_child(_player_name)
-	var stats := HBoxContainer.new()
-	stats.add_theme_constant_override("separation", 5)
-	card_col.add_child(stats)
-	stats.add_child(_icon(ICON_HP, 18))
-	_stat_hp = Label.new()
-	stats.add_child(_stat_hp)
-	stats.add_child(_icon(ICON_BIO, 18))
-	_stat_bio = Label.new()
-	stats.add_child(_stat_bio)
-	stats.add_child(_icon(ICON_MONEY, 18))
-	_stat_money = Label.new()
-	stats.add_child(_stat_money)
 	_stat_tiles = Label.new()
 	_stat_tiles.add_theme_color_override("font_color", Color(0.8, 0.82, 0.9))
-	_stat_tiles.add_theme_font_size_override("font_size", 15)
+	_stat_tiles.add_theme_font_size_override("font_size", 14)
 	card_col.add_child(_stat_tiles)
+	var gauge_row := HBoxContainer.new()
+	gauge_row.add_theme_constant_override("separation", 4)
+	card_v.add_child(gauge_row)
+	gauge_row.add_child(_make_gauge("hp", "res://Assets/UI/hp_bg.png", "res://Assets/UI/hp_fill.png", ICON_HP))
+	gauge_row.add_child(_make_gauge("bio", "res://Assets/UI/bio_bg.png", "res://Assets/UI/bio_fill.png", ICON_BIO))
+	gauge_row.add_child(_make_gauge("money", "res://Assets/UI/money_bg.png", "res://Assets/UI/money_fill.png", ICON_MONEY))
+	# Influence counter + Shop
+	var inf_col := VBoxContainer.new()
+	inf_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inf_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	inf_col.add_theme_constant_override("separation", 4)
+	gauge_row.add_child(inf_col)
+	var inf_title := Label.new()
+	inf_title.text = "INFLUENCE"
+	inf_title.theme_type_variation = &"TitleLabel"
+	inf_title.add_theme_font_size_override("font_size", 10)
+	inf_title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
+	inf_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inf_col.add_child(inf_title)
+	var inf_row := HBoxContainer.new()
+	inf_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	inf_row.add_theme_constant_override("separation", 4)
+	inf_col.add_child(inf_row)
+	inf_row.add_child(_icon("res://Assets/UI/influence_icon.png", 30))
+	_inf_label = Label.new()
+	_inf_label.name = "InfluenceCount"
+	_inf_label.add_theme_font_size_override("font_size", 30)
+	_inf_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	inf_row.add_child(_inf_label)
+	_inf_box = inf_row
+	var inf_hint := Label.new()
+	inf_hint.text = "+%d per hex won" % MapWar.INFLUENCE_PER_HEX
+	inf_hint.add_theme_font_size_override("font_size", 13)
+	inf_hint.add_theme_color_override("font_color", Color(0.75, 0.76, 0.85))
+	inf_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inf_col.add_child(inf_hint)
+	_shop_btn = Button.new()
+	_shop_btn.name = "ShopButton"
+	_shop_btn.text = "Shop"
+	_shop_btn.theme_type_variation = &"SelectedButton"
+	_shop_btn.custom_minimum_size = Vector2(0, 44)
+	_shop_btn.add_theme_font_size_override("font_size", 18)
+	_shop_btn.focus_mode = Control.FOCUS_NONE
+	_shop_btn.pressed.connect(_open_shop)
+	inf_col.add_child(_shop_btn)
 	_status = Label.new()
 	_status.name = "Status"
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -346,15 +384,84 @@ func _show_banner(text: String, col: Color) -> void:
 	_banner.visible = true
 	_end_btn.disabled = true
 
+# Vertical pixel gauge like the battle screen: +income on top, bar, value, icon.
+func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: String) -> Control:
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 2)
+	col.custom_minimum_size = Vector2(58, 0)
+	var income := Label.new()
+	income.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	income.add_theme_font_size_override("font_size", 14)
+	income.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55))
+	col.add_child(income)
+	var bar := TextureProgressBar.new()
+	bar.name = key.capitalize() + "Gauge"
+	bar.texture_under = load(bg_path) as Texture2D
+	bar.texture_progress = load(fill_path) as Texture2D
+	bar.fill_mode = TextureProgressBar.FILL_BOTTOM_TO_TOP
+	bar.nine_patch_stretch = true
+	bar.stretch_margin_left = 6
+	bar.stretch_margin_right = 6
+	bar.stretch_margin_top = 9
+	bar.stretch_margin_bottom = 9
+	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bar.custom_minimum_size = Vector2(30, 96)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(bar)
+	var value := Label.new()
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value.add_theme_font_size_override("font_size", 15)
+	col.add_child(value)
+	var ic := _icon(icon_path, 20)
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(ic)
+	_gauges[key] = {"bar": bar, "value": value, "income": income}
+	return col
+
+func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
+	var g: Dictionary = _gauges[key]
+	var bar := g["bar"] as TextureProgressBar
+	bar.max_value = maxi(max_val, 1)
+	var tw := bar.create_tween()
+	tw.tween_property(bar, "value", float(val), 0.35).set_trans(Tween.TRANS_SINE)
+	(g["value"] as Label).text = "%d/%d" % [val, max_val] if key == "hp" else str(val)
+	(g["income"] as Label).text = ("+%d" % gain) if gain > 0 else " "
+	if key == "hp":
+		bar.tint_progress = Color(1, 0.6, 0.6) if val * 4 < max_val else Color.WHITE
+
+# Influence gained: counter pulses and a "+N" floats up from it.
+func _bump_influence(amount: int) -> void:
+	if amount <= 0 or _inf_box == null:
+		return
+	_sfx("coin")
+	var pop := Label.new()
+	pop.text = "+%d" % amount
+	pop.add_theme_font_size_override("font_size", 24)
+	pop.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	pop.top_level = true
+	pop.global_position = _inf_label.global_position + Vector2(_inf_label.size.x + 6, -4)
+	add_child(pop)
+	var tw := pop.create_tween().set_parallel(true)
+	tw.tween_property(pop, "global_position:y", pop.global_position.y - 36, 1.1)
+	tw.tween_property(pop, "modulate:a", 0.0, 1.1)
+	tw.chain().tween_callback(pop.queue_free)
+	_inf_label.pivot_offset = _inf_label.size * 0.5
+	var tw2 := _inf_label.create_tween()
+	tw2.tween_property(_inf_label, "scale", Vector2(1.35, 1.35), 0.12)
+	tw2.tween_property(_inf_label, "scale", Vector2.ONE, 0.25)
+
 func _refresh_player_card() -> void:
 	var c := _campaign()
 	var p := _human()
 	_player_flag.texture = _flag_tex(c.player_nation)
 	_player_name.text = c.player_nation
 	if p != null:
-		_stat_hp.text = "%d/%d" % [p.HitPoints, p.MaxHitPoints]
-		_stat_bio.text = str(p.BioSupply)
-		_stat_money.text = str(p.MoneySupply)
+		_set_gauge("hp", p.HitPoints, p.MaxHitPoints, p.predicted_hp_gain())
+		_set_gauge("bio", p.BioSupply, 200, p.predicted_bio_gain())
+		_set_gauge("money", p.MoneySupply, 200, p.predicted_money_gain())
+		_inf_label.text = str(p.Influence)
+	_shop_btn.disabled = _busy or c.has_won() or c.has_lost()
 	_stat_tiles.text = "%d hexes · %d cards on the map · turn %d" % [c.tile_count(c.player_nation), _war.cards_of(c.player_nation).size() if _war != null else 0, _war.turn if _war != null else 1]
 
 func _refresh_legend() -> void:
@@ -521,7 +628,10 @@ func _clear_selection() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var kc := (event as InputEventKey).keycode
-		if kc == KEY_ESCAPE and _selected != null:
+		if kc == KEY_ESCAPE and _shop_panel != null:
+			_close_shop()
+			get_viewport().set_input_as_handled()
+		elif kc == KEY_ESCAPE and _selected != null:
 			_clear_selection()
 			get_viewport().set_input_as_handled()
 		elif (kc == KEY_SPACE or kc == KEY_ENTER) and not _busy and not _end_btn.disabled:
@@ -610,6 +720,9 @@ func _on_tile_selected(x: int, y: int) -> void:
 # ------------------------------------------------------------------- turns
 func _start_player_turn() -> void:
 	_war.begin_turn(_me())
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		gs.prepare_shop() # fresh stock every turn
 	_busy = false
 	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
 	_status.text = "Your turn. Deploy cards, then End Turn (Space)."
@@ -621,6 +734,8 @@ func _on_end_turn() -> void:
 		return
 	_busy = true
 	_end_btn.disabled = true
+	_shop_btn.disabled = true
+	_close_shop()
 	_clear_selection()
 	_sfx("end_turn", -2.0)
 	_status.text = "Your units open fire..."
@@ -688,6 +803,9 @@ func _resolve_collapses() -> void:
 	for ev in events:
 		var loser := str(ev["loser"])
 		var winner := str(ev["winner"])
+		if winner == _me():
+			_bump_influence(int(ev.get("influence", 0)))
+			_log_line("[color=#ffd966]+%d Influence[/color] for %d hex%s." % [int(ev.get("influence", 0)), int(ev["tiles"]), "" if int(ev["tiles"]) == 1 else "es"])
 		if winner != "":
 			_sfx("war")
 			var tail := ("[b]%s is eliminated.[/b]" % loser) if bool(ev["eliminated"]) else ("%s rebuilds." % loser)
@@ -707,6 +825,223 @@ func _check_end() -> bool:
 		_refresh()
 		return true
 	return false
+
+# -------------------------------------------------------------------- shop
+# Same shop as between card battles (GameState.buy_card / buy_modifier /
+# remove_card_from_deck), paid with Influence earned by taking hexes. Stock
+# refreshes at the start of each of your turns; bought cards join your draw pile.
+const REMOVE_COST := 25
+
+func _open_shop() -> void:
+	if _busy or _war == null:
+		return
+	var gs = get_node_or_null("/root/GameState")
+	if gs == null:
+		return
+	if gs.shop_offer.is_empty() and gs.shop_modifier_offer.is_empty():
+		gs.prepare_shop()
+	_clear_selection()
+	_build_shop(false)
+
+func _close_shop() -> void:
+	if _shop_panel != null and is_instance_valid(_shop_panel):
+		_shop_panel.queue_free()
+	_shop_panel = null
+
+func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: bool, owned: bool, on_buy: Callable) -> Button:
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(170, 196)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.set_meta("no_ui_sfx", true)
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.anchor_right = 1.0
+	v.anchor_bottom = 1.0
+	v.offset_left = 8
+	v.offset_right = -8
+	v.offset_top = 8
+	v.offset_bottom = -10
+	v.add_theme_constant_override("separation", 2)
+	btn.add_child(v)
+	var t := Label.new()
+	t.text = title
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 16)
+	t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	t.clip_text = true
+	v.add_child(t)
+	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(art)
+	for ln in lines:
+		var l := Label.new()
+		l.text = str(ln)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_font_size_override("font_size", 12)
+		l.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
+		l.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		v.add_child(l)
+	var price := HBoxContainer.new()
+	price.alignment = BoxContainer.ALIGNMENT_CENTER
+	price.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	price.add_child(_icon("res://Assets/UI/influence_icon.png", 18))
+	var pl := Label.new()
+	pl.text = "Owned" if owned else str(cost)
+	pl.add_theme_font_size_override("font_size", 17)
+	pl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35) if can_buy else Color(1, 0.45, 0.4))
+	price.add_child(pl)
+	v.add_child(price)
+	if not can_buy:
+		btn.modulate = Color(1, 1, 1, 0.55)
+	btn.pressed.connect(func():
+		if can_buy:
+			on_buy.call()
+		else:
+			_sfx("deny", -4.0))
+	return btn
+
+func _build_shop(remove_mode: bool) -> void:
+	_close_shop()
+	var gs = get_node_or_null("/root/GameState")
+	var p := _human()
+	if gs == null or p == null:
+		return
+	_shop_panel = PanelContainer.new()
+	_shop_panel.name = "ShopPanel"
+	_shop_panel.theme_type_variation = &"GoldPanel"
+	_shop_panel.z_index = 60
+	_shop_panel.set_anchors_preset(Control.PRESET_CENTER)
+	add_child(_shop_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	_shop_panel.add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
+	var title := Label.new()
+	title.text = "REMOVE A CARD" if remove_mode else "SHOP"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	head.add_child(title)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	head.add_child(_icon("res://Assets/UI/influence_icon.png", 26))
+	var inf := Label.new()
+	inf.text = "%d Influence" % p.Influence
+	inf.add_theme_font_size_override("font_size", 22)
+	inf.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	head.add_child(inf)
+	var sub := Label.new()
+	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_color_override("font_color", Color(0.78, 0.8, 0.88))
+	v.add_child(sub)
+	if remove_mode:
+		sub.text = "Pick a card to remove from your deck for %d Influence (once per turn). Cards already on the map stay." % REMOVE_COST
+		var groups: Dictionary = {}
+		for pile in [p.DrawPile, p.DiscardPile, p.Hand]:
+			for c in pile:
+				var cn := (c as Card).card_name
+				if not groups.has(cn):
+					groups[cn] = []
+				(groups[cn] as Array).append(c)
+		var grid := GridContainer.new()
+		grid.columns = 6
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		v.add_child(grid)
+		var names: Array = groups.keys()
+		names.sort()
+		for cn in names:
+			var stack: Array = groups[cn]
+			var card: Card = stack[0]
+			var can: bool = p.Influence >= REMOVE_COST and not gs.shop_remove_used
+			var item := _shop_item("%s  x%d" % [cn, stack.size()], Card.create_sprite_for(cn, Vector2(64, 64)), [], REMOVE_COST, can, false, func():
+				if gs.remove_card_from_deck(card):
+					_sfx("shop_buy")
+					_log_line("You remove a %s from your deck." % cn)
+					_after_purchase()
+					_build_shop(false))
+			item.custom_minimum_size = Vector2(150, 150)
+			grid.add_child(item)
+	else:
+		sub.text = "Spend Influence (earned by taking hexes). Stock refreshes every turn; bought cards go to your draw pile."
+		v.add_child(_section_label("CARDS"))
+		var cards_row := HBoxContainer.new()
+		cards_row.add_theme_constant_override("separation", 8)
+		v.add_child(cards_row)
+		for c in gs.shop_offer:
+			var card := c as Card
+			var lines: Array = []
+			if card is Unit:
+				var u := card as Unit
+				lines.append("HP %d  DMG %d%s%s" % [u.HitPoints, u.Damage, "  RNG" if u.HasRange else "", "  FLY" if u.Flying else ""])
+			elif card is Building:
+				lines.append("HP %d  INC %d" % [(card as Building).HitPoints, (card as Building).Income])
+			lines.append("$%d  Bio %d" % [card.MoneyCost, card.BioCost])
+			var can_c: bool = p.Influence >= card.InfluenceCost
+			cards_row.add_child(_shop_item(card.card_name, Card.create_sprite_for(card.card_name, Vector2(84, 84)), lines, card.InfluenceCost, can_c, false, func():
+				if gs.buy_card(card):
+					_sfx("shop_buy")
+					_log_line("You buy a %s (joins your draw pile)." % card.card_name)
+					_after_purchase()
+					_build_shop(false)))
+		if gs.shop_offer.is_empty():
+			var none := Label.new()
+			none.text = "Sold out until next turn."
+			cards_row.add_child(none)
+		v.add_child(_section_label("MODIFIERS"))
+		var mods_row := HBoxContainer.new()
+		mods_row.add_theme_constant_override("separation", 8)
+		v.add_child(mods_row)
+		for m in gs.shop_modifier_offer:
+			var mod := m as Modifier
+			var owned: bool = p.has_modifier(mod.modifier_name)
+			var can_m: bool = not owned and p.Influence >= mod.InfluenceCost
+			var item_m := _shop_item(mod.modifier_name, Modifier.create_sprite_for(mod.modifier_name, Vector2(64, 64)), [mod.Effect], mod.InfluenceCost, can_m, owned, func():
+				if gs.buy_modifier(mod):
+					_sfx("shop_buy")
+					_log_line("You adopt %s." % mod.modifier_name)
+					_after_purchase()
+					_build_shop(false))
+			item_m.custom_minimum_size = Vector2(290, 222)
+			mods_row.add_child(item_m)
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	foot.add_theme_constant_override("separation", 8)
+	v.add_child(foot)
+	if not remove_mode:
+		var rm := Button.new()
+		rm.text = "Remove a card (%d)" % REMOVE_COST if not gs.shop_remove_used else "Removal used this turn"
+		rm.disabled = gs.shop_remove_used or p.Influence < REMOVE_COST
+		rm.custom_minimum_size = Vector2(0, 44)
+		rm.focus_mode = Control.FOCUS_NONE
+		rm.pressed.connect(func(): _build_shop(true))
+		foot.add_child(rm)
+	else:
+		var back := Button.new()
+		back.text = "Back"
+		back.custom_minimum_size = Vector2(110, 44)
+		back.focus_mode = Control.FOCUS_NONE
+		back.pressed.connect(func(): _build_shop(false))
+		foot.add_child(back)
+	var close := Button.new()
+	close.text = "Close"
+	close.theme_type_variation = &"PrimaryButton"
+	close.custom_minimum_size = Vector2(120, 44)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(_close_shop)
+	foot.add_child(close)
+	# centre on screen once its size is known
+	_shop_panel.reset_size()
+	await get_tree().process_frame
+	if _shop_panel != null and is_instance_valid(_shop_panel):
+		_shop_panel.position = (size - _shop_panel.size) * 0.5
+
+func _after_purchase() -> void:
+	_refresh_player_card()
+	_refresh_hand()
 
 # ----------------------------------------------------------------- buttons
 func _on_new_campaign_pressed() -> void:

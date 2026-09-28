@@ -148,7 +148,10 @@ func test_collapse_cedes_border_to_top_damager():
 	w.ledger[B] = {A: 40, C: 10}
 	(w.players[A] as Player).HitPoints = 35
 	var before_a := w.campaign.tile_count(A)
+	var inf_before: int = (w.players[A] as Player).Influence
 	var events := w.resolve_collapses()
+	assert_eq((w.players[A] as Player).Influence, inf_before + 3 * MapWar.INFLUENCE_PER_HEX, "winner earns Influence per hex taken")
+	assert_eq(int(events[0]["influence"]), 3 * MapWar.INFLUENCE_PER_HEX, "event reports the Influence")
 	assert_eq(events.size(), 1, "one collapse")
 	assert_eq(events[0]["winner"], A, "top damager wins land")
 	assert_eq(events[0]["tiles"], 3, "1 tile per 10 HP the victor has left")
