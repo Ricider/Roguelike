@@ -90,16 +90,6 @@ MAPS = {
             "Horde": ("Ulaanbaatar", 47.92, 106.92), "Fundamentalists": ("Shanghai", 31.23, 121.47),
         },
     },
-    "ukraine": {
-        "name": "Ukraine", "blurb": "The steppe between the Carpathians and the Don, down to Crimea and the Black Sea.",
-        "grid": (45, 38), "lon": (21.5, 41.0), "lat": (53.0, 43.5), "wraps": False, "regional": True,
-        "cities": {
-            "State Troops": ("Kyiv", 50.45, 30.52), "Coalition Army": ("Lviv", 49.84, 24.03),
-            "Mercenaries": ("Odesa", 46.48, 30.72), "Peace Keepers": ("Kharkiv", 49.99, 36.23),
-            "Fundamentalists": ("Dnipro", 48.46, 35.05), "Corporate Troops": ("Donetsk", 48.00, 37.80),
-            "Insurgents": ("Simferopol", 44.95, 34.10), "Horde": ("Chisinau", 47.01, 28.86),
-        },
-    },
 }
 
 

@@ -15,7 +15,7 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
 - **Touch / Mouse**: Tap a neighboring tile to move there, tap player to wait. On-screen D-pad (bottom right) also works on mobile/web
 
 ## World Map campaign (hex war)
-- **This is the main mode:** Main menu -> **New Game** opens the map chooser: **World**, **Europe**, **Byzantium**, **East Asia** or **Ukraine**. Every map has all 8 nations starting from real cities; only the world map wraps east-west. **Resume** continues a saved campaign on its own map. The original run of card battles on the 4x10 grid is still available as **Legacy Grid Mode**.
+- **This is the main mode:** Main menu -> **New Game** opens the map chooser: **World**, **Europe**, **Byzantium** or **East Asia**. Every map has all 8 nations starting from real cities; only the world map wraps east-west. **Resume** continues a saved campaign on its own map.
 - **Terrain:** non-flying units standing on mountain hexes take 1 less damage from every hit (minimum 1).
 - The map is Earth on a 90x40 hex grid generated from real coastlines (pointy-top hexes, odd rows offset half a hex; every hex has 6 neighbors, and the map wraps east-west at the Bering Strait). Capitals sit at their real locations. Pick your nation in the chooser first.
 - Maps are data files (`Assets/Maps/<id>.json`). Regenerate them with `python3 tools/make_world.py` (or `... make_world.py europe` for one map); each map's bounds, grid size and faction-to-city assignments are set in the `MAPS` table there. It uses Natural Earth's public-domain 1:110m land polygons, cached in `tools/data/`, samples 7 points per hex so thin islands survive, assigns terrain from climate and mountain boxes, and bridges narrow straits (Dover, Korea, Indonesia) so every capital is reachable. Far islands such as New Zealand and Antarctica stay unclaimed wilderness. Saves made on an older map layout restart the campaign.
@@ -30,11 +30,8 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
 - Camera: the map opens zoomed in on your capital. Scroll wheel or trackpad pinch zooms (1x-4x), dragging pans (it wraps east-west like a globe), arrows/WASD pan, +/- zoom, and H or the Home button returns to your capital.
 - Rules live in `Classes/GameBoard/MapWar.gd` (covered by `tests/unit/test_map_war.gd`). Saves include every card on the map, nation HP/Bio/Money and the turn.
 
-## Legacy Grid Mode (card battles on the 4x10 grid)
-- Each turn runs **Economy → Build → Combat** for both sides. Bring the enemy HQ to 0 HP.
-- **Build**: pick a card from your hand (click it, press **1–0**, or drag it) and drop it on a highlighted square in your bottom four rows. Cards you can't afford show what you're short on.
-- Hovering a square with a card selected shows a preview of the card there, plus any Barracks adjacency bonus.
-- **End Turn**: button or **Space/Enter**. **Esc** deselects. **Log** (top bar) lists every hit from the last combats.
+## Card battles on the 4x10 grid (legacy)
+The original card-battle run and its tutorial are no longer on the main menu. The code (`scenes/Game.tscn`, `GodotHelpers/GameController.gd`) stays in the project, so older saves of that mode still resume, and the world war reuses its cards, decks, modifiers and shop rules.
 
 ## Project Structure
 ```

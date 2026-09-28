@@ -8,7 +8,7 @@
 extends RefCounted
 class_name WorldMap
 
-const MAPS: Array = ["world", "europe", "byzantium", "east_asia", "ukraine"]
+const MAPS: Array = ["world", "europe", "byzantium", "east_asia"]
 const MAP_DIR := "res://Assets/Maps/%s.json"
 
 const OCEAN: String = "ocean"

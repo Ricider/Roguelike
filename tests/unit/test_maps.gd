@@ -41,9 +41,9 @@ func test_regional_maps_do_not_wrap():
 	assert_true(WorldMap.WRAPS, "the world wraps")
 
 func test_regional_capitals_at_real_cities():
-	WorldMap.use_map("ukraine")
-	var kyiv := WorldMap.nation_start("State Troops")
-	assert_true(MapCampaign.hex_distance(kyiv, WorldMap.hex_for_latlon(50.45, 30.52)) <= 1, "Kyiv where Kyiv is")
+	WorldMap.use_map("east_asia")
+	var tokyo := WorldMap.nation_start("Corporate Troops")
+	assert_true(MapCampaign.hex_distance(tokyo, WorldMap.hex_for_latlon(35.68, 139.69)) <= 1, "Tokyo where Tokyo is")
 	WorldMap.use_map("europe")
 	var paris := WorldMap.nation_start("Coalition Army")
 	assert_true(MapCampaign.hex_distance(paris, WorldMap.hex_for_latlon(48.86, 2.35)) <= 1, "Paris where Paris is")

@@ -19,9 +19,7 @@ func _ready():
 		play_btn.grab_focus()
 	_wire_buttons()
 	_build_player_chooser()
-	_add_tutorial_button()
 	_add_resume_button()
-	_add_legacy_button()
 	_enforce_menu_order()
 	_style_menu_buttons()
 	_stylize_title()
@@ -348,7 +346,7 @@ func _stylize_title():
 	tw.tween_property(title, "modulate", Color(0.96, 0.97, 1.0, 1), 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _style_menu_buttons():
-	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton", "CenterContainer/VBox/LegacyButton"]:
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/ResumeButton"]:
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
@@ -367,87 +365,12 @@ func _style_pill_button(btn: Button, _bg: Color, _hover_bg: Color, _border: Colo
 	btn.theme_type_variation = &""
 	btn.focus_mode = Control.FOCUS_NONE
 
-func _add_tutorial_button():
-	var vbox = get_node_or_null("CenterContainer/VBox")
-	if vbox == null:
-		return
-	if vbox.has_node("TutorialButton"):
-		return
-	var tbtn := Button.new()
-	tbtn.name = "TutorialButton"
-	tbtn.text = "Tutorial"
-	# Horizontal size must match Play/Quit exactly (both 340×72 in Main.tscn)
-	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
-	var _quit_ref = vbox.get_node_or_null("QuitButton") as Button
-	var _w: float = 340
-	var _h: float = 72
-	if _play_ref != null:
-		_w = _play_ref.custom_minimum_size.x
-		_h = _play_ref.custom_minimum_size.y
-	elif _quit_ref != null:
-		_w = _quit_ref.custom_minimum_size.x
-		_h = _quit_ref.custom_minimum_size.y
-	tbtn.custom_minimum_size = Vector2(_w, _h)
-	tbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	tbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tbtn.add_theme_font_size_override("font_size", 26)
-	tbtn.pressed.connect(_on_tutorial_pressed)
-	# Put at bottom (below Quit, just before MessageLabel if present)
-	var quit = vbox.get_node_or_null("QuitButton")
-	var msg = vbox.get_node_or_null("MessageLabel")
-	vbox.add_child(tbtn)
-	if msg != null:
-		vbox.move_child(tbtn, msg.get_index())
-	elif quit != null:
-		vbox.move_child(tbtn, quit.get_index() + 1)
-	_style_pill_button(tbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
-	_enforce_menu_order()
-
-func _on_tutorial_pressed():
-	var gs = get_node_or_null("/root/GameState")
-	if gs != null:
-		gs.start_tutorial()
-	get_tree().change_scene_to_file("res://scenes/Game.tscn")
-
-func _add_legacy_button():
-	var vbox = get_node_or_null("CenterContainer/VBox")
-	if vbox == null:
-		return
-	if vbox.has_node("LegacyButton"):
-		return
-	# The old sequential card-battle run lives on as "Legacy Grid Mode";
-	# New Game now starts the world map campaign.
-	var wbtn := Button.new()
-	wbtn.name = "LegacyButton"
-	wbtn.text = "Legacy Grid Mode"
-	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
-	var _w: float = 340
-	var _h: float = 72
-	if _play_ref != null:
-		_w = _play_ref.custom_minimum_size.x
-		_h = _play_ref.custom_minimum_size.y
-	wbtn.custom_minimum_size = Vector2(_w, _h)
-	wbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	wbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	wbtn.add_theme_font_size_override("font_size", 26)
-	wbtn.pressed.connect(_on_legacy_pressed)
-	vbox.add_child(wbtn)
-	_style_pill_button(wbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
-	_enforce_menu_order()
-
-# Legacy Grid Mode: the original run of card battles on the 4x10 grid.
-func _on_legacy_pressed():
-	var gs = get_node_or_null("/root/GameState")
-	if gs != null:
-		gs.start_run(_selected_player)
-	get_tree().change_scene_to_file("res://scenes/Game.tscn")
-
 func _enforce_menu_order():
 	var vbox = get_node_or_null("CenterContainer/VBox")
 	if vbox == null:
 		return
 	# Desired order top→bottom: New Game (Play), Resume, Tutorial, World Map, Quit (Exit) at bottom - all 340x72
-	var order = ["PlayButton", "ResumeButton", "TutorialButton", "LegacyButton", "QuitButton"]
+	var order = ["PlayButton", "ResumeButton", "QuitButton"]
 	var to_place: Array = []
 	for name in order:
 		var btn = vbox.get_node_or_null(name)
@@ -509,19 +432,7 @@ func _add_resume_button():
 	rbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	rbtn.add_theme_font_size_override("font_size", 26)
 	rbtn.pressed.connect(_on_resume_pressed)
-	var quit = vbox.get_node_or_null("QuitButton")
-	var tutorial = vbox.get_node_or_null("TutorialButton")
 	vbox.add_child(rbtn)
-	# Place resume between Quit and Tutorial (Quit -> Resume -> Tutorial)
-	if quit != null and tutorial != null:
-		vbox.move_child(rbtn, tutorial.get_index())
-		# Ensure order is Quit, Resume, Tutorial -> if resume ended up after tutorial, swap
-		if rbtn.get_index() > tutorial.get_index():
-			vbox.move_child(rbtn, tutorial.get_index())
-	elif quit != null:
-		vbox.move_child(rbtn, quit.get_index() + 1)
-	elif tutorial != null:
-		vbox.move_child(rbtn, tutorial.get_index())
 	_style_pill_button(rbtn, Color(0.16,0.32,0.18,1), Color(0.22,0.42,0.24,1), Color(0.4,0.9,0.5,0.9))
 	_enforce_menu_order()
 
@@ -704,7 +615,7 @@ func _show_map_chooser():
 	sub.add_theme_font_size_override("font_size", 16)
 	v.add_child(sub)
 	var grid := GridContainer.new()
-	grid.columns = 3
+	grid.columns = 2 if WorldMap.MAPS.size() == 4 else 3 # 4 maps sit best as a 2x2 grid
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
 	v.add_child(grid)
