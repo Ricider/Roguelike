@@ -503,12 +503,17 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 	row.add_child(hp_bar)
 	var count := Label.new()
 	count.text = ("%d hex" % c.tile_count(nm)) if alive else "out"
-	if alive and _war != null and _war.is_weak(nm):
-		# fewer than 3 units: this nation loses land twice as fast
-		count.text = "2x " + count.text
-		count.add_theme_color_override("font_color", Color(1, 0.55, 0.4))
+	if alive and _war != null and _war.loss_multiplier(nm) > 1:
+		# few or no units: this nation loses land 2x / 4x as fast
+		var mult := _war.loss_multiplier(nm)
+		count.text = "%dx %s" % [mult, count.text]
+		count.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if mult >= 4 else Color(1, 0.55, 0.4))
 	if _war != null and alive:
-		btn.tooltip_text += " · %d units on the map%s" % [_war.unit_count(nm), " (under %d: loses land twice as fast)" % MapWar.WEAK_UNIT_COUNT if _war.is_weak(nm) else ""]
+		var why := ""
+		match _war.loss_multiplier(nm):
+			4: why = " (none: loses land 4x as fast)"
+			2: why = " (under %d: loses land 2x as fast)" % MapWar.WEAK_UNIT_COUNT
+		btn.tooltip_text += " · %d units on the map%s" % [_war.unit_count(nm), why]
 	count.custom_minimum_size = Vector2(76, 0)
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count.add_theme_font_size_override("font_size", 14)
@@ -727,9 +732,6 @@ func _on_tile_selected(x: int, y: int) -> void:
 # ------------------------------------------------------------------- turns
 func _start_player_turn() -> void:
 	_war.begin_turn(_me())
-	var gs = get_node_or_null("/root/GameState")
-	if gs != null:
-		gs.prepare_shop() # fresh stock every turn
 	_busy = false
 	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
 	_status.text = "Your turn. Deploy cards, then End Turn (Space)."
@@ -755,6 +757,9 @@ func _on_end_turn() -> void:
 			continue
 		_status.text = "%s is moving..." % n
 		_war.begin_turn(n)
+		var bought: Array = _war.ai_shop(n)
+		if not bought.is_empty():
+			_log_line("[color=#%s]%s[/color] shops: %s." % [_nation_hex_color(n), n, ", ".join(bought)])
 		var placed: Array = _war.ai_build(n)
 		for pl in placed:
 			_view.add_place(pl[1] as Vector2i)
@@ -816,7 +821,10 @@ func _resolve_collapses() -> void:
 		if winner != "":
 			_sfx("war")
 			var tail := ("[b]%s is eliminated.[/b]" % loser) if bool(ev["eliminated"]) else ("%s rebuilds." % loser)
-			var weak_note := " [color=#ffb070](under %d units: double losses)[/color]" % MapWar.WEAK_UNIT_COUNT if bool(ev.get("doubled", false)) else ""
+			var weak_note := ""
+			match int(ev.get("multiplier", 1)):
+				4: weak_note = " [color=#ff7060](no units on the map: 4x losses)[/color]"
+				2: weak_note = " [color=#ffb070](under %d units: 2x losses)[/color]" % MapWar.WEAK_UNIT_COUNT
 			_log_line("[color=#ff7a70]%s collapses![/color] %s takes %d hex%s%s. %s" % [loser, winner, int(ev["tiles"]), "" if int(ev["tiles"]) == 1 else "es", weak_note, tail])
 			if bool(ev.get("flag_moved", false)) and not bool(ev["eliminated"]):
 				var fs: Vector2i = ev["flag"]
@@ -842,16 +850,11 @@ func _check_end() -> bool:
 # Same shop as between card battles (GameState.buy_card / buy_modifier /
 # remove_card_from_deck), paid with Influence earned by taking hexes. Stock
 # refreshes at the start of each of your turns; bought cards join your draw pile.
-const REMOVE_COST := 25
+const REMOVE_COST := MapWar.REMOVE_COST
 
 func _open_shop() -> void:
 	if _busy or _war == null:
 		return
-	var gs = get_node_or_null("/root/GameState")
-	if gs == null:
-		return
-	if gs.shop_offer.is_empty() and gs.shop_modifier_offer.is_empty():
-		gs.prepare_shop()
 	_clear_selection()
 	_build_shop(false)
 
@@ -914,10 +917,10 @@ func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: b
 
 func _build_shop(remove_mode: bool) -> void:
 	_close_shop()
-	var gs = get_node_or_null("/root/GameState")
 	var p := _human()
-	if gs == null or p == null:
+	if _war == null or p == null:
 		return
+	var shop: Dictionary = _war.shop_of(_me())
 	_shop_panel = PanelContainer.new()
 	_shop_panel.name = "ShopPanel"
 	_shop_panel.theme_type_variation = &"GoldPanel"
@@ -968,9 +971,9 @@ func _build_shop(remove_mode: bool) -> void:
 		for cn in names:
 			var stack: Array = groups[cn]
 			var card: Card = stack[0]
-			var can: bool = p.Influence >= REMOVE_COST and not gs.shop_remove_used
+			var can: bool = p.Influence >= REMOVE_COST and not bool(shop["remove_used"])
 			var item := _shop_item("%s  x%d" % [cn, stack.size()], Card.create_sprite_for(cn, Vector2(64, 64)), [], REMOVE_COST, can, false, func():
-				if gs.remove_card_from_deck(card):
+				if _war.remove_card(_me(), card):
 					_sfx("shop_buy")
 					_log_line("You remove a %s from your deck." % cn)
 					_after_purchase()
@@ -978,12 +981,14 @@ func _build_shop(remove_mode: bool) -> void:
 			item.custom_minimum_size = Vector2(150, 150)
 			grid.add_child(item)
 	else:
-		sub.text = "Spend Influence (earned by taking hexes). Stock refreshes every turn; bought cards go to your draw pile."
+		sub.text = "Spend Influence (earned by taking hexes). Stock refreshes every turn; bought cards are drawn next.\nCard odds follow your starting deck: " + _odds_text(_me())
+		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sub.custom_minimum_size = Vector2(880, 0)
 		v.add_child(_section_label("CARDS"))
 		var cards_row := HBoxContainer.new()
 		cards_row.add_theme_constant_override("separation", 8)
 		v.add_child(cards_row)
-		for c in gs.shop_offer:
+		for c in shop["cards"]:
 			var card := c as Card
 			var lines: Array = []
 			if card is Unit:
@@ -994,12 +999,12 @@ func _build_shop(remove_mode: bool) -> void:
 			lines.append("$%d  Bio %d" % [card.MoneyCost, card.BioCost])
 			var can_c: bool = p.Influence >= card.InfluenceCost
 			cards_row.add_child(_shop_item(card.card_name, Card.create_sprite_for(card.card_name, Vector2(84, 84)), lines, card.InfluenceCost, can_c, false, func():
-				if gs.buy_card(card):
+				if _war.buy_card(_me(), card):
 					_sfx("shop_buy")
 					_log_line("You buy a %s (joins your draw pile)." % card.card_name)
 					_after_purchase()
 					_build_shop(false)))
-		if gs.shop_offer.is_empty():
+		if (shop["cards"] as Array).is_empty():
 			var none := Label.new()
 			none.text = "Sold out until next turn."
 			cards_row.add_child(none)
@@ -1007,12 +1012,12 @@ func _build_shop(remove_mode: bool) -> void:
 		var mods_row := HBoxContainer.new()
 		mods_row.add_theme_constant_override("separation", 8)
 		v.add_child(mods_row)
-		for m in gs.shop_modifier_offer:
+		for m in shop["mods"]:
 			var mod := m as Modifier
 			var owned: bool = p.has_modifier(mod.modifier_name)
 			var can_m: bool = not owned and p.Influence >= mod.InfluenceCost
 			var item_m := _shop_item(mod.modifier_name, Modifier.create_sprite_for(mod.modifier_name, Vector2(64, 64)), [mod.Effect], mod.InfluenceCost, can_m, owned, func():
-				if gs.buy_modifier(mod):
+				if _war.buy_modifier(_me(), mod):
 					_sfx("shop_buy")
 					_log_line("You adopt %s." % mod.modifier_name)
 					_after_purchase()
@@ -1025,8 +1030,8 @@ func _build_shop(remove_mode: bool) -> void:
 	v.add_child(foot)
 	if not remove_mode:
 		var rm := Button.new()
-		rm.text = "Remove a card (%d)" % REMOVE_COST if not gs.shop_remove_used else "Removal used this turn"
-		rm.disabled = gs.shop_remove_used or p.Influence < REMOVE_COST
+		rm.text = "Remove a card (%d)" % REMOVE_COST if not bool(shop["remove_used"]) else "Removal used this turn"
+		rm.disabled = bool(shop["remove_used"]) or p.Influence < REMOVE_COST
 		rm.custom_minimum_size = Vector2(0, 44)
 		rm.focus_mode = Control.FOCUS_NONE
 		rm.pressed.connect(func(): _build_shop(true))
@@ -1049,7 +1054,22 @@ func _build_shop(remove_mode: bool) -> void:
 	_shop_panel.reset_size()
 	await get_tree().process_frame
 	if _shop_panel != null and is_instance_valid(_shop_panel):
-		_shop_panel.position = (size - _shop_panel.size) * 0.5
+		# the wrapped odds line measures tall before it has a width; shrink back to fit
+		_shop_panel.reset_size()
+		_shop_panel.position = ((size - _shop_panel.size) * 0.5).floor()
+
+# "Infantry 29% · Wall 29% · Tank 9% ..." from the nation's starting deck.
+func _odds_text(nation: String) -> String:
+	var w: Dictionary = _war.deck_weights.get(nation, {})
+	var total := 0
+	for cn in w.keys():
+		total += int(w[cn])
+	var names: Array = w.keys()
+	names.sort_custom(func(a, b): return int(w[a]) > int(w[b]) if int(w[a]) != int(w[b]) else str(a) < str(b))
+	var parts: Array = []
+	for cn in names:
+		parts.append("%s %d%%" % [cn, roundi(100.0 * int(w[cn]) / maxi(total, 1))])
+	return " · ".join(parts)
 
 func _after_purchase() -> void:
 	_refresh_player_card()

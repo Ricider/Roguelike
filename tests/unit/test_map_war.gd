@@ -177,6 +177,29 @@ func test_weak_nation_loses_territory_twice_as_fast():
 	assert_true(events[0]["doubled"], "doubled")
 	assert_eq(events[0]["tiles"], 6, "3 hexes x2")
 
+func test_nation_without_units_loses_territory_four_times_as_fast():
+	var w := _war()
+	_drop(w, B, Wall.new(), 20) # walls and buildings are not units
+	_drop(w, B, Housing.new(), 21)
+	assert_eq(w.unit_count(B), 0, "no units on the map")
+	assert_eq(w.loss_multiplier(B), 4, "4x")
+	(w.players[B] as Player).HitPoints = 0
+	w.ledger[B] = {A: 40}
+	(w.players[A] as Player).HitPoints = 25 # 2 hexes normally
+	var events := w.resolve_collapses()
+	assert_eq(int(events[0]["multiplier"]), 4, "event reports 4x")
+	assert_eq(events[0]["tiles"], 8, "2 hexes x4")
+
+func test_loss_multiplier_steps():
+	var w := _war()
+	assert_eq(w.loss_multiplier(B), 4, "0 units -> 4x")
+	_drop(w, B, Infantry.new(), 20)
+	assert_eq(w.loss_multiplier(B), 2, "1 unit -> 2x")
+	_drop(w, B, Infantry.new(), 21)
+	assert_eq(w.loss_multiplier(B), 2, "2 units -> 2x")
+	_drop(w, B, Tank.new(), 22)
+	assert_eq(w.loss_multiplier(B), 1, "3 units -> 1x")
+
 func test_flag_needs_its_own_hex():
 	var w := _war()
 	var p: Player = w.players[A]
@@ -316,3 +339,90 @@ func test_gamestate_save_resume_restores_war():
 		f.close()
 	else:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+
+func test_shop_odds_follow_starting_deck():
+	var w := _war()
+	w.deck_weights[A] = {"Infantry": 10, "Tank": 5}
+	var n := 3000
+	var inf := 0
+	for i in range(n):
+		var c := w.roll_shop_card(A)
+		assert_true(c.card_name in ["Infantry", "Tank"], "only cards from the starting deck")
+		if c.card_name == "Infantry":
+			inf += 1
+	var frac := float(inf) / n
+	assert_almost_eq(frac, 2.0 / 3.0, 0.04, "Infantry about 2/3 of slots (got %.3f)" % frac)
+
+func test_real_nation_shop_uses_its_own_deck():
+	var c := MapCampaign.new("State Troops")
+	var w := MapWar.new()
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	w.setup(c, func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name("State Troops", true))
+	var weights: Dictionary = w.deck_weights["Insurgents"]
+	# odds = copies in the Insurgents' whole starting deck (piles + starting board)
+	var fresh: Player = gs.make_player_by_name("Insurgents")
+	var expect: Dictionary = {}
+	for pile in [fresh.DrawPile, fresh.get_all_board_cards()]:
+		for card in pile:
+			expect[(card as Card).card_name] = int(expect.get((card as Card).card_name, 0)) + 1
+	assert_eq(weights, expect, "shop odds match the starting deck")
+	assert_true(int(weights.get("Drone", 0)) >= 8, "the deck's 8 Drones are counted")
+	assert_false(weights.has("Fighter Jet"), "Insurgents never start with jets")
+	for trial in range(20):
+		w.restock_shop("Insurgents")
+		for card in w.shop_of("Insurgents")["cards"]:
+			assert_true(weights.has((card as Card).card_name), "%s is in the Insurgents deck" % (card as Card).card_name)
+	assert_eq(w.shop_of("Insurgents")["cards"].size(), MapWar.SHOP_CARD_SLOTS, "5 card slots")
+	gs.free()
+
+func test_ai_shop_spends_without_overspending():
+	var w := _war()
+	var p: Player = w.players[B]
+	w.deck_weights[B] = {"Infantry": 1, "Tank": 1, "Artilery": 1}
+	p.Influence = 100
+	w.restock_shop(B)
+	var draw_before := p.DrawPile.size()
+	var bought := w.ai_shop(B)
+	assert_false(bought.is_empty(), "AI buys something with 100 Influence")
+	assert_true(p.Influence >= 0, "never overspends")
+	var cards_bought := 0
+	for nm in bought:
+		if not p.has_modifier(str(nm)):
+			cards_bought += 1
+	assert_eq(p.DrawPile.size(), draw_before + cards_bought, "bought cards join the draw pile")
+	for c in w.shop_of(B)["cards"]:
+		assert_true((c as Card).InfluenceCost > p.Influence, "stops only when nothing left is affordable")
+
+func test_player_shop_buy_and_remove_rules():
+	var w := _war()
+	var p: Player = w.players[A]
+	w.deck_weights[A] = {"Tank": 1}
+	w.restock_shop(A)
+	var tank: Card = w.shop_of(A)["cards"][0]
+	p.Influence = tank.InfluenceCost - 1
+	assert_false(w.buy_card(A, tank), "can't buy without enough Influence")
+	p.Influence = 100
+	assert_true(w.buy_card(A, tank), "bought")
+	assert_eq(p.Influence, 100 - tank.InfluenceCost, "paid")
+	assert_false(w.buy_card(A, tank), "sold item leaves the shop")
+	var junk := Wall.new()
+	p.DrawPile.append(junk)
+	assert_true(w.remove_card(A, junk), "remove a card")
+	assert_false(p.DrawPile.has(junk), "gone from the deck")
+	var junk2 := Wall.new()
+	p.DrawPile.append(junk2)
+	assert_false(w.remove_card(A, junk2), "only one removal per turn")
+	w.begin_turn(A)
+	assert_true(w.remove_card(A, junk2), "restock resets the removal")
+
+func test_shops_survive_save():
+	var w := _war()
+	w.deck_weights[B] = {"Drone": 3}
+	w.restock_shop(B)
+	(w.players[B] as Player).Influence = 77
+	var d := w.to_data()
+	var w2 := MapWar.from_data(d, w.campaign, _plain_player, Player.new(100, 200, 200))
+	assert_eq(int(w2.deck_weights[B]["Drone"]), 3, "odds survive")
+	assert_eq(w2.shop_of(B)["cards"].size(), MapWar.SHOP_CARD_SLOTS, "stock survives")
+	assert_eq((w2.shop_of(B)["cards"][0] as Card).card_name, "Drone", "same stock")
+	assert_eq((w2.players[B] as Player).Influence, 77, "Influence survives")

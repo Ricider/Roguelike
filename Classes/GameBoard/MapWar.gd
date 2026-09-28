@@ -11,8 +11,8 @@
 # from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
-# cedes border hexes (1 per 10 HP the victor has left, doubled when it fields
-# fewer than 3 units) to whoever damaged it most, loses the cards on those
+# cedes border hexes (1 per 10 HP the victor has left; x2 when it fields fewer
+# than 3 units, x4 with none) to whoever damaged it most, loses the cards on those
 # hexes, then rebuilds to full HP. A fallen flag moves to the free hex nearest
 # the centre of the remaining territory; flags always keep a hex to themselves.
 # The winner earns INFLUENCE_PER_HEX Influence per hex taken (spent in the shop).
@@ -21,8 +21,12 @@ class_name MapWar
 
 # Influence (the shop currency) a nation earns per hex it takes.
 const INFLUENCE_PER_HEX: int = 5
-# A nation fielding fewer than this many units loses territory twice as fast.
+# A nation fielding fewer than this many units loses territory twice as fast;
+# with no units on the map at all it loses territory four times as fast.
 const WEAK_UNIT_COUNT: int = 3
+# Shop: 5 card slots + 3 modifiers per nation, restocked at the start of its turn.
+const SHOP_CARD_SLOTS: int = 5
+const REMOVE_COST: int = 25
 
 var campaign: MapCampaign = null
 var players: Dictionary = {} # nation -> Player
@@ -30,6 +34,8 @@ var units: Dictionary = {} # "x,y" -> {"card": Card, "owner": String}
 var ledger: Dictionary = {} # victim nation -> {attacker nation: HP damage dealt}
 var turn: int = 1
 var rng := RandomNumberGenerator.new()
+var deck_weights: Dictionary = {} # nation -> {card name: copies in its starting deck}
+var shops: Dictionary = {} # nation -> {"cards": Array[Card], "mods": Array[Modifier], "remove_used": bool}
 
 # make_player: Callable(nation: String) -> Player for the AI nations.
 func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
@@ -45,6 +51,7 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 		p.display_name = nm
 		p.MapCards.clear()
 		players[nm] = p
+		deck_weights[nm] = starting_deck_weights(p)
 		# Starting cards on the 4x10 board move onto the map around the capital.
 		var start_cards: Array = p.get_all_board_cards()
 		for row in p.Board:
@@ -150,6 +157,115 @@ func _remove(k: String) -> void:
 # ------------------------------------------------------------------ turns
 func begin_turn(nation: String) -> void:
 	(players[nation] as Player).economy_phase() # income from map buildings + draw to 10
+	restock_shop(nation)
+
+# ------------------------------------------------------------------- shop
+# Copies of each card in a player's whole deck (piles, hand and board), used as
+# the odds for that nation's shop: 10 Infantry + 5 Tank -> each slot is
+# Infantry 2/3 of the time and Tank 1/3.
+static func starting_deck_weights(p: Player) -> Dictionary:
+	var w: Dictionary = {}
+	for pile in [p.DrawPile, p.DiscardPile, p.Hand, p.get_all_board_cards()]:
+		for c in pile:
+			var cn := (c as Card).card_name
+			w[cn] = int(w.get(cn, 0)) + 1
+	return w
+
+# One shop slot: a card type drawn with odds proportional to deck_weights.
+func roll_shop_card(nation: String) -> Card:
+	var weights: Dictionary = deck_weights.get(nation, {})
+	var total := 0
+	for cn in weights.keys():
+		total += int(weights[cn])
+	if total <= 0:
+		var pool: Array = CardFactory.all_card_types()
+		return pool[rng.randi_range(0, pool.size() - 1)]
+	var roll := rng.randi_range(1, total)
+	var names: Array = weights.keys()
+	names.sort() # deterministic order for a given seed
+	for cn in names:
+		roll -= int(weights[cn])
+		if roll <= 0:
+			return (players[nation] as Player)._base_card_by_name(str(cn))
+	return null
+
+func restock_shop(nation: String) -> void:
+	var p: Player = players[nation]
+	var cards: Array = []
+	for i in range(SHOP_CARD_SLOTS):
+		var c := roll_shop_card(nation)
+		if c != null:
+			cards.append(c)
+	var owned: Array = []
+	for m in p.Modifiers:
+		if m is Modifier:
+			owned.append((m as Modifier).modifier_name)
+	shops[nation] = {"cards": cards, "mods": CardFactory.random_modifier_offer_excluding(owned), "remove_used": false}
+
+func shop_of(nation: String) -> Dictionary:
+	if not shops.has(nation):
+		restock_shop(nation)
+	return shops[nation]
+
+func buy_card(nation: String, card: Card) -> bool:
+	var p: Player = players[nation]
+	var shop := shop_of(nation)
+	if card == null or not (shop["cards"] as Array).has(card) or p.Influence < card.InfluenceCost:
+		return false
+	p.Influence -= card.InfluenceCost
+	p.DrawPile.append(card) # drawn next (draws pop from the back)
+	(shop["cards"] as Array).erase(card)
+	return true
+
+func buy_modifier(nation: String, mod: Modifier) -> bool:
+	var p: Player = players[nation]
+	var shop := shop_of(nation)
+	if mod == null or not (shop["mods"] as Array).has(mod) or p.Influence < mod.InfluenceCost or p.has_modifier(mod.modifier_name):
+		return false
+	p.Influence -= mod.InfluenceCost
+	p.Modifiers.append(mod)
+	(shop["mods"] as Array).erase(mod)
+	return true
+
+# Remove one card (by instance, else by name) from the draw/discard piles or hand.
+func remove_card(nation: String, card: Card) -> bool:
+	var p: Player = players[nation]
+	var shop := shop_of(nation)
+	if card == null or bool(shop["remove_used"]) or p.Influence < REMOVE_COST:
+		return false
+	for pile in [p.DrawPile, p.DiscardPile, p.Hand]:
+		if pile.has(card):
+			pile.erase(card)
+			p.Influence -= REMOVE_COST
+			shop["remove_used"] = true
+			return true
+	return false
+
+# AI shopping: a random affordable modifier (they last all game), then the
+# priciest affordable cards until Influence runs out. Returns item names bought.
+func ai_shop(nation: String) -> Array:
+	var p: Player = players[nation]
+	var shop := shop_of(nation)
+	var bought: Array = []
+	# a random affordable modifier, so nations don't all converge on the same one
+	var affordable: Array = []
+	for m in shop["mods"]:
+		if p.Influence >= (m as Modifier).InfluenceCost and not p.has_modifier((m as Modifier).modifier_name):
+			affordable.append(m)
+	if not affordable.is_empty():
+		var pick: Modifier = affordable[rng.randi_range(0, affordable.size() - 1)]
+		if buy_modifier(nation, pick):
+			bought.append(pick.modifier_name)
+	while true:
+		var best: Card = null
+		for c in shop["cards"]:
+			var card := c as Card
+			if card.InfluenceCost <= p.Influence and (best == null or card.InfluenceCost > best.InfluenceCost):
+				best = card
+		if best == null or not buy_card(nation, best):
+			break
+		bought.append(best.card_name)
+	return bought
 
 func end_turn(nation: String) -> void:
 	(players[nation] as Player).discard_hand()
@@ -241,6 +357,16 @@ func unit_count(nation: String) -> int:
 
 func is_weak(nation: String) -> bool:
 	return unit_count(nation) < WEAK_UNIT_COUNT
+
+# How many times the normal number of hexes a nation cedes when it collapses:
+# 4x with no units on the map, 2x with fewer than WEAK_UNIT_COUNT, else 1x.
+func loss_multiplier(nation: String) -> int:
+	var n := unit_count(nation)
+	if n == 0:
+		return 4
+	if n < WEAK_UNIT_COUNT:
+		return 2
+	return 1
 
 func attackers_of(nation: String) -> Array:
 	var out: Array = []
@@ -422,7 +548,7 @@ func fire(k: String) -> Array:
 			"victim": victim2, "damage": actual, "direct": false, "intercepted": actual < before, "destroyed": destroyed, "splash": splash})
 	return log
 
-# Nations at 0 HP cede border hexes to their top damager (double when weak) and rebuild.
+# Nations at 0 HP cede border hexes to their top damager (x2 when weak, x4 with no units) and rebuild.
 # Returns [{loser, winner, tiles}] (winner "" when nobody could take land).
 func resolve_collapses() -> Array:
 	var events: Array = []
@@ -433,7 +559,7 @@ func resolve_collapses() -> Array:
 		var row: Dictionary = ledger.get(loser, {})
 		var ranked: Array = row.keys()
 		ranked.sort_custom(func(a, b): return int(row[a]) > int(row[b]))
-		var weak := is_weak(loser)
+		var mult := loss_multiplier(loser)
 		var old_flag := campaign.capital_site(loser)
 		var winner := ""
 		var moved := 0
@@ -441,7 +567,7 @@ func resolve_collapses() -> Array:
 			var w := str(cand)
 			if w == loser or not alive(w):
 				continue
-			moved = campaign.conquer(w, loser, (players[w] as Player).HitPoints, 2 if weak else 1)
+			moved = campaign.conquer(w, loser, (players[w] as Player).HitPoints, mult)
 			if moved > 0:
 				winner = w
 				break
@@ -472,7 +598,7 @@ func resolve_collapses() -> Array:
 		lp.HitPoints = lp.MaxHitPoints
 		ledger[loser] = {}
 		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser), "influence": gained,
-			"doubled": weak, "flag_moved": flag_moved, "flag": campaign.capital_site(loser) if alive(loser) else Vector2i(-1, -1)})
+			"multiplier": mult, "doubled": mult > 1, "flag_moved": flag_moved, "flag": campaign.capital_site(loser) if alive(loser) else Vector2i(-1, -1)})
 	return events
 
 # --------------------------------------------------------------- save/load
@@ -480,12 +606,25 @@ func to_data() -> Dictionary:
 	var nat: Dictionary = {}
 	for nm in players.keys():
 		var p: Player = players[nm]
-		nat[nm] = {"hp": p.HitPoints, "bio": p.BioSupply, "money": p.MoneySupply}
+		var mod_names: Array = []
+		for m in p.Modifiers:
+			mod_names.append((m as Modifier).modifier_name if m is Modifier else str(m))
+		nat[nm] = {"hp": p.HitPoints, "bio": p.BioSupply, "money": p.MoneySupply, "influence": p.Influence, "mods": mod_names}
 	var us: Array = []
 	for k in units.keys():
 		var info: Dictionary = units[k]
 		us.append({"key": k, "name": (info["card"] as Card).card_name, "owner": info["owner"], "hp": card_hp(info["card"])})
-	return {"turn": turn, "nations": nat, "units": us}
+	var sh: Dictionary = {}
+	for nm in shops.keys():
+		var shop: Dictionary = shops[nm]
+		var card_names: Array = []
+		for c in shop["cards"]:
+			card_names.append((c as Card).card_name)
+		var shop_mods: Array = []
+		for m2 in shop["mods"]:
+			shop_mods.append((m2 as Modifier).modifier_name)
+		sh[nm] = {"cards": card_names, "mods": shop_mods, "remove_used": shop["remove_used"]}
+	return {"turn": turn, "nations": nat, "units": us, "weights": deck_weights.duplicate(true), "shops": sh}
 
 # Rebuild from saved data; decks come fresh from the factory (make_player).
 static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, human: Player) -> MapWar:
@@ -504,6 +643,13 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 			p.HitPoints = int(nd.get("hp", p.HitPoints))
 			p.BioSupply = int(nd.get("bio", p.BioSupply))
 			p.MoneySupply = int(nd.get("money", p.MoneySupply))
+			p.Influence = int(nd.get("influence", p.Influence))
+			if nd.has("mods"):
+				p.Modifiers.clear()
+				for mn in nd["mods"]:
+					for mm in Modifier.all_modifiers():
+						if (mm as Modifier).modifier_name == str(mn):
+							p.Modifiers.append(mm)
 	for u in d.get("units", []):
 		var ud: Dictionary = u
 		var owner := str(ud.get("owner", ""))
@@ -517,4 +663,26 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 		elif card is Building:
 			(card as Building).HitPoints = int(ud.get("hp", 1))
 		w._put(owner, card, key_to_hex(str(ud["key"])))
+	# shop odds come from the deck each nation started the campaign with
+	var wd = d.get("weights", {})
+	if wd is Dictionary and not (wd as Dictionary).is_empty():
+		w.deck_weights = (wd as Dictionary).duplicate(true)
+	var sd = d.get("shops", {})
+	if sd is Dictionary:
+		for nm in (sd as Dictionary).keys():
+			if not w.players.has(nm):
+				continue
+			var entry: Dictionary = sd[nm]
+			var p2: Player = w.players[nm]
+			var cards: Array = []
+			for cn in entry.get("cards", []):
+				var shop_card := p2._base_card_by_name(str(cn))
+				if shop_card != null:
+					cards.append(shop_card)
+			var mods: Array = []
+			for mn in entry.get("mods", []):
+				for mm in Modifier.all_modifiers():
+					if (mm as Modifier).modifier_name == str(mn):
+						mods.append(mm)
+			w.shops[nm] = {"cards": cards, "mods": mods, "remove_used": bool(entry.get("remove_used", false))}
 	return w

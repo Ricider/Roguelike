@@ -2,7 +2,7 @@
 # godot --path . -s tools/dev/screenshot.gd -- <scene> <out.png> [frames] [setup]
 # setup: "battle" starts a run first, "battle_select" also selects the first hand card
 # and hovers a square, "battle_endturn" plays one full combat turn,
-# "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round.
+# "press:<Button>" presses a named button, "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round.
 extends SceneTree
 
 func _initialize() -> void:
@@ -27,6 +27,15 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 	for i in range(frames):
 		await process_frame
 	var gc = current_scene
+	if setup.begins_with("press:") and gc != null:
+		# press a named button (e.g. press:PlayButton) and report where it leads
+		var btn := gc.find_child(setup.substr(6), true, false) as Button
+		if btn != null:
+			btn.pressed.emit()
+			for i in range(60):
+				await process_frame
+		var gs3 = root.get_node_or_null("GameState")
+		print("pressed=", setup.substr(6), " scene=", current_scene.scene_file_path if current_scene else "none", " map_mode=", gs3.map_mode, " run_started=", gs3.run_started)
 	if setup == "map_conquer" and gc != null and gc.has_method("_resolve_collapses"):
 		# force a neighbour to collapse with all its damage credited to the player
 		var me: String = gc._me()
@@ -48,9 +57,9 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		gc._open_shop()
 		for i in range(10):
 			await process_frame
-		var gs2 = root.get_node("GameState")
 		var before: int = gc._human().Influence
-		var bought: bool = gs2.buy_card(gs2.shop_offer[0]) if not gs2.shop_offer.is_empty() else false
+		var offer: Array = gc._war.shop_of(gc._me())["cards"]
+		var bought: bool = gc._war.buy_card(gc._me(), offer[0]) if not offer.is_empty() else false
 		gc._after_purchase()
 		gc._build_shop(false)
 		print("shop bought=", bought, " influence ", before, " -> ", gc._human().Influence, " drawpile=", gc._human().DrawPile.size())
@@ -96,7 +105,9 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		var sm = root.get_node_or_null("SoundManager")
 		if sm != null:
 			print("music=", sm._music_name, " sfx_voices_used=", sm._last_played.keys())
-	await RenderingServer.frame_post_draw
+	# force a synchronous draw: waiting for frame_post_draw hangs if the OS
+	# stops drawing an occluded window, and a stale frame shows old UI
+	RenderingServer.force_draw(false)
 	var img := root.get_viewport().get_texture().get_image()
 	img.save_png(out)
 	print("saved ", out, " ", img.get_size())

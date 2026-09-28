@@ -21,7 +21,7 @@ func _ready():
 	_build_player_chooser()
 	_add_tutorial_button()
 	_add_resume_button()
-	_add_world_map_button()
+	_add_legacy_button()
 	_enforce_menu_order()
 	_style_menu_buttons()
 	_stylize_title()
@@ -348,7 +348,7 @@ func _stylize_title():
 	tw.tween_property(title, "modulate", Color(0.96, 0.97, 1.0, 1), 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _style_menu_buttons():
-	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton", "CenterContainer/VBox/WorldMapButton"]:
+	for path in ["CenterContainer/VBox/PlayButton", "CenterContainer/VBox/QuitButton", "CenterContainer/VBox/TutorialButton", "CenterContainer/VBox/ResumeButton", "CenterContainer/VBox/LegacyButton"]:
 		var b: Button = get_node_or_null(path) as Button
 		if b == null:
 			continue
@@ -409,15 +409,17 @@ func _on_tutorial_pressed():
 		gs.start_tutorial()
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
-func _add_world_map_button():
+func _add_legacy_button():
 	var vbox = get_node_or_null("CenterContainer/VBox")
 	if vbox == null:
 		return
-	if vbox.has_node("WorldMapButton"):
+	if vbox.has_node("LegacyButton"):
 		return
+	# The old sequential card-battle run lives on as "Legacy Grid Mode";
+	# New Game now starts the world map campaign.
 	var wbtn := Button.new()
-	wbtn.name = "WorldMapButton"
-	wbtn.text = "World Map"
+	wbtn.name = "LegacyButton"
+	wbtn.text = "Legacy Grid Mode"
 	var _play_ref = vbox.get_node_or_null("PlayButton") as Button
 	var _w: float = 340
 	var _h: float = 72
@@ -428,23 +430,24 @@ func _add_world_map_button():
 	wbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	wbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	wbtn.add_theme_font_size_override("font_size", 26)
-	wbtn.pressed.connect(_on_world_map_pressed)
+	wbtn.pressed.connect(_on_legacy_pressed)
 	vbox.add_child(wbtn)
 	_style_pill_button(wbtn, Color(0.14,0.18,0.32,1), Color(0.18,0.24,0.40,1), Color(0.4,0.75,1.0,0.9))
 	_enforce_menu_order()
 
-func _on_world_map_pressed():
+# Legacy Grid Mode: the original run of card battles on the 4x10 grid.
+func _on_legacy_pressed():
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
-		gs.set_player(_selected_player)
-	get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
+		gs.start_run(_selected_player)
+	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _enforce_menu_order():
 	var vbox = get_node_or_null("CenterContainer/VBox")
 	if vbox == null:
 		return
 	# Desired order top→bottom: New Game (Play), Resume, Tutorial, World Map, Quit (Exit) at bottom - all 340x72
-	var order = ["PlayButton", "ResumeButton", "TutorialButton", "WorldMapButton", "QuitButton"]
+	var order = ["PlayButton", "ResumeButton", "TutorialButton", "LegacyButton", "QuitButton"]
 	var to_place: Array = []
 	for name in order:
 		var btn = vbox.get_node_or_null(name)
@@ -631,11 +634,13 @@ func _select_player(name: String):
 		b.theme_type_variation = &"SelectedButton" if n == name else &""
 		b.focus_mode = Control.FOCUS_NONE
 
+# New Game: a fresh world map campaign (the main mode) as the chosen nation.
 func _on_play_pressed():
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
-		gs.start_run(_selected_player)
-	get_tree().change_scene_to_file("res://scenes/Game.tscn")
+		gs.set_player(_selected_player)
+		gs.start_map_campaign(_selected_player)
+	get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
 
 func _on_quit_pressed():
 	get_tree().quit()
