@@ -13,7 +13,7 @@ const ICON_MONEY := "res://Assets/UI/money_icon.png"
 const SPEEDS := [1.0, 2.0, 4.0]
 const SHOT_GAP := 0.07 # seconds between shots at 1x
 const TRAVEL := 0.28 # projectile flight time at 1x
-const START_ZOOM := 1.9 # open zoomed in on your capital so units read clearly
+const START_HEX_PX := 18.0 # open zoomed in on your capital: same hex size on every map
 const PAN_STEP := 60.0
 const SHOT_SFX := {
 	"Infantry": "shot_rifle", "Special Ops": "shot_rifle",
@@ -66,7 +66,7 @@ func _ready() -> void:
 func _go_home() -> void:
 	var c := _campaign()
 	if c != null and c.is_alive(c.player_nation):
-		_view.center_on(c.capital_site(c.player_nation), START_ZOOM)
+		_view.center_on(c.capital_site(c.player_nation), _view.zoom_for_hex_size(START_HEX_PX))
 
 # ---------------------------------------------------------------- helpers
 func _sfx(sfx_name: String, volume_db: float = 0.0) -> void:
@@ -219,7 +219,7 @@ func _build_ui() -> void:
 	side.add_theme_constant_override("separation", 8)
 	panel.add_child(side)
 	var title := Label.new()
-	title.text = "WORLD WAR"
+	title.text = ("WORLD WAR" if WorldMap.MAP_ID == "world" else WorldMap.MAP_NAME.to_upper())
 	title.theme_type_variation = &"TitleLabel"
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
@@ -680,6 +680,8 @@ func _describe(x: int, y: int) -> String:
 			var card: Card = info["card"]
 			var owner := str(info["owner"])
 			text += " · %s's %s  HP %d" % [owner, card.card_name, _war.card_hp(card)]
+			if card is Unit and not (card as Unit).Flying and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN:
+				text += " · mountain cover: takes 1 less damage"
 			if card is Unit:
 				var u := card as Unit
 				var ranged: bool = (_war.players[owner] as Player).has_range_for(u)
@@ -692,6 +694,8 @@ func _on_tile_hovered(x: int, y: int) -> void:
 	if _selected != null:
 		var why := _war.can_place(_me(), _selected, Vector2i(x, y))
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
+		if why == "" and _selected is Unit and not (_selected as Unit).Flying and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN:
+			_hover_bar.text += " (mountain: takes 1 less damage)"
 		return
 	_hover_bar.text = _describe(x, y)
 
@@ -1082,7 +1086,7 @@ func _on_new_campaign_pressed() -> void:
 	var gs = get_node_or_null("/root/GameState")
 	if gs == null:
 		return
-	gs.start_map_campaign(gs.selected_player_name)
+	gs.start_map_campaign(gs.selected_player_name, WorldMap.MAP_ID)
 	_war = gs.ensure_map_war()
 	_view.set_war(_war)
 	_banner.visible = false

@@ -125,7 +125,10 @@ func start_tutorial():
 	shop_remove_used = false
 	# Tutorial deck will be set by TutorialController, keep minimal
 
-func start_map_campaign(chosen_name: String):
+func start_map_campaign(chosen_name: String, map_id: String = ""):
+	# map_id "" keeps the current map (e.g. "New campaign" from the map screen)
+	if map_id != "":
+		WorldMap.use_map(map_id)
 	is_tutorial = false
 	selected_player_name = chosen_name
 	run_player = make_player_by_name(chosen_name, true)

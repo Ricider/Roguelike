@@ -22,18 +22,27 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		elif setup == "tutorial":
 			gs.start_tutorial()
 		elif setup.begins_with("map"):
-			gs.start_map_campaign("State Troops")
+			# "map_turn3@europe" plays on a specific map
+			gs.start_map_campaign("State Troops", setup.get_slice("@", 1) if setup.contains("@") else "")
+			setup = setup.get_slice("@", 0)
 	change_scene_to_file(scene)
 	for i in range(frames):
 		await process_frame
 	var gc = current_scene
 	if setup.begins_with("press:") and gc != null:
 		# press a named button (e.g. press:PlayButton) and report where it leads
-		var btn := gc.find_child(setup.substr(6), true, false) as Button
+		var names: PackedStringArray = setup.substr(6).split("/")
+		var btn := gc.find_child(names[0], true, false) as Button
+		if names.size() > 1 and btn != null:
+			btn.pressed.emit()
+			for i in range(20):
+				await process_frame
+			btn = current_scene.find_child(names[1], true, false) as Button
 		if btn != null:
 			btn.pressed.emit()
 			for i in range(60):
 				await process_frame
+		# press:A/B presses A, then B (e.g. PlayButton/Map_europe)
 		var gs3 = root.get_node_or_null("GameState")
 		print("pressed=", setup.substr(6), " scene=", current_scene.scene_file_path if current_scene else "none", " map_mode=", gs3.map_mode, " run_started=", gs3.run_started)
 	if setup == "map_conquer" and gc != null and gc.has_method("_resolve_collapses"):

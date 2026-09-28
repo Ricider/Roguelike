@@ -1,0 +1,105 @@
+{
+ "id": "world",
+ "name": "World",
+ "blurb": "The whole Earth. Wraps east-west at the Bering Strait.",
+ "grid_w": 90,
+ "grid_h": 40,
+ "wraps": true,
+ "lon0": -169.0,
+ "lon_span": 360.0,
+ "lat_top": 80.0,
+ "lat_bot": -62.0,
+ "americas_split": true,
+ "rows": [
+  "....................sss.ssssssssssssss.......ss....................s......................",
+  "............ss..s.ssss.s...ssssssssss........s.........ss......sssssss......ss............",
+  "...s.......s.sss.ss.sssss....ssssssss........s...s.....s...ssssssssssssssssssssss.........",
+  "sssssssssssssssssssss..sss..ssssss..s........sssssss..ssssssssssssssssssssssssssssssssssss",
+  ".sssssssssssssssssss.s..ss...sss.....s......sssssssssssssssssssssssssssssssssssssssssss...",
+  "gggggggmmmgggggggg....gg......s............ggg.gggggggggmgggggggggggggggggggggggg.ggg.....",
+  ".........ggggggggggg...gggg..............g..gg..ggggggggmmggggggggggggggggggg....gg.......",
+  ".........ggmmmmgggggg.gggggg...........g.g.gggggggggggggmgggggggggggggggggggg....g........",
+  "..........ggmmmmggggggggggggg............ggggggggggggggggggggggggggggggggggggg............",
+  "...........mmmmgggggggggggg..............ggmmgggggggggggggggggggdddddddggggg..............",
+  "...........gmmmmggggggggg...............ggg..gggg...mmgddddgggggdddddddgggg..g............",
+  "...........mmmmgggggggg................ggg.....ggggggggdddggdddddddddddggg................",
+  "............gddddgggggg.................g.ggg......gggmmdddgmmmmmmmggggg..ggg.............",
+  "............ddddgggggg.................gmmgggg.g..gggmmddddgmmmmmmmggggg..g...............",
+  ".............ddddg...g.................ddddddddddddddd.ddddgmmmmmmmgggggg.................",
+  "...............gg....g................dddddddddddddddddd..gggggggggggggg..................",
+  "................gg..g.g...............ddddddddddddddddddd...gggg.ggggg....................",
+  "................gggj..j...............ddddddddddddd.dddd....ggg..jjj......................",
+  "...................jjj.g..............ggggggggggggggggg......j.....jjj....................",
+  "....................j..gg.............gggggggggggggmggg......j......j.....................",
+  ".......................ggggg...........ggggggggggggmmgg.......g....jj....j................",
+  "......................mmjjjjj...............jjjjjggmgg............jj..j...................",
+  "......................mmjjjjjj..............jjjjjjgmm..............jjjjj..................",
+  ".....................gmmjjjjjjjg............jjjjjggm...............j..jj...jjj............",
+  "......................mmjjjjjjjggg...........jjjjjgg.................jj....j.jj...........",
+  "......................mmjjjjjjjgg............ggggggg......................g...............",
+  ".......................mggggggggg............ggggggggjj...................gg..............",
+  "........................mggggggg.............dddggg..j..................gggggg............",
+  ".........................mgggggg..............ddggg..j.................gddddddgg..........",
+  "........................mggggg...............dddgg...g................gddddddggg..........",
+  "........................mmgggg................gggg.....................gddddddggg.........",
+  "........................mgggg.................ggg......................ddddddggg..........",
+  "........................mmgg.................................................ggg..........",
+  ".......................gmgg..........................................................g....",
+  "........................gg..........................................................gg....",
+  ".......................gg..........................................................g......",
+  ".......................gg.................................................................",
+  ".......................gg.................................................................",
+  "..........................................................................................",
+  "........sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss........."
+ ],
+ "nations": [
+  {
+   "name": "Insurgents",
+   "capital": "Kabul",
+   "x": 59,
+   "y": 12
+  },
+  {
+   "name": "State Troops",
+   "capital": "Baghdad",
+   "x": 52,
+   "y": 13
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "London",
+   "x": 42,
+   "y": 8
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Kinshasa",
+   "x": 45,
+   "y": 23
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "New York",
+   "x": 23,
+   "y": 10
+  },
+  {
+   "name": "Horde",
+   "capital": "Moscow",
+   "x": 51,
+   "y": 6
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Paris",
+   "x": 43,
+   "y": 8
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Tokyo",
+   "x": 76,
+   "y": 12
+  }
+ ]
+}

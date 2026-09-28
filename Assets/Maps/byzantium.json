@@ -1,0 +1,103 @@
+{
+ "id": "byzantium",
+ "name": "Byzantium",
+ "blurb": "The Eastern Mediterranean of the old empire: Balkans, Anatolia, the Levant and Egypt.",
+ "grid_w": 53,
+ "grid_h": 38,
+ "wraps": false,
+ "lon0": 8.0,
+ "lon_span": 40.0,
+ "lat_top": 47.0,
+ "lat_bot": 27.0,
+ "americas_split": false,
+ "rows": [
+  "mmmmmmmggggggggggggggggggggggggggggggg..ggggggggggggg",
+  "mmmmmmggggggggggggggggggggggg...ggg....gggggggggggggg",
+  "mmmmmmmmggggggggggggggggggggg....ggg...gggggggggggggg",
+  "mmmmm..ggggggggggggggggggggg....ggggg.ggggggggggggggg",
+  "mmmmmm...ggmmgmmgggggggggggg......m....gggggggggggggg",
+  ".mmmgm...ggmmmmmggggggggggg.............ggggggggggggg",
+  "...gggm...gmmmmmmgggggggggg...............mgmmmmmgmmm",
+  "...gggm.....mmmmmggggggggg................mmmmmmmmmmg",
+  ".gggggmmm....mmmmggggggggg..................mmmmmmmmg",
+  "gg..ggmmm.....mmmgmmmmmggg.......ggg........mmmmmmmmg",
+  ".g....ggggg....ggggmmmmmgggg...ggggggg......mmmmgmmgg",
+  "g......ggggg..ggggmmmmmggg.ggggggggggggggmmmgmggggggg",
+  "gg.......ggggg.gggggg...ggggggggggggggggggmmmmmmggggg",
+  "gg.......gg....gggg.....gggggggggggggggggmmmmmggggggg",
+  "gg........gg....gggg....ggggggggggggggggggmmmmmmggggg",
+  "..........g.....gggg....gggggggggggggggggmmmmgmgggggg",
+  ".........gg......gggg...gggggmmgmmmmmmggggggggggggggg",
+  ".....gggg........gggg...gggggmmmmmmmmmggggggggggggggg",
+  ".gg....ggg........gg......gggmmmmmmmmmggggggggggggggg",
+  "ggg.....g.........g......ggggmmmmmmmggggggggggggggggg",
+  "gggg........................gg..ggg..mggggggggggggggg",
+  "ggg.............................g....gddddddgggggggmg",
+  "gggg.................ggg.........gg..mddddddgggggggmg",
+  "ggg.............................g...ggdddddddgggggmmm",
+  "ggg..................................gdddddddgggggmmm",
+  "ggg.................................gdddddddggggggmmm",
+  "ggggg...............................ggdddddddgggggmmm",
+  "gggggggg........ggg................ggddddddgdgggggmmm",
+  "gggddgdggg......gdgggd.............gggdddddddgggggmmm",
+  "gdggdgdgdd.....gdddggddgd....gd...gggdggggdddggggggmm",
+  "ddddddddddddd...ddddggddgddgddddggdddgdgggggdggdgdmmm",
+  "ddgdgdddgdddddgddddddddgddddddggdddgdddgdddddgddddgmm",
+  "dddddddddddgddddddddgddddddddggddgdddddddgdgdddgddgmm",
+  "dddddddddddddddgdgdddgdddddggdddgggdddddddddddddddmmm",
+  "dddddddddddddddddddddddddddggdgdggggdgdddgdddgdddgddd",
+  "ddddddddddddddddddddddddddgddgggdgddgddgddddddddddddd",
+  "ddddddddddddddddddddddgdddddddddggg.ddddddddddddddddd",
+  "dddddddddddddddddddddddgdgdgddgdd...ddddddddddddddddd"
+ ],
+ "nations": [
+  {
+   "name": "State Troops",
+   "capital": "Constantinople",
+   "x": 27,
+   "y": 11
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Rome",
+   "x": 5,
+   "y": 9
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Carthage",
+   "x": 2,
+   "y": 19
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Alexandria",
+   "x": 29,
+   "y": 30
+  },
+  {
+   "name": "Horde",
+   "capital": "Trebizond",
+   "x": 41,
+   "y": 11
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Antioch",
+   "x": 37,
+   "y": 20
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Athens",
+   "x": 20,
+   "y": 17
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Jerusalem",
+   "x": 35,
+   "y": 29
+  }
+ ]
+}

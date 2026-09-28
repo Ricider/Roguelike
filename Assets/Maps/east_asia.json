@@ -1,0 +1,115 @@
+{
+ "id": "east_asia",
+ "name": "East Asia",
+ "blurb": "China, Mongolia, Korea, Japan, Southeast Asia and the Philippines.",
+ "grid_w": 45,
+ "grid_h": 50,
+ "wraps": false,
+ "lon0": 88.0,
+ "lon_span": 60.0,
+ "lat_top": 54.0,
+ "lat_bot": 4.0,
+ "americas_split": false,
+ "rows": [
+  "ggggggggggggggggggggggggggggggggggggggggg....",
+  "ggggggggggggggggggggggggggggggggggggggggg....",
+  "gggggggggggggggggggggggggggggggggggggggggg...",
+  "ggggggggggggggggggggggggggggggggggggggg.g....",
+  "ggggggggggggggggggggggggggggjjjgjjjgggg.gg...",
+  "gggggggggggggggggggggggggggjjjjjjjjgggg.g....",
+  "dddggdddddgdddggggddgggggggggjjjjjjggg..g....",
+  "dgddddddddddddddddddgggggggjjjjjjjjgg...g....",
+  "dddddddddddddddddgdggggggggggjjgjgjgg...g....",
+  "gddddddddddddddddgdggggggggggggggggg....g....",
+  "dggdddddddddddddddgdggggggggggggggg.....ggg..",
+  "dgdddddddddddddddgddgggggggggggg......ggg....",
+  "gdddddddddddddddddddggggggggggg........g.....",
+  "gdgdddddddddddddddgdgggg.ggggg........gg.....",
+  "gdddddddddddddddddgdggg..g..gg.........gg....",
+  "dgdgdddgdddgdgddddddgg.....ggm........g......",
+  "ddddggdgdgdgddgdgdggggg.gg...gm.......gg.....",
+  "gmmgmmgmggggggggggggggggg...ggg.....mmg......",
+  "mmmmmmmmgggggggggggggggg.....gg..gggmmg......",
+  "mmmmmmmgmggggggggggggggg....g...ggggg........",
+  "mmmmmmmmmgggggggggggggggg......gggg..........",
+  "mmmmmmmmmggggggggggggggg.......g.............",
+  "mmmmmmmmmggggggggggggggggg......g............",
+  "mmmmmmmmggggggggggggggggg....................",
+  "mmmmmmmmmmmmgggggggggggggg...................",
+  "gmgmmmmmmmmmggggggggggggg....................",
+  "mgmgmgmmmmmgggggggggggggg....................",
+  "ggggggmmmgmggggggggggggg.....................",
+  "gggggggggggggggggggggggg.....................",
+  "gggggggggggggggggggggg.gg....................",
+  "gggggggggggggggggggggg..g....................",
+  "gggggggggggggggggggg...g.....................",
+  "...gggggggggggg.gg......g....................",
+  "...gggggggggg...g.......g....................",
+  "....gjgjggggg...j.......j....................",
+  "....gggjjgggg..j........j....................",
+  ".....gjgjjjjjg..........jj...................",
+  "....ggjjgjgjjg..........j....................",
+  ".......ggjjjjjgj........g....................",
+  ".......ggjgjjjj.........j....................",
+  "........jjjjjjjj.........jj..................",
+  ".......jj.jjjjjj..........j..................",
+  "........j..jjjjj...........j.................",
+  ".......g...jjj...........jj..................",
+  "........j....j............j.j................",
+  ".......gj.................jj.................",
+  "........g................jjjj................",
+  "........gg...........j....jj.................",
+  ".........jj.........jjj......................",
+  ".....jjjjjj........jjj......................."
+ ],
+ "nations": [
+  {
+   "name": "Corporate Troops",
+   "capital": "Tokyo",
+   "x": 38,
+   "y": 18
+  },
+  {
+   "name": "State Troops",
+   "capital": "Beijing",
+   "x": 21,
+   "y": 14
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Seoul",
+   "x": 29,
+   "y": 16
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Manila",
+   "x": 24,
+   "y": 39
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Bangkok",
+   "x": 9,
+   "y": 40
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Hanoi",
+   "x": 13,
+   "y": 32
+  },
+  {
+   "name": "Horde",
+   "capital": "Ulaanbaatar",
+   "x": 14,
+   "y": 6
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Shanghai",
+   "x": 25,
+   "y": 22
+  }
+ ]
+}

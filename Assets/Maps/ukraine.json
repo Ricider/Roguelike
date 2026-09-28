@@ -1,0 +1,103 @@
+{
+ "id": "ukraine",
+ "name": "Ukraine",
+ "blurb": "The steppe between the Carpathians and the Don, down to Crimea and the Black Sea.",
+ "grid_w": 45,
+ "grid_h": 38,
+ "wraps": false,
+ "lon0": 21.5,
+ "lon_span": 19.5,
+ "lat_top": 53.0,
+ "lat_bot": 43.5,
+ "americas_split": false,
+ "rows": [
+  "gjjgjjjjjjjjjjjjjjjjjjjjggggggggggggggggggggg",
+  "gjjjjjjjjjjjjjjjjjjjjjjjgjggggggggggggggggggg",
+  "ggjjjjjjjjjjjjjjjjjjjjjgjgggggggggggggggggggg",
+  "gjgjjjjjjjjjjjjjjjjjjjjjjjggggggggggggggggggg",
+  "gjgjjjjjjjjjjjjjjjjjjjjjgjggggggggggggggggggg",
+  "gjjjgjjjjjjjjjjjjjjjjjjjggggggggggggggggggggg",
+  "gjjjjjjjjjgjjjgjjgjjjjjjjjggggggggggggggggggg",
+  "gggjjggjjgjjgjjjjgjjjgjjjjggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggggggggg",
+  "ggmmmmmgmmmgggggggggggggggggggggggggggggggggg",
+  "ggmmmmmmmmmgggggggggggggggggggggggggggggggggg",
+  "ggmmmmmmmmmgggggggggggggggggggggggggggggggggg",
+  "gmmmmmmmmmmgggggggggggggggggggggggggggggggggg",
+  "ggmmmmmmmmggggggggggggggggggggggggggggggggggg",
+  "gmmmmmmmmmmgggggggggggggggggggggggggggggggggg",
+  "ggmmmmmmmmmmggggggggggggggggggggggggggggggggg",
+  "gggmmmmmmmmgggggggggggggggggggggggggggggggggg",
+  "gggmmggmmgmgggggggggggggggggggggggggggggggggg",
+  "ggggggggggggggggggggggggggggggggggggggg.ggggg",
+  "gggggggggggggggggggggggggggggggggggg...gggggg",
+  "gggggggggggggggggggggg.gggggggggg....gggggggg",
+  "ggggggggggggggggggggg...gggggggg......ggggggg",
+  "gggggggggggggggggggg......ggggg.......ggggggg",
+  "gggggggggggggggggggg.......gggg.......ggggggg",
+  "ggggggggggggggggggg.......ggggg......gggggggg",
+  "ggggggggggggggggggg......gggggggggg.ggggggggg",
+  "gggggggggggggggggg........gggggggg.gggggggggg",
+  "gggggggggggggggggg..........mggm....ggggggggg",
+  "gggggggggggggggg...........gmm.......gggggggg",
+  "ggggggggggggggggg...........g..........gggggg",
+  "gggggggggggggggg........................ggggg",
+  "ggggggggggggggggg........................gggm",
+  "gggggggggggggggg.........................gmmg"
+ ],
+ "nations": [
+  {
+   "name": "State Troops",
+   "capital": "Kyiv",
+   "x": 20,
+   "y": 10
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Lviv",
+   "x": 5,
+   "y": 12
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Odesa",
+   "x": 20,
+   "y": 25
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Kharkiv",
+   "x": 33,
+   "y": 11
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Dnipro",
+   "x": 31,
+   "y": 18
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Donetsk",
+   "x": 37,
+   "y": 20
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Simferopol",
+   "x": 29,
+   "y": 32
+  },
+  {
+   "name": "Horde",
+   "capital": "Chisinau",
+   "x": 16,
+   "y": 23
+  }
+ ]
+}

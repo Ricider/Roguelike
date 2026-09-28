@@ -1,17 +1,15 @@
-# WorldMap: Civ-style hex Earth for the Geopolitics map view.
+# WorldMap: the hex campaign map currently in play (Geopolitics map view).
 # Scope is map-only: terrain grid + nation start positions, no gameplay rules.
-# ROWS and capitals are generated from real coastlines by tools/make_world.py
-# (equirectangular, pointy-top hexes in odd-r layout, wrapping at the Bering Strait).
-# Legend: '.' ocean, 'g' grassland, 'd' desert, 'm' mountain, 's' snow, 'j' jungle.
+# Maps are data files (Assets/Maps/<id>.json) generated from real coastlines by
+# tools/make_world.py: the world plus regional maps. use_map(id) switches the
+# active map; the world map is loaded by default. Only the world map wraps
+# east-west (at the Bering Strait). Hexes are pointy-top in odd-r layout.
+# Legend: '.' ocean, 'g' grassland, 'd' desert, 'm' mountain, 's' snow, 'j' forest/jungle.
 extends RefCounted
 class_name WorldMap
 
-const GRID_W: int = 90
-const GRID_H: int = 40
-
-const LON0: float = -169.0 # west edge (Bering Strait); the map wraps east-west here
-const LAT_TOP: float = 80.0
-const LAT_BOT: float = -62.0
+const MAPS: Array = ["world", "europe", "byzantium", "east_asia", "ukraine"]
+const MAP_DIR := "res://Assets/Maps/%s.json"
 
 const OCEAN: String = "ocean"
 const GRASSLAND: String = "grassland"
@@ -20,104 +18,86 @@ const MOUNTAIN: String = "mountain"
 const SNOW: String = "snow"
 const JUNGLE: String = "jungle"
 
-const ROWS: Array[String] = [
-	"....................sss.ssssssssssssss.......ss....................s......................",
-	"............ss..s.ssss.s...ssssssssss........s.........ss......sssssss......ss............",
-	"...s.......s.sss.ss.sssss....ssssssss........s...s.....s...ssssssssssssssssssssss.........",
-	"sssssssssssssssssssss..sss..ssssss..s........sssssss..ssssssssssssssssssssssssssssssssssss",
-	".sssssssssssssssssss.s..ss...sss.....s......sssssssssssssssssssssssssssssssssssssssssss...",
-	"gggggggmmmgggggggg....gg......s............ggg.gggggggggmgggggggggggggggggggggggg.ggg.....",
-	".........ggggggggggg...gggg..............g..gg..ggggggggmmggggggggggggggggggg....gg.......",
-	".........ggmmmmgggggg.gggggg...........g.g.gggggggggggggmgggggggggggggggggggg....g........",
-	"..........ggmmmmggggggggggggg............ggggggggggggggggggggggggggggggggggggg............",
-	"...........mmmmgggggggggggg..............ggmmgggggggggggggggggggdddddddggggg..............",
-	"...........gmmmmggggggggg...............ggg..gggg...mmgddddgggggdddddddgggg..g............",
-	"...........mmmmgggggggg................ggg.....ggggggggdddggdddddddddddggg................",
-	"............gddddgggggg.................g.ggg......gggmmdddgmmmmmmmggggg..ggg.............",
-	"............ddddgggggg.................gmmgggg.g..gggmmddddgmmmmmmmggggg..g...............",
-	".............ddddg...g.................ddddddddddddddd.ddddgmmmmmmmgggggg.................",
-	"...............gg....g................dddddddddddddddddd..gggggggggggggg..................",
-	"................gg..g.g...............ddddddddddddddddddd...gggg.ggggg....................",
-	"................gggj..j...............ddddddddddddd.dddd....ggg..jjj......................",
-	"...................jjj.g..............ggggggggggggggggg......j.....jjj....................",
-	"....................j..gg.............gggggggggggggmggg......j......j.....................",
-	".......................ggggg...........ggggggggggggmmgg.......g....jj....j................",
-	"......................mmjjjjj...............jjjjjggmgg............jj..j...................",
-	"......................mmjjjjjj..............jjjjjjgmm..............jjjjj..................",
-	".....................gmmjjjjjjjg............jjjjjggm...............j..jj...jjj............",
-	"......................mmjjjjjjjggg...........jjjjjgg.................jj....j.jj...........",
-	"......................mmjjjjjjjgg............ggggggg......................g...............",
-	".......................mggggggggg............ggggggggjj...................gg..............",
-	"........................mggggggg.............dddggg..j..................gggggg............",
-	".........................mgggggg..............ddggg..j.................gddddddgg..........",
-	"........................mggggg...............dddgg...g................gddddddggg..........",
-	"........................mmgggg................gggg.....................gddddddggg.........",
-	"........................mgggg.................ggg......................ddddddggg..........",
-	"........................mmgg.................................................ggg..........",
-	".......................gmgg..........................................................g....",
-	"........................gg..........................................................gg....",
-	".......................gg..........................................................g......",
-	".......................gg.................................................................",
-	".......................gg.................................................................",
-	"..........................................................................................",
-	"........sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss.........",
-]
+# Faction colours and flavour (the same 8 factions play on every map).
+const NATION_STYLE := {
+	"Insurgents": {"color": "b5651d", "blurb": "Sparse mountain village + Guerilla Warfare."},
+	"State Troops": {"color": "c9a227", "blurb": "Old town with towers and domes + State of emergency."},
+	"Fundamentalists": {"color": "7d3c98", "blurb": "Medieval village + Fanaticism."},
+	"Mercenaries": {"color": "922b21", "blurb": "Warzone rubble + Corruption."},
+	"Peace Keepers": {"color": "2e86c1", "blurb": "United Nations tents + Defensive Doctrine."},
+	"Horde": {"color": "cb4335", "blurb": "Snowy fortified city + Conscription."},
+	"Coalition Army": {"color": "1e8449", "blurb": "European-style towers + Aerial Supremacy."},
+	"Corporate Troops": {"color": "17a589", "blurb": "Cyberpunk skyrises + Advanced Robotics."},
+}
 
-# Sample nations mapped to real-world regions matching their spec descriptions
-# (BackgroundImage / theme). x/y are tile coords into ROWS (x = column).
-const NATIONS: Array = [
-	{
-		"name": "Insurgents", "capital": "Kabul", "region": "Central Asia (Hindu Kush)",
-		"x": 59, "y": 12, "color": "b5651d",
-		"blurb": "Sparse mountain village + Guerilla Warfare -> Afghan mountains.",
-	},
-	{
-		"name": "State Troops", "capital": "Baghdad", "region": "Middle East",
-		"x": 52, "y": 13, "color": "c9a227",
-		"blurb": "Middle Eastern town with mosques -> Mesopotamia.",
-	},
-	{
-		"name": "Fundamentalists", "capital": "London", "region": "British Isles",
-		"x": 42, "y": 8, "color": "7d3c98",
-		"blurb": "Medieval village + Fanaticism -> old-world Europe.",
-	},
-	{
-		"name": "Mercenaries", "capital": "Kinshasa", "region": "Central Africa (Congo)",
-		"x": 45, "y": 23, "color": "922b21",
-		"blurb": "Warzone rubble + Corruption -> Congo basin.",
-	},
-	{
-		"name": "Peace Keepers", "capital": "New York", "region": "North America (East Coast)",
-		"x": 23, "y": 10, "color": "2e86c1",
-		"blurb": "United Nation tents + Defensive Doctrine -> UN HQ (NYC).",
-	},
-	{
-		"name": "Horde", "capital": "Moscow", "region": "Russia",
-		"x": 51, "y": 6, "color": "cb4335",
-		"blurb": "Snowy Russian-style city + Conscription -> Russia.",
-	},
-	{
-		"name": "Coalition Army", "capital": "Paris", "region": "Western Europe",
-		"x": 43, "y": 8, "color": "1e8449",
-		"blurb": "European-style towers + Aerial Supremacy -> NATO heartland.",
-	},
-	{
-		"name": "Corporate Troops", "capital": "Tokyo", "region": "East Asia (Japan)",
-		"x": 76, "y": 12, "color": "17a589",
-		"blurb": "Cyberpunk skyrises + Advanced Robotics -> tech-hub Japan.",
-	},
-]
+# Active map (set by use_map). Read these like constants.
+static var MAP_ID: String = ""
+static var MAP_NAME: String = ""
+static var MAP_BLURB: String = ""
+static var GRID_W: int = 0
+static var GRID_H: int = 0
+static var WRAPS: bool = true
+static var LON0: float = 0.0 # west edge
+static var LON_SPAN: float = 360.0 # degrees of longitude across the grid
+static var LAT_TOP: float = 0.0
+static var LAT_BOT: float = 0.0
+static var AMERICAS_SPLIT: bool = false # world only: starting land never crosses the Americas/Old World line
+static var ROWS: Array = []
+static var NATIONS: Array = []
+
+static func _static_init() -> void:
+	use_map("world")
+
+static func map_data(map_id: String) -> Dictionary:
+	var path := MAP_DIR % map_id
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return parsed if parsed is Dictionary else {}
+
+# Switch the active map. Returns false (and keeps the current map) if unknown.
+static func use_map(map_id: String) -> bool:
+	if map_id == MAP_ID and not ROWS.is_empty():
+		return true
+	var d := map_data(map_id)
+	if d.is_empty():
+		push_warning("WorldMap: unknown map '%s'" % map_id)
+		return false
+	MAP_ID = map_id
+	MAP_NAME = str(d.get("name", map_id))
+	MAP_BLURB = str(d.get("blurb", ""))
+	GRID_W = int(d["grid_w"])
+	GRID_H = int(d["grid_h"])
+	WRAPS = bool(d.get("wraps", false))
+	LON0 = float(d["lon0"])
+	LON_SPAN = float(d.get("lon_span", 360.0))
+	LAT_TOP = float(d["lat_top"])
+	LAT_BOT = float(d["lat_bot"])
+	AMERICAS_SPLIT = bool(d.get("americas_split", false))
+	ROWS = []
+	for r in d["rows"]:
+		ROWS.append(str(r))
+	NATIONS = []
+	for n in d["nations"]:
+		var nd: Dictionary = n
+		var nm := str(nd["name"])
+		var style: Dictionary = NATION_STYLE.get(nm, {"color": "888888", "blurb": ""})
+		NATIONS.append({"name": nm, "capital": str(nd["capital"]), "x": int(nd["x"]), "y": int(nd["y"]),
+			"color": style["color"], "blurb": style["blurb"], "region": MAP_NAME})
+	return true
 
 # Real-world latitude/longitude at the centre of hex (x, y), as Vector2(lat, lon).
 static func hex_latlon(x: int, y: int) -> Vector2:
 	var fx: float = (x + 0.5 * float(y & 1) + 0.5) / GRID_W
 	var fy: float = (y + 0.5) / GRID_H
-	var lon: float = fposmod(LON0 + fx * 360.0 + 180.0, 360.0) - 180.0
+	var lon: float = fposmod(LON0 + fx * LON_SPAN + 180.0, 360.0) - 180.0
 	return Vector2(LAT_TOP - fy * (LAT_TOP - LAT_BOT), lon)
 
 # 1 for the Americas (and Greenland), 0 for the Old World. Starting territories
 # never spread across this line, so no nation begins with land on another continent.
 static func region_of(x: int, y: int) -> int:
+	if not AMERICAS_SPLIT:
+		return 0
 	var lon: float = hex_latlon(x, y).y
 	return 1 if (lon > -170.0 and lon <= -20.0) else 0
 
@@ -125,8 +105,9 @@ static func region_of(x: int, y: int) -> int:
 static func hex_for_latlon(lat: float, lon: float) -> Vector2i:
 	var fy: float = (LAT_TOP - lat) / (LAT_TOP - LAT_BOT)
 	var y: int = clampi(int(fy * GRID_H), 0, GRID_H - 1)
-	var fx: float = fposmod(lon - LON0, 360.0) / 360.0
-	var x: int = posmod(int(fx * GRID_W - 0.5 * float(y & 1)), GRID_W)
+	var fx: float = (fposmod(lon - LON0, 360.0) if WRAPS else lon - LON0) / LON_SPAN
+	var x: int = int(floor(fx * GRID_W - 0.5 * float(y & 1)))
+	x = posmod(x, GRID_W) if WRAPS else clampi(x, 0, GRID_W - 1)
 	return Vector2i(x, y)
 
 static func in_bounds(x: int, y: int) -> bool:

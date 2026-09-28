@@ -32,7 +32,10 @@ static func hex_dirs(row: int) -> Array:
 # map (callers check 0 <= y < GRID_H).
 static func hex_neighbor(t: Vector2i, i: int) -> Vector2i:
 	var d := hex_dirs(t.y)[i] as Vector2i
-	return Vector2i((t.x + d.x + WorldMap.GRID_W) % WorldMap.GRID_W, t.y + d.y)
+	var nx: int = t.x + d.x
+	if WorldMap.WRAPS:
+		nx = posmod(nx, WorldMap.GRID_W)
+	return Vector2i(nx, t.y + d.y) # regional maps: may be off the grid (callers check)
 
 # The 6 hex neighbors with east-west wraparound (Civ-style cylinder map),
 # so the Bering Strait land bridge links the Americas to Asia.
@@ -40,14 +43,15 @@ static func wrapped_neighbors(t: Vector2i) -> Array:
 	var out: Array = []
 	for i in range(6):
 		var n := hex_neighbor(t, i)
-		if n.y >= 0 and n.y < WorldMap.GRID_H:
+		if WorldMap.in_bounds(n.x, n.y):
 			out.append(n)
 	return out
 
 # Hex distance with east-west wrap (cube distance on the odd-r layout).
 static func hex_distance(a: Vector2i, b: Vector2i) -> int:
 	var best: int = 1 << 30
-	for shift in [-WorldMap.GRID_W, 0, WorldMap.GRID_W]:
+	var shifts: Array = [-WorldMap.GRID_W, 0, WorldMap.GRID_W] if WorldMap.WRAPS else [0]
+	for shift in shifts:
 		var bx: int = b.x + int(shift)
 		var aq: int = a.x - (a.y - (a.y & 1)) / 2
 		var bq: int = bx - (b.y - (b.y & 1)) / 2
@@ -149,11 +153,10 @@ func border_edges(nation: String) -> Array:
 		var dirs := hex_dirs(tile.y)
 		for i in range(6):
 			var d := dirs[i] as Vector2i
-			var nx: int = (tile.x + d.x + WorldMap.GRID_W) % WorldMap.GRID_W
-			var ny: int = tile.y + d.y
+			var nb := hex_neighbor(tile, i)
 			var o := ""
-			if ny >= 0 and ny < WorldMap.GRID_H:
-				o = owner_of(nx, ny)
+			if WorldMap.in_bounds(nb.x, nb.y):
+				o = owner_of(nb.x, nb.y)
 			if o != nation:
 				out.append([tile, d, i])
 	return out
@@ -313,9 +316,9 @@ func relocate_flag(nation: String, blocked: Dictionary) -> Vector2i:
 		var tv := t as Vector2i
 		var px: float = tv.x + 0.5 * float(tv.y & 1)
 		var dx: float = px - (ref.x + 0.5 * float(ref.y & 1))
-		if dx > WorldMap.GRID_W * 0.5:
+		if WorldMap.WRAPS and dx > WorldMap.GRID_W * 0.5:
 			px -= WorldMap.GRID_W
-		elif dx < -WorldMap.GRID_W * 0.5:
+		elif WorldMap.WRAPS and dx < -WorldMap.GRID_W * 0.5:
 			px += WorldMap.GRID_W
 		var p := Vector2(px, tv.y * ROW_H)
 		pts.append(p)
@@ -372,12 +375,13 @@ func to_data() -> Dictionary:
 	for n in flag_sites.keys():
 		var t: Vector2i = flag_sites[n]
 		flags[n] = [t.x, t.y]
-	return {"player_nation": player_nation, "owner": owner.duplicate(), "grid": [WorldMap.GRID_W, WorldMap.GRID_H], "flags": flags}
+	return {"player_nation": player_nation, "owner": owner.duplicate(), "map": WorldMap.MAP_ID, "grid": [WorldMap.GRID_W, WorldMap.GRID_H], "flags": flags}
 
 # Saves from an older map layout (different grid) can't be mapped onto the
 # current world, so they restart the campaign for the same nation.
 static func from_data(d: Dictionary) -> MapCampaign:
 	var nation := str(d.get("player_nation", ""))
+	WorldMap.use_map(str(d.get("map", "world"))) # saves remember which map they were played on
 	var grid = d.get("grid", [])
 	if not (grid is Array and grid.size() == 2 and int(grid[0]) == WorldMap.GRID_W and int(grid[1]) == WorldMap.GRID_H):
 		var fresh := MapCampaign.new(nation) if nation != "" else MapCampaign.new()

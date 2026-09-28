@@ -10,6 +10,7 @@
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
 # from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
+# Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1).
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
 # cedes border hexes (1 per 10 HP the victor has left; x2 when it fields fewer
 # than 3 units, x4 with none) to whoever damaged it most, loses the cards on those
@@ -449,6 +450,12 @@ func _hurt_nation(victim: String, attacker: String, amount: int) -> void:
 	var row: Dictionary = ledger[victim]
 	row[attacker] = int(row.get(attacker, 0)) + amount
 
+# Mountain cover: a non-flying unit standing on a mountain hex takes 1 less damage (min 1).
+static func terrain_adjusted(card: Card, t: Vector2i, dmg: int) -> int:
+	if card is Unit and not (card as Unit).Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
+		return maxi(1, dmg - 1)
+	return dmg
+
 func _damage_card(k: String, amount: int) -> void:
 	var card: Card = units[k]["card"]
 	if card is Unit:
@@ -516,7 +523,7 @@ func fire(k: String) -> Array:
 				for nb in MapCampaign.wrapped_neighbors(site):
 					var ninfo := unit_at(nb as Vector2i)
 					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
-						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), dmg)
+						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, dmg))
 						fsplash.append(nb)
 			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
 				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash})
@@ -535,17 +542,20 @@ func fire(k: String) -> Array:
 			actual = maxi(1, actual / 2)
 		var before := actual
 		actual = _intercept(victim2, to, unit, nation, actual)
+		var pre_terrain := actual
+		actual = terrain_adjusted(target, to, actual)
 		_damage_card(tk, actual)
 		var splash: Array = []
 		if unit is FighterJet:
 			for nb in MapCampaign.wrapped_neighbors(to):
 				var ninfo := unit_at(nb as Vector2i)
 				if not ninfo.is_empty() and str(ninfo["owner"]) == victim2:
-					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), actual)
+					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain))
 					splash.append(nb)
 		var destroyed := _reap(nation)
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,
-			"victim": victim2, "damage": actual, "direct": false, "intercepted": actual < before, "destroyed": destroyed, "splash": splash})
+			"victim": victim2, "damage": actual, "direct": false, "intercepted": pre_terrain < before, "mountain": actual < pre_terrain,
+			"destroyed": destroyed, "splash": splash})
 	return log
 
 # Nations at 0 HP cede border hexes to their top damager (x2 when weak, x4 with no units) and rebuild.

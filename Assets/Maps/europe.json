@@ -1,0 +1,115 @@
+{
+ "id": "europe",
+ "name": "Europe",
+ "blurb": "From Iberia to the Urals, Scandinavia to the North African coast.",
+ "grid_w": 43,
+ "grid_h": 50,
+ "wraps": false,
+ "lon0": -12.0,
+ "lon_span": 60.0,
+ "lat_top": 71.0,
+ "lat_bot": 34.0,
+ "americas_split": false,
+ "rows": [
+  "..........................sssss............",
+  "......................ssssssss.............",
+  ".....................sssssssssssss.........",
+  "...................sssssssssssssssss...ss..",
+  "...................sssssssssssssssssss..ss.",
+  "..................ssssssssssssssssssss..s.s",
+  "..................sssssssssssssss..ss.sssss",
+  ".................sssssss..sssssss....ssssss",
+  "................ssssssss..ssssssss.ssssssss",
+  "...............mmmmgjgg.jgggjggggjgggggjggj",
+  "..............mmmmmmjj..gjjjjjjjjgjjjgjgjjj",
+  "............ggmmmmmmj..gjgjjgjjjjjjjjjjjjjj",
+  "............ggggmmmmj...gjjjgjjjjjjjjjjjjjj",
+  "............ggmjjmjmj..gjgjjjjjjjjjjjjjjjjj",
+  "............ggggjjjjjj...gj..jjjjjjjjjjjjjj",
+  "............ggggjjjjj.....g.jjjjjjjjjjjjjjj",
+  ".............gg.gjjgj....jjgjjjjjjjjjjjjjjj",
+  "....gg..........gjjg.....jjjjjjjjjjjjjjjjjj",
+  "....ggg........g.gggg...j.jjjjjjjjjjjjgjjjg",
+  "....gg........gg.ggg...gjggjgjjjgjjjgggjgjj",
+  "....ggg.......gg.gg.....ggggggggggggggggggg",
+  "...gggg.......g.g......gggggggggggggggggggg",
+  "..gg..gg.......g.g..ggggggggggggggggggggggg",
+  ".ggg..gg.....gggggggggggggggggggggggggggggg",
+  "..gg.ggggg..ggggggggggggjgjjjjjjggggggggggg",
+  ".gg..gggg..ggggggggggggggjjjjjjgggggggggggg",
+  ".....ggggg.gggggggggggggggjjjjjgggggggggggg",
+  "....ggg..gggggggggggggggggggggggggggggggggg",
+  ".........gggggggggggggggggggggggggggggggggg",
+  ".......gggggggggggggggggmmmgggggggggggggggg",
+  ".....ggggggggggggggggggggmmgggggggggggggggg",
+  ".....gggggggmmgmmgggggggmmmgggggggggggggggg",
+  ".......ggggggmmmmmmgggggggggggggggggggggggg",
+  ".......gggggmmmmmggggggggggggg.gg..gggggggg",
+  "........gggggmmmmmgggggggggggg..gg.gggggggg",
+  ".......ggggggmmmm..ggmmgggggg...m..gggggggg",
+  ".......ggggggg.ggg..mmmmggggg........ggmgmm",
+  "..ggggggggg.g..ggm..mmmggggg.........mmmmmm",
+  "..gggggmmmm....gggm...mgggggg.........mmmmm",
+  ".ggggggggg....g..mgg..mgmmmg...ggg....mmmmg",
+  "..gggggggg....g...ggg.ggmmmggggggggggmgmggm",
+  "..gggggg......g....gg.ggg..gggggggggmmmmggg",
+  "..ggggggg.....gg....g..gg..ggggggggggmmmggg",
+  ".ggggggg...........g...gg..gggggggggmgmgggg",
+  "..gggggg..........gg....gg..ggmmmmmgggggggg",
+  "..ggggg..........gg....gg...ggmmmmmgggggggg",
+  "....gg...ggggggg........g....gggggggggggggg",
+  ".....g..gggggggg..................dggggggmg",
+  "....ggggggggggggg.........g.....g.mdddggggm",
+  "...mmmmmmmgggggg..................ddddggggm"
+ ],
+ "nations": [
+  {
+   "name": "Fundamentalists",
+   "capital": "London",
+   "x": 8,
+   "y": 26
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Paris",
+   "x": 9,
+   "y": 29
+  },
+  {
+   "name": "State Troops",
+   "capital": "Berlin",
+   "x": 17,
+   "y": 25
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Madrid",
+   "x": 5,
+   "y": 41
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Rome",
+   "x": 17,
+   "y": 39
+  },
+  {
+   "name": "Horde",
+   "capital": "Moscow",
+   "x": 35,
+   "y": 20
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Stockholm",
+   "x": 20,
+   "y": 15
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Athens",
+   "x": 25,
+   "y": 44
+  }
+ ]
+}

@@ -634,13 +634,141 @@ func _select_player(name: String):
 		b.theme_type_variation = &"SelectedButton" if n == name else &""
 		b.focus_mode = Control.FOCUS_NONE
 
-# New Game: a fresh world map campaign (the main mode) as the chosen nation.
+# New Game: pick a map, then start a fresh campaign on it as the chosen nation.
 func _on_play_pressed():
+	_show_map_chooser()
+
+func _start_campaign_on(map_id: String):
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
 		gs.set_player(_selected_player)
-		gs.start_map_campaign(_selected_player)
+		gs.start_map_campaign(_selected_player, map_id)
 	get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
+
+const PREVIEW_COLORS := {
+	".": Color8(36, 82, 150), "g": Color8(84, 150, 62), "d": Color8(222, 186, 116),
+	"m": Color8(120, 104, 92), "s": Color8(224, 234, 246), "j": Color8(34, 96, 52),
+}
+
+# Tiny pixel preview of a map: 2px per hex, odd rows shifted like the hex grid,
+# capitals as white dots.
+func _map_preview(d: Dictionary) -> Texture2D:
+	var w := int(d["grid_w"])
+	var h := int(d["grid_h"])
+	var img := Image.create(w * 2 + 1, h * 2, false, Image.FORMAT_RGBA8)
+	img.fill(PREVIEW_COLORS["."])
+	var rows: Array = d["rows"]
+	for y in range(h):
+		var row: String = rows[y]
+		for x in range(w):
+			var col: Color = PREVIEW_COLORS.get(row.substr(x, 1), PREVIEW_COLORS["."])
+			var px := x * 2 + (y & 1)
+			img.fill_rect(Rect2i(px, y * 2, 2, 2), col)
+	for n in d["nations"]:
+		var nd: Dictionary = n
+		var cx := int(nd["x"]) * 2 + (int(nd["y"]) & 1)
+		img.fill_rect(Rect2i(cx, int(nd["y"]) * 2, 2, 2), Color.WHITE)
+	return ImageTexture.create_from_image(img)
+
+func _show_map_chooser():
+	if has_node("MapChooser"):
+		return
+	var layer := Control.new()
+	layer.name = "MapChooser"
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.z_index = 50
+	add_child(layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.02, 0.06, 0.78)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(center)
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"GoldPanel"
+	center.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	panel.add_child(v)
+	var title := Label.new()
+	title.text = "CHOOSE A MAP"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(title)
+	var sub := Label.new()
+	sub.text = "Playing as %s. Every map has all 8 nations, starting from real cities." % _selected_player
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 16)
+	v.add_child(sub)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	v.add_child(grid)
+	for id in WorldMap.MAPS:
+		var d := WorldMap.map_data(id)
+		if d.is_empty():
+			continue
+		var btn := Button.new()
+		btn.name = "Map_" + id
+		btn.custom_minimum_size = Vector2(300, 268)
+		btn.focus_mode = Control.FOCUS_NONE
+		var col := VBoxContainer.new()
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.anchor_right = 1.0
+		col.anchor_bottom = 1.0
+		col.offset_left = 10
+		col.offset_right = -10
+		col.offset_top = 10
+		col.offset_bottom = -12
+		col.add_theme_constant_override("separation", 4)
+		btn.add_child(col)
+		var prev := TextureRect.new()
+		prev.texture = _map_preview(d)
+		prev.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		prev.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		prev.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		prev.custom_minimum_size = Vector2(0, 130)
+		prev.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(prev)
+		var nm := Label.new()
+		nm.text = str(d["name"])
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.add_theme_font_size_override("font_size", 20)
+		nm.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+		col.add_child(nm)
+		var bl := Label.new()
+		bl.text = str(d.get("blurb", ""))
+		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bl.add_theme_font_size_override("font_size", 13)
+		bl.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
+		col.add_child(bl)
+		var land := 0
+		for r in d["rows"]:
+			for ch in str(r):
+				if ch != ".":
+					land += 1
+		var info := Label.new()
+		info.text = "%dx%d hexes · %d land%s" % [int(d["grid_w"]), int(d["grid_h"]), land, " · wraps around" if bool(d.get("wraps", false)) else ""]
+		info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		info.add_theme_font_size_override("font_size", 12)
+		info.add_theme_color_override("font_color", Color(0.65, 0.67, 0.78))
+		col.add_child(info)
+		var map_id: String = id
+		btn.pressed.connect(func(): _start_campaign_on(map_id))
+		grid.add_child(btn)
+	var back := Button.new()
+	back.name = "MapChooserBack"
+	back.text = "Back"
+	back.custom_minimum_size = Vector2(160, 48)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	back.focus_mode = Control.FOCUS_NONE
+	back.pressed.connect(func(): layer.queue_free())
+	v.add_child(back)
 
 func _on_quit_pressed():
 	get_tree().quit()

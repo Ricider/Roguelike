@@ -183,9 +183,19 @@ func _variant_for(x: int, y: int) -> int:
 	return absi(x * 73856093 ^ y * 19349663) % TileArt.VARIANTS
 
 # ----------------------------------------------------------------- camera
+# Hex size at zoom 1: the world fills the width (it wraps); a regional map fits entirely.
 func _fit_size() -> float:
 	var avail := size - Vector2(FRAME_PX, FRAME_PX) * 2.0
-	return maxf(avail.x / (WorldMap.GRID_W * SQRT3), 0.0)
+	if WorldMap.WRAPS:
+		return maxf(avail.x / (WorldMap.GRID_W * SQRT3), 0.0)
+	return maxf(minf(avail.x / ((WorldMap.GRID_W + 0.5) * SQRT3), avail.y / (1.5 * WorldMap.GRID_H + 0.5)), 0.0)
+
+# Zoom level at which hexes are `px` pixels (centre to corner) on screen.
+func zoom_for_hex_size(px: float) -> float:
+	return clampf(px / maxf(_fit_size(), 0.001), ZOOM_MIN, ZOOM_MAX)
+
+func _map_width(s: float) -> float:
+	return (WorldMap.GRID_W + (0.0 if WorldMap.WRAPS else 0.5)) * SQRT3 * s
 
 # [hex size (centre->corner), origin x, origin y, hex width, wrap period]
 func metrics() -> Array:
@@ -193,7 +203,13 @@ func metrics() -> Array:
 	var w: float = SQRT3 * s
 	var period: float = WorldMap.GRID_W * w
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
-	var ox: float = floorf((size.x - period) * 0.5 + _pan.x)
+	var map_w: float = _map_width(s)
+	var ox: float = floorf((size.x - map_w) * 0.5 + _pan.x)
+	if not WorldMap.WRAPS:
+		if map_w + FRAME_PX * 2.0 <= size.x:
+			ox = floorf((size.x - map_w) * 0.5)
+		else:
+			ox = floorf(clampf((size.x - map_w) * 0.5 + _pan.x, size.x - map_w - FRAME_PX, FRAME_PX))
 	var oy: float
 	if map_h + FRAME_PX * 2.0 <= size.y:
 		oy = floorf((size.y - map_h) * 0.5)
@@ -209,6 +225,8 @@ func hex_center(x: int, y: int, m: Array) -> Vector2:
 # Screen position of hex t using the wrapped copy nearest the view centre.
 func screen_pos(t: Vector2i, m: Array) -> Vector2:
 	var c := hex_center(t.x, t.y, m)
+	if not WorldMap.WRAPS:
+		return c
 	var period: float = m[4]
 	var mid: float = size.x * 0.5
 	c.x = c.x + roundf((mid - c.x) / period) * period
@@ -219,6 +237,10 @@ func _visible_copies(t: Vector2i, m: Array, margin: float) -> Array:
 	var out: Array = []
 	var period: float = m[4]
 	var c := hex_center(t.x, t.y, m)
+	if not WorldMap.WRAPS:
+		if c.x >= -margin and c.x <= size.x + margin and c.y >= -margin and c.y <= size.y + margin:
+			out.append(c)
+		return out
 	var k0 := int(floor((-margin - c.x) / period))
 	var k1 := int(ceil((size.x + margin - c.x) / period))
 	for k in range(k0, k1 + 1):
@@ -241,9 +263,9 @@ func zoom_by(factor: float, anchor: Vector2 = Vector2(-1, -1)) -> void:
 	var new_ox: float = anchor.x - (anchor.x - float(m[1])) * ratio
 	var new_oy: float = anchor.y - (anchor.y - float(m[2])) * ratio
 	zoom = new_zoom
-	var new_period: float = WorldMap.GRID_W * SQRT3 * new_s
+	var new_map_w: float = _map_width(new_s)
 	var new_map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * new_s
-	_pan.x = new_ox - (size.x - new_period) * 0.5
+	_pan.x = new_ox - (size.x - new_map_w) * 0.5
 	_pan.y = new_oy - (size.y - new_map_h) * 0.5
 	_normalize_pan()
 	_redraw_all()
@@ -256,8 +278,12 @@ func pan_by(delta: Vector2) -> void:
 func _normalize_pan() -> void:
 	var s: float = _fit_size() * zoom
 	var period: float = WorldMap.GRID_W * SQRT3 * s
-	if period > 0.0:
-		_pan.x = fposmod(_pan.x + period * 0.5, period) - period * 0.5
+	if WorldMap.WRAPS:
+		if period > 0.0:
+			_pan.x = fposmod(_pan.x + period * 0.5, period) - period * 0.5
+	else:
+		var slack_x: float = maxf(0.0, (_map_width(s) - size.x) * 0.5 + FRAME_PX)
+		_pan.x = clampf(_pan.x, -slack_x, slack_x)
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
 	var slack: float = maxf(0.0, (map_h - size.y) * 0.5 + FRAME_PX)
 	_pan.y = clampf(_pan.y, -slack, slack)
@@ -308,7 +334,9 @@ func tile_at_point(p: Vector2) -> Vector2i:
 	else:
 		rz = -rx - ry
 	var row := int(rz)
-	var col := posmod(int(rx) + (row - (row & 1)) / 2, WorldMap.GRID_W) # east-west wrap
+	var col := int(rx) + (row - (row & 1)) / 2
+	if WorldMap.WRAPS:
+		col = posmod(col, WorldMap.GRID_W) # east-west wrap
 	if not WorldMap.in_bounds(col, row):
 		return Vector2i(-1, -1)
 	return Vector2i(col, row)
@@ -406,7 +434,7 @@ func _draw() -> void:
 	for y in range(vr[2], vr[3] + 1):
 		for cx in range(vr[0], vr[1] + 1):
 			var c := hex_center(cx, y, m)
-			if y < 0 or y >= WorldMap.GRID_H:
+			if y < 0 or y >= WorldMap.GRID_H or (not WorldMap.WRAPS and (cx < 0 or cx >= WorldMap.GRID_W)):
 				# deep sea beyond the poles
 				if not ocean_tiles.is_empty():
 					_draw_hex_tex(self, c, s + 0.5, ocean_tiles[posmod(cx + y + _sea_phase, ocean_tiles.size())] as Texture2D, Color(0.42, 0.47, 0.62))
@@ -433,6 +461,8 @@ func _draw() -> void:
 	# Nation borders along hex edges (second pass so they sit on top of every hex)
 	for y in range(maxi(vr[2], 0), mini(vr[3], WorldMap.GRID_H - 1) + 1):
 		for cx in range(vr[0], vr[1] + 1):
+			if not WorldMap.WRAPS and (cx < 0 or cx >= WorldMap.GRID_W):
+				continue
 			var key2 := MapCampaign.key_of(posmod(cx, WorldMap.GRID_W), y)
 			if not _edge_map.has(key2):
 				continue
@@ -444,11 +474,16 @@ func _draw() -> void:
 				var b := c2 + _corner_unit[(k + 1) % 6] * inset
 				draw_line(a, b, Color(0.05, 0.04, 0.08, 0.85), bw + 2.0)
 				draw_line(a, b, ed[1] as Color, bw)
-	# Pixel bezel along the polar edges of the map
-	for edge_y in [oy - FRAME_PX, oy + map_h]:
-		if edge_y + FRAME_PX >= 0.0 and edge_y <= size.y:
-			draw_rect(Rect2(0, edge_y, size.x, FRAME_PX), Color8(20, 16, 30), true)
-			draw_rect(Rect2(0, edge_y + 2.0, size.x, 2.0), Color8(94, 104, 128), true)
+	# Pixel bezel: polar edges (the world wraps sideways); all four sides on regional maps
+	if WorldMap.WRAPS:
+		for edge_y in [oy - FRAME_PX, oy + map_h]:
+			if edge_y + FRAME_PX >= 0.0 and edge_y <= size.y:
+				draw_rect(Rect2(0, edge_y, size.x, FRAME_PX), Color8(20, 16, 30), true)
+				draw_rect(Rect2(0, edge_y + 2.0, size.x, 2.0), Color8(94, 104, 128), true)
+	else:
+		var fr := Rect2(m[1], oy, _map_width(s), map_h).grow(FRAME_PX * 0.5)
+		draw_rect(fr, Color8(20, 16, 30), false, FRAME_PX)
+		draw_rect(fr.grow(-2.0), Color8(94, 104, 128), false, 2.0)
 	# Capitals: pixel flag on a pole, planted on the capital hex
 	for n in WorldMap.nations():
 		var d := n as Dictionary
@@ -520,6 +555,8 @@ func add_place(at: Vector2i) -> void:
 
 func _wrap_target(a: Vector2, b: Vector2, m: Array) -> Vector2:
 	# shoot across the east-west seam the short way
+	if not WorldMap.WRAPS:
+		return b
 	var period: float = m[4]
 	b.x = b.x + roundf((a.x - b.x) / period) * period
 	return b
