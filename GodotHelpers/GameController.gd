@@ -135,45 +135,13 @@ func _log_tutorial_analytics(event: String, step: int, expected: String, got: St
 
 
 func _style_round_button(btn: Button, primary: bool = true):
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.18,0.18,0.27,1) if primary else Color(0.14,0.14,0.20,1)
-	sb.border_color = Color(0.95,0.85,0.4,1) if primary else Color(0.35,0.35,0.45,0.6)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(16)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 6
-	sb.content_margin_bottom = 6
-	sb.shadow_color = Color(0,0,0,0.35)
-	sb.shadow_size = 5
-	sb.shadow_offset = Vector2(0,2)
-	btn.add_theme_stylebox_override("normal", sb)
-	var sb_h := StyleBoxFlat.new()
-	sb_h.bg_color = Color(0.24,0.24,0.34,1) if primary else Color(0.20,0.20,0.28,1)
-	sb_h.border_color = Color(1,0.92,0.55,1)
-	sb_h.set_border_width_all(2)
-	sb_h.set_corner_radius_all(16)
-	sb_h.content_margin_left = 12
-	sb_h.content_margin_right = 12
-	sb_h.content_margin_top = 6
-	sb_h.content_margin_bottom = 6
-	sb_h.shadow_color = Color(0,0,0,0.45)
-	sb_h.shadow_size = 6
-	btn.add_theme_stylebox_override("hover", sb_h)
-	var sb_p := StyleBoxFlat.new()
-	sb_p.bg_color = Color(0.12,0.12,0.18,1)
-	sb_p.border_color = sb.border_color
-	sb_p.set_border_width_all(2)
-	sb_p.set_corner_radius_all(16)
-	sb_p.content_margin_left = 12
-	sb_p.content_margin_right = 12
-	sb_p.content_margin_top = 6
-	sb_p.content_margin_bottom = 6
-	btn.add_theme_stylebox_override("pressed", sb_p)
-	btn.add_theme_stylebox_override("focus", sb_h)
-	btn.add_theme_color_override("font_color", Color(1,1,1))
-	if not primary:
-		btn.add_theme_color_override("font_color", Color(0.92,0.92,0.95))
+	# Pixel-art 9-slice buttons come from the project theme (Assets/UI/retro_theme.tres).
+	# Primary actions get the gold "PrimaryButton" variation; everything else the steel default.
+	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+		btn.remove_theme_stylebox_override(st)
+	btn.remove_theme_color_override("font_color")
+	btn.theme_type_variation = &"PrimaryButton" if primary else &""
+	btn.focus_mode = Control.FOCUS_NONE
 
 func _move_player_piles_to_bottom():
 	# Bottom-right vertical: hide opponent piles, keep player discard/graveyard vertically
@@ -394,7 +362,8 @@ func _setup_tutorial_overlay():
 	var title := Label.new()
 	title.text = "TUTORIAL"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 18)
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 14)
 	title.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
 	vbox.add_child(title)
 	# Steps are 1-3 sentences now, so the box simply fits its text (no scroll area)
@@ -603,16 +572,16 @@ func _apply_kraj_efficient_ui():
 	for bar in [ai_hp_bar, player_hp_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = hp_fill_muted if bar.value >= 30 else Color(1, 0.6, 0.6, 1)
-			bar.custom_minimum_size = Vector2(26, 180)
+			bar.custom_minimum_size = Vector2(36, 180)
 			bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for bar in [ai_bio_bar, player_bio_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = bio_fill_muted
-			bar.custom_minimum_size = Vector2(26, 180)
+			bar.custom_minimum_size = Vector2(36, 180)
 	for bar in [ai_money_bar, player_money_bar]:
 		if bar != null and is_instance_valid(bar):
 			bar.tint_progress = money_fill_muted
-			bar.custom_minimum_size = Vector2(26, 180)
+			bar.custom_minimum_size = Vector2(36, 180)
 	# LeftGauges / RightGauges as safe green zones - narrow, low opacity bg
 	var left = get_node_or_null("VBox/MainHBox/LeftGauges") as Control
 	var right = get_node_or_null("VBox/MainHBox/RightGauges") as Control
@@ -1454,7 +1423,7 @@ func _boost_text_resolution():
 
 func _enforce_uniform_gauge_width():
 	# Kraj Key #5 weight + Key #1 safe zone: thin beige bars, narrow green zone
-	var w: float = 26
+	var w: float = 36
 	var h: float = 180
 	var gw: float = 80
 	var lg0: Control = _get_left_gauges()
@@ -1468,7 +1437,15 @@ func _enforce_uniform_gauge_width():
 			bar.custom_minimum_size = Vector2(w, h)
 			bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			bar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			# Pixel bezel + fill share one 36x192 layout: nine-patch keeps the 6px sides and
+			# 9px end caps crisp while the middle stretches to the bar height.
+			bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			bar.nine_patch_stretch = true
+			bar.stretch_margin_left = 6
+			bar.stretch_margin_right = 6
+			bar.stretch_margin_top = 9
+			bar.stretch_margin_bottom = 9
+			bar.texture_progress_offset = Vector2.ZERO
 			# Round corners via wrapper clipping - pill shape radius 13
 			if bar.get_parent() != null and not bar.get_parent().name.begins_with("RoundedClip"):
 				var parent: Control = bar.get_parent() as Control
@@ -1483,7 +1460,7 @@ func _enforce_uniform_gauge_width():
 				wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				var wsb := StyleBoxFlat.new()
 				wsb.bg_color = Color(0, 0, 0, 0)
-				wsb.set_corner_radius_all(13)
+				wsb.set_corner_radius_all(0)
 				wsb.set_border_width_all(0)
 				wrap.add_theme_stylebox_override("panel", wsb)
 				wrap.add_child(bar)
@@ -3908,9 +3885,16 @@ func _add_placement_hint(btn: Button) -> void:
 	sb.set_corner_radius_all(4)
 	hint.add_theme_stylebox_override("panel", sb)
 	btn.add_child(hint)
-	var tw := hint.create_tween().set_loops()
-	tw.tween_property(hint, "modulate:a", 0.45, 0.6).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(hint, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_SINE)
+	# Start the looping pulse only once the square is in the tree; a looped tween on a
+	# node outside the tree finishes instantly and trips Godot's infinite-loop guard.
+	var start_pulse := func():
+		var tw := hint.create_tween().set_loops()
+		tw.tween_property(hint, "modulate:a", 0.45, 0.6).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(hint, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_SINE)
+	if hint.is_inside_tree():
+		start_pulse.call()
+	else:
+		hint.tree_entered.connect(start_pulse, CONNECT_ONE_SHOT)
 
 func _adjacent_friendly_units(r: int, c: int) -> int:
 	var n: int = 0
@@ -4102,8 +4086,9 @@ func _add_combat_log_button() -> void:
 	_combat_log_panel.offset_bottom = 470
 	var vb := VBoxContainer.new()
 	var title := Label.new()
-	title.text = "Combat Log"
-	title.add_theme_font_size_override("font_size", 18)
+	title.text = "COMBAT LOG"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 12)
 	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
 	vb.add_child(title)
 	_combat_log_label = RichTextLabel.new()

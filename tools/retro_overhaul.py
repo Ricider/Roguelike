@@ -1907,20 +1907,195 @@ def icon(name):
     return g
 
 
-def gauge(fill_dark, fill_mid, fill_light):
-    bg = Pix(8, 64)
-    bg.r(0, 0, 8, 64, "K")
-    bg.r(1, 1, 6, 62, "n")
-    for y in range(8, 64, 8):
-        bg.r(1, y, 6, 1, "k")
-    fill = Pix(6, 62)
-    for y in range(62):
-        fill.p(0, y, fill_light)
-        fill.r(1, y, 3, 1, fill_mid)
-        fill.r(4, y, 2, 1, fill_dark)
-        if y % 8 == 7:
-            fill.r(0, y, 6, 1, fill_dark)
+def gauge(fill_dark, fill_mid, fill_light, fill_hi):
+    """12x64 bezel + matching fill (x3 = 36x192). Same geometry for both so the
+    TextureProgressBar can nine-patch them with identical margins (2px sides,
+    3px caps in logical pixels)."""
+    W, H = 12, 64
+    bg = Pix(W, H)
+    bg.r(0, 1, W, H - 2, "K")
+    bg.r(1, 0, W - 2, H, "K")
+    bg.r(1, 1, W - 2, H - 2, "2")
+    bg.r(1, 1, W - 2, 1, "4")
+    bg.r(1, 1, 1, H - 2, "3")
+    bg.r(W - 2, 1, 1, H - 2, "1")
+    bg.r(1, H - 2, W - 2, 1, "1")
+    bg.r(1, 2, W - 2, 1, "3")
+    bg.r(1, H - 3, W - 2, 1, "1")
+    for x in (3, W - 4):
+        bg.p(x, 1, "5")
+        bg.p(x, H - 2, "3")
+    bg.r(2, 3, W - 4, H - 6, "n")
+    for y in range(8, H - 4, 6):
+        bg.r(3, y, W - 6, 1, "k")
+        bg.p(2, y, "1")
+        bg.p(W - 3, y, "1")
+    fill = Pix(W, H)
+    for y in range(3, H - 3):
+        fill.p(2, y, fill_mid)
+        fill.p(3, y, fill_hi)
+        fill.r(4, y, 3, 1, fill_light)
+        fill.r(7, y, 2, 1, fill_mid)
+        fill.p(9, y, fill_dark)
+    for y in range(8, H - 4, 6):
+        fill.r(2, y, W - 4, 1, fill_dark)
+        fill.p(3, y + 1, "W")
     return bg, fill
+
+
+# ------------------------------------------------------------------ UI kit
+# 9-slice pixel buttons and panels (16x16 logical, x3). Texture margins are
+# 3 logical px (9 real px) on the sides/top and 4 at the bottom lip.
+BUTTON_KINDS = {
+    # kind: (body, light, dark, rim, rim_hover)
+    "secondary": ((44, 48, 76), (78, 86, 126), (26, 28, 48), (120, 130, 170), (255, 214, 90)),
+    "primary": ((196, 134, 34), (246, 196, 84), (120, 74, 18), (255, 232, 150), (255, 250, 210)),
+    "selected": ((58, 62, 96), (98, 106, 150), (32, 34, 58), (255, 214, 90), (255, 240, 160)),
+    "danger": ((150, 38, 44), (210, 74, 72), (84, 20, 28), (240, 130, 120), (255, 214, 90)),
+}
+
+
+def button_tex(kind, state):
+    body, light, dark, rim, rim_h = BUTTON_KINDS[kind]
+    if state == "hover":
+        body = tuple(min(255, int(c * 1.18) + 6) for c in body)
+        light = tuple(min(255, int(c * 1.12) + 6) for c in light)
+        rim = rim_h
+    if state == "disabled":
+        grey = lambda c: (int(sum(c) / 3 * 0.7),) * 3
+        body, light, dark, rim = grey(body), grey(light), grey(dark), grey(rim)
+    g = Pix(16, 16)
+    pressed = state == "pressed"
+    top = 1 if pressed else 0
+    bottom = 15
+    # drop shadow under the lip (not when pressed down)
+    if not pressed:
+        g.r(1, 15, 14, 1, (0, 0, 0, 90))
+        bottom = 14
+    g.r(1, top, 14, bottom - top + 1, "K")
+    g.r(0, top + 1, 16, bottom - top - 1, "K")
+    g.r(1, top + 1, 14, bottom - top - 1, rim)
+    g.r(2, top + 2, 12, bottom - top - 3, body)
+    g.r(2, top + 2, 12, 1, light)
+    g.r(2, top + 2, 1, bottom - top - 4, light)
+    if not pressed:
+        g.r(2, bottom - 2, 12, 2, dark)
+    else:
+        g.r(2, bottom - 1, 12, 1, dark)
+    g.p(1, top + 1, "K")
+    g.p(14, top + 1, "K")
+    g.p(1, bottom - 1, "K")
+    g.p(14, bottom - 1, "K")
+    return g
+
+
+def panel_tex(rim, alpha=236):
+    g = Pix(16, 16)
+    g.r(1, 0, 14, 16, "K")
+    g.r(0, 1, 16, 14, "K")
+    g.r(1, 1, 14, 14, rim)
+    g.r(2, 2, 12, 12, (16, 14, 28, alpha))
+    g.r(2, 2, 12, 1, (40, 38, 60, alpha))
+    for (x, y) in ((1, 1), (14, 1), (1, 14), (14, 14)):
+        g.p(x, y, "5")
+    return g
+
+
+THEME_TRES = """[gd_resource type="Theme" load_steps={steps} format=3]
+
+[ext_resource type="FontFile" path="res://Assets/Fonts/PixelifySans.ttf" id="1_body"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/PressStart2P.ttf" id="2_title"]
+{ext}
+[sub_resource type="StyleBoxEmpty" id="focus_empty"]
+
+{subs}
+[resource]
+default_font = ExtResource("1_body")
+default_font_size = 18
+Button/colors/font_color = Color(0.95, 0.94, 0.9, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(0.9, 0.9, 0.86, 1)
+Button/colors/font_focus_color = Color(1, 1, 1, 1)
+Button/colors/font_disabled_color = Color(0.62, 0.62, 0.66, 1)
+Button/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+Button/constants/outline_size = 4
+Button/styles/focus = SubResource("focus_empty")
+{button_styles}
+PrimaryButton/base_type = &"Button"
+PrimaryButton/colors/font_color = Color(0.16, 0.08, 0.02, 1)
+PrimaryButton/colors/font_hover_color = Color(0.1, 0.05, 0.0, 1)
+PrimaryButton/colors/font_pressed_color = Color(0.16, 0.08, 0.02, 1)
+PrimaryButton/colors/font_focus_color = Color(0.16, 0.08, 0.02, 1)
+PrimaryButton/colors/font_outline_color = Color(1, 0.9, 0.6, 0.6)
+PrimaryButton/constants/outline_size = 2
+{primary_styles}
+SelectedButton/base_type = &"Button"
+{selected_styles}
+DangerButton/base_type = &"Button"
+{danger_styles}
+PanelContainer/styles/panel = SubResource("sb_panel")
+Panel/styles/panel = SubResource("sb_panel")
+GoldPanel/base_type = &"PanelContainer"
+GoldPanel/styles/panel = SubResource("sb_panel_gold")
+TooltipPanel/styles/panel = SubResource("sb_panel")
+TitleLabel/base_type = &"Label"
+TitleLabel/fonts/font = ExtResource("2_title")
+TitleLabel/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+TitleLabel/constants/outline_size = 8
+TitleLabel/constants/shadow_offset_x = 3
+TitleLabel/constants/shadow_offset_y = 3
+TitleLabel/colors/font_shadow_color = Color(0, 0, 0, 0.6)
+Label/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+"""
+
+
+def gen_ui_kit():
+    kit = ui_path("kit")
+    ext, subs, styles = [], [], {}
+    rid = 3
+    for kind in BUTTON_KINDS:
+        for state in ("normal", "hover", "pressed", "disabled"):
+            name = "btn_%s_%s" % (kind, state)
+            button_tex(kind, state).save(os.path.join(kit, name + ".png"), 3)
+            ext.append('[ext_resource type="Texture2D" path="res://Assets/UI/kit/%s.png" id="%d_%s"]' % (name, rid, name))
+            subs.append(
+                '[sub_resource type="StyleBoxTexture" id="sb_%s"]\n'
+                'texture = ExtResource("%d_%s")\n'
+                'texture_margin_left = 9.0\ntexture_margin_top = 9.0\n'
+                'texture_margin_right = 9.0\ntexture_margin_bottom = 12.0\n'
+                'content_margin_left = 16.0\ncontent_margin_top = %s\n'
+                'content_margin_right = 16.0\ncontent_margin_bottom = %s\n'
+                % (name, rid, name, "11.0" if state == "pressed" else "8.0", "8.0" if state == "pressed" else "11.0"))
+            styles.setdefault(kind, []).append((state, "sb_" + name))
+            rid += 1
+    for name, rim in (("panel", "2"), ("panel_gold", "y")):
+        panel_tex(rim).save(os.path.join(kit, name + ".png"), 3)
+        ext.append('[ext_resource type="Texture2D" path="res://Assets/UI/kit/%s.png" id="%d_%s"]' % (name, rid, name))
+        subs.append(
+            '[sub_resource type="StyleBoxTexture" id="sb_%s"]\n'
+            'texture = ExtResource("%d_%s")\n'
+            'texture_margin_left = 9.0\ntexture_margin_top = 9.0\n'
+            'texture_margin_right = 9.0\ntexture_margin_bottom = 9.0\n'
+            'content_margin_left = 14.0\ncontent_margin_top = 12.0\n'
+            'content_margin_right = 14.0\ncontent_margin_bottom = 12.0\n'
+            % (name, rid, name))
+        rid += 1
+
+    def style_lines(prefix, kind):
+        return "\n".join("%s/styles/%s = SubResource(\"%s\")" % (prefix, st, sid) for st, sid in styles[kind])
+
+    tres = THEME_TRES.format(
+        steps=len(ext) + len(subs) + 4,
+        ext="\n".join(ext) + "\n",
+        subs="\n".join(subs),
+        button_styles=style_lines("Button", "secondary"),
+        primary_styles=style_lines("PrimaryButton", "primary"),
+        selected_styles=style_lines("SelectedButton", "selected"),
+        danger_styles=style_lines("DangerButton", "danger"),
+    )
+    with open(ui_path("retro_theme.tres"), "w") as f:
+        f.write(tres)
+    print("ui kit done")
 
 
 def gen_ui():
@@ -1928,11 +2103,12 @@ def gen_ui():
         icon(name).save(ui_path(name + ".png"), 32)
     icon("flying_icon").save(ui_path("flying_icon.png"), 4)
     icon("hasrange_icon").save(ui_path("hasrange_icon.png"), 4)
-    for key, cols in (("hp", ("e", "R", (255, 130, 130))), ("bio", ("p", "G", (200, 255, 200))),
-                      ("money", ("y", "Y", "W"))):
+    for key, cols in (("hp", ("e", "R", (255, 104, 104), (255, 190, 180))),
+                      ("bio", ("p", "q", "G", (200, 255, 200))),
+                      ("money", ("y", (230, 170, 40), "Y", "W"))):
         bg, fill = gauge(*cols)
-        bg.save(ui_path("%s_bg.png" % key), 8)
-        fill.save(ui_path("%s_fill.png" % key), 8)
+        bg.save(ui_path("%s_bg.png" % key), 3)
+        fill.save(ui_path("%s_fill.png" % key), 3)
     # tiled game backdrop: dark scorched ground
     t = Pix(16, 16, rgba((30, 28, 40)))
     k = 5
@@ -2041,6 +2217,7 @@ GROUPS = {
     "modifiers": gen_modifiers,
     "players": gen_players,
     "ui": gen_ui,
+    "kit": gen_ui_kit,
 }
 
 

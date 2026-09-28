@@ -31,6 +31,10 @@ window/stretch/mode="viewport"
 window/stretch/aspect="expand"
 window/stretch/scale_mode="canvas_items"
 
+[gui]
+
+theme/custom="res://Assets/UI/retro_theme.tres"
+
 [input]
 
 move_left={
