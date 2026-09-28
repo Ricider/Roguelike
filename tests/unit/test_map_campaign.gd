@@ -74,8 +74,9 @@ func test_border_edges_synthetic_pocket():
 		"32,6": "Horde",
 		"31,7": "Coalition Army", "32,7": "Coalition Army", "33,7": "Coalition Army",
 	}
-	assert_eq(c.border_edges("Horde").size(), 4, "lone tile borders all 4 sides")
-	assert_eq(c.border_edges("Coalition Army").size(), 8, "3-tile row has 8 edges")
+	# Hex map: a lone hex has 6 edges; a 3-hex row shares 2 internal edges (3*6 - 2*2)
+	assert_eq(c.border_edges("Horde").size(), 6, "lone hex borders all 6 sides")
+	assert_eq(c.border_edges("Coalition Army").size(), 14, "3-hex row has 14 edges")
 	assert_true(c.border_edges("Insurgents").is_empty(), "landless nation has no edges")
 
 func test_tiles_for_hp():

@@ -5,7 +5,11 @@
 extends RefCounted
 class_name MapCampaign
 
-const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+# Hex grid in "odd-r" offset layout: pointy-top hexes, odd rows sit half a hex
+# to the right. Direction index i matches hex edge i as drawn by WorldMapView:
+# 0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE.
+const HEX_DIRS_EVEN: Array = [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1)]
+const HEX_DIRS_ODD: Array = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, -1)]
 
 var player_nation: String = ""
 var owner: Dictionary = {} # "x,y" -> nation name, land tiles only
@@ -20,15 +24,23 @@ static func key_of(x: int, y: int) -> String:
 static func tiles_for_hp(hp_left: int) -> int:
 	return maxi(1, hp_left / 10)
 
-# Orthogonal neighbors with east-west wraparound (Civ-style cylinder map),
+static func hex_dirs(row: int) -> Array:
+	return HEX_DIRS_ODD if (row & 1) == 1 else HEX_DIRS_EVEN
+
+# Neighbor across hex edge i with east-west wraparound; y may fall off the
+# map (callers check 0 <= y < GRID_H).
+static func hex_neighbor(t: Vector2i, i: int) -> Vector2i:
+	var d := hex_dirs(t.y)[i] as Vector2i
+	return Vector2i((t.x + d.x + WorldMap.GRID_W) % WorldMap.GRID_W, t.y + d.y)
+
+# The 6 hex neighbors with east-west wraparound (Civ-style cylinder map),
 # so the Bering Strait land bridge links the Americas to Asia.
 static func wrapped_neighbors(t: Vector2i) -> Array:
 	var out: Array = []
-	for dir in DIRS:
-		var nx: int = (t.x + (dir as Vector2i).x + WorldMap.GRID_W) % WorldMap.GRID_W
-		var ny: int = t.y + (dir as Vector2i).y
-		if ny >= 0 and ny < WorldMap.GRID_H:
-			out.append(Vector2i(nx, ny))
+	for i in range(6):
+		var n := hex_neighbor(t, i)
+		if n.y >= 0 and n.y < WorldMap.GRID_H:
+			out.append(n)
 	return out
 
 func new_campaign(nation: String) -> void:
@@ -106,22 +118,23 @@ func neighbors_of(nation: String) -> Array:
 func is_neighbor(a: String, b: String) -> bool:
 	return neighbors_of(a).has(b)
 
-# Border edges of a nation for map highlighting: Array of [tile, dir]
-# where dir is the orthogonal step toward a non-nation neighbor
-# (rival land, wilderness, ocean, or map edge).
+# Border edges of a nation for map highlighting: Array of [tile, dir, edge]
+# where dir is the (unwrapped) offset to a non-nation hex neighbor (rival
+# land, wilderness, ocean, or map edge) and edge is the hex edge index 0-5.
 func border_edges(nation: String) -> Array:
 	var out: Array = []
 	for t in tiles_of(nation):
 		var tile := t as Vector2i
-		for dir in DIRS:
-			var d := dir as Vector2i
+		var dirs := hex_dirs(tile.y)
+		for i in range(6):
+			var d := dirs[i] as Vector2i
 			var nx: int = (tile.x + d.x + WorldMap.GRID_W) % WorldMap.GRID_W
 			var ny: int = tile.y + d.y
 			var o := ""
 			if ny >= 0 and ny < WorldMap.GRID_H:
 				o = owner_of(nx, ny)
 			if o != nation:
-				out.append([tile, d])
+				out.append([tile, d, i])
 	return out
 
 func can_attack(target: String) -> bool:

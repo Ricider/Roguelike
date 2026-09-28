@@ -11,6 +11,9 @@ var _battle_layer: Control = null
 var _battle_rng := RandomNumberGenerator.new()
 
 func _ready():
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play_music("menu")
 	var play_btn = get_node_or_null("CenterContainer/VBox/PlayButton")
 	if play_btn:
 		play_btn.grab_focus()

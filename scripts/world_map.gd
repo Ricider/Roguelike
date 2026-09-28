@@ -22,6 +22,7 @@ var _target: String = ""
 var _land_total: int = 0
 
 func _ready() -> void:
+	_sfx_music("map")
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
 		if gs.map_campaign == null or not gs.map_mode or gs.map_campaign.player_nation != gs.selected_player_name:
@@ -32,6 +33,16 @@ func _ready() -> void:
 				_land_total += 1
 	_build_ui()
 	_refresh()
+
+func _sfx(sfx_name: String) -> void:
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play(sfx_name)
+
+func _sfx_music(track: String) -> void:
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play_music(track)
 
 func _campaign() -> MapCampaign:
 	var gs = get_node_or_null("/root/GameState")
@@ -199,6 +210,12 @@ func _build_ui() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(spec[2])
 		row.add_child(b)
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		var snd: Button = sm.make_toggle_button()
+		snd.custom_minimum_size = Vector2(0, 40)
+		snd.add_theme_font_size_override("font_size", 15)
+		side.add_child(snd)
 
 func _refresh() -> void:
 	var c := _campaign()
@@ -323,6 +340,7 @@ func _on_tile_selected(x: int, y: int) -> void:
 	var c := _campaign()
 	if c == null:
 		return
+	_sfx("map_select")
 	_target = ""
 	_attack_btn.disabled = true
 	_attack_btn.text = "Attack"
@@ -366,6 +384,7 @@ func _on_attack_pressed() -> void:
 		return
 	if not c.can_attack(_target):
 		return
+	_sfx("war")
 	gs.start_map_battle(_target)
 	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 

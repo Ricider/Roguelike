@@ -495,7 +495,7 @@ func _highlight_hand_card(card_name: String):
 			var idx: int = int(_hand_display_idx[i]) if i < _hand_display_idx.size() else i
 			if idx < human.Hand.size() and (human.Hand[idx] as Card).card_name == card_name:
 				(child as Button).modulate = Color(1, 0.92, 0.4)
-				var tw := create_tween()
+				var tw := (child as Node).create_tween()
 				tw.set_loops()
 				tw.tween_property(child, "scale", Vector2(1.06, 1.06), 0.4)
 				tw.tween_property(child, "scale", Vector2(1.0, 1.0), 0.4)
@@ -539,7 +539,7 @@ func _highlight_end_turn():
 			tutorial_highlight_tween.kill()
 		end_turn_btn.modulate = Color(1, 0.92, 0.4)
 		end_turn_btn.scale = Vector2(1,1)
-		var tw := create_tween()
+		var tw := end_turn_btn.create_tween()
 		tw.set_loops()
 		tw.tween_property(end_turn_btn, "scale", Vector2(1.08, 1.08), 0.35)
 		tw.tween_property(end_turn_btn, "scale", Vector2(1.0, 1.0), 0.35)
@@ -1658,6 +1658,9 @@ func _clear_board(player: Player):
 
 func _ready():
 	var gs = get_node_or_null("/root/GameState")
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play_music("battle")
 	# Roguelike run: use persistent player/enemy sequence per Main Game Rules
 	if gs != null and gs.run_started and gs.run_player != null:
 		human = gs.run_player
@@ -2497,7 +2500,7 @@ func _show_attack_arrow(attacker: Player, attacker_sq: Square, defender: Player)
 		if c is Control:
 			(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Fade in and looping fade in/out - half speed (was 0.35/0.55)
-	var tw := create_tween()
+	var tw := (root as Node).create_tween()
 	tw.set_loops()
 	tw.tween_property(root, "modulate:a", 1.0, 0.70).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(root, "modulate:a", 0.25, 1.10).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -3391,18 +3394,24 @@ func _buy_shop_card(card: Card):
 	if gs == null:
 		return
 	if gs.buy_card(card):
+		_sfx("shop_buy")
 		human.Influence = gs.run_player.Influence
 		_show_shop()
 		_refresh_ui()
+	else:
+		_sfx("deny")
 
 func _buy_shop_modifier(mod: Modifier):
 	var gs = get_node_or_null("/root/GameState")
 	if gs == null:
 		return
 	if gs.buy_modifier(mod):
+		_sfx("shop_buy")
 		human.Influence = gs.run_player.Influence
 		_show_shop()
 		_refresh_ui()
+	else:
+		_sfx("deny")
 
 func _show_remove_dialog():
 	var gs = get_node_or_null("/root/GameState")
@@ -3828,6 +3837,33 @@ func _refresh_ui():
 	# Hand
 	_refresh_hand()
 
+# --- Sound (SoundManager autoload; assets from tools/chiptune.py) -------------
+const SHOT_SFX := {
+	"Infantry": "shot_rifle", "Special Ops": "shot_rifle",
+	"Tank": "shot_cannon", "Artilery": "shot_cannon", "Howitzer": "shot_cannon",
+	"Rocket Launcher": "shot_rocket", "RocketLauncher": "shot_rocket",
+	"Drone": "shot_laser", "Fighter Jet": "missile", "Interceptor": "missile",
+	"Anti Aircraft": "shot_flak",
+}
+
+func _sfx(sfx_name: String, volume_db: float = 0.0) -> void:
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play(sfx_name, volume_db)
+
+func _impact_sfx(entry: Dictionary) -> String:
+	if bool(entry["is_direct"]):
+		return "hq_hit"
+	if bool(entry.get("intercepted", false)):
+		return "intercept"
+	var tgt: Card = entry["target"]
+	var hp_left: int = 1
+	if tgt is Unit:
+		hp_left = (tgt as Unit).HitPoints
+	elif tgt is Building:
+		hp_left = (tgt as Building).HitPoints
+	return "explosion" if hp_left <= 0 else "hit"
+
 # --- Board tiles, placement hints, drag-to-place, shortcuts, combat log ------
 var _tile_tex_player: Texture2D = null
 var _tile_tex_ai: Texture2D = null
@@ -4066,6 +4102,14 @@ func _add_combat_log_button() -> void:
 	var menu = controls.get_node_or_null("MenuBtn")
 	if menu:
 		controls.move_child(lbtn, menu.get_index())
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null and not controls.has_node("SoundToggle"):
+		var snd: Button = sm.make_toggle_button()
+		snd.custom_minimum_size = Vector2(150, 40)
+		snd.add_theme_font_size_override("font_size", 16)
+		controls.add_child(snd)
+		if menu:
+			controls.move_child(snd, menu.get_index())
 	# Floating panel, top-right under the controls; click Log again to close
 	_combat_log_panel = PanelContainer.new()
 	_combat_log_panel.name = "CombatLogPanel"
@@ -4319,17 +4363,17 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 					aura.offset_bottom = aura_size.y * 0.5
 					aura.pivot_offset = aura_size * 0.5
 					# Circular animate: pulse scale + gentle rotation + modulate
-					var atw := create_tween()
+					var atw := aura.create_tween()
 					atw.set_loops()
 					atw.set_trans(Tween.TRANS_SINE)
 					atw.set_ease(Tween.EASE_IN_OUT)
 					atw.tween_property(aura, "scale", Vector2(1.06,1.06), 0.85)
 					atw.tween_property(aura, "scale", Vector2(0.96,0.96), 0.85)
-					var atw2 := create_tween()
+					var atw2 := aura.create_tween()
 					atw2.set_loops()
 					atw2.tween_property(aura, "rotation", 0.18, 2.2).set_trans(Tween.TRANS_SINE)
 					atw2.tween_property(aura, "rotation", -0.18, 2.2)
-					var atw3 := create_tween()
+					var atw3 := aura.create_tween()
 					atw3.set_loops()
 					atw3.set_trans(Tween.TRANS_SINE)
 					atw3.tween_property(aura, "modulate", Color(1,1,1,0.85), 0.9)
@@ -4349,7 +4393,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 						aura.add_child(inner)
 						inner.position = (aura_size - Vector2(118,118))*0.5
 						inner.pivot_offset = Vector2(59,59)
-						var itw := create_tween()
+						var itw := inner.create_tween()
 						itw.set_loops()
 						itw.tween_property(inner, "rotation", 6.28, 3.0).set_trans(Tween.TRANS_LINEAR)
 					if is_intercepted_idle:
@@ -4366,7 +4410,7 @@ func _refresh_board(container: GridContainer, player: Player, is_human: bool):
 						aura.add_child(inner2)
 						inner2.position = (aura_size - Vector2(126,126))*0.5
 						inner2.pivot_offset = Vector2(63,63)
-						var i2tw := create_tween()
+						var i2tw := inner2.create_tween()
 						i2tw.set_loops()
 						i2tw.tween_property(inner2, "rotation", -6.28, 3.5).set_trans(Tween.TRANS_LINEAR)
 				# Magnified preview on hover — flipped for middle rows: top 2 of player -> bottom, lower 2 of opponent -> top
@@ -4720,13 +4764,13 @@ func _refresh_hand():
 			btn.add_theme_stylebox_override("pressed", _sel_sb)
 			btn.add_theme_stylebox_override("focus", _sel_sb)
 			btn.pivot_offset = Vector2(54, 34)
-			var _sel_tw: Tween = create_tween()
+			var _sel_tw: Tween = btn.create_tween()
 			_sel_tw.set_loops()
 			_sel_tw.set_trans(Tween.TRANS_SINE)
 			_sel_tw.set_ease(Tween.EASE_IN_OUT)
 			_sel_tw.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.42)
 			_sel_tw.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.42)
-			var _glow_tw: Tween = create_tween()
+			var _glow_tw: Tween = btn.create_tween()
 			_glow_tw.set_loops()
 			_glow_tw.set_trans(Tween.TRANS_SINE)
 			_glow_tw.tween_property(btn, "modulate", Color(1, 1, 1, 1), 0.5)
@@ -4777,8 +4821,10 @@ func _on_hand_click(idx: int):
 		selected_card = human.Hand[idx]
 		selected_card_idx = idx
 		if _selected_affordable():
+			_sfx("card_select", -3.0)
 			message_label.text = "Selected %s - click or drag to a highlighted square" % selected_card.card_name
 		else:
+			_sfx("deny", -4.0)
 			message_label.text = "Can't afford %s: need %s" % [selected_card.card_name, _shortfall_text(selected_card)]
 		if is_tutorial and tutorial_step == 0:
 			tutorial_step = 1
@@ -4826,6 +4872,7 @@ func _on_board_click(r: int, c: int):
 		fail_reason = "Can't afford %s: need %s" % [selected_card.card_name, _shortfall_text(selected_card)]
 	var ok: bool = human.play_card(selected_card, r, c)
 	_clear_ghost()
+	_sfx("card_place" if ok else "deny")
 	if ok:
 		message_label.text = "Placed %s at [%d,%d]" % [selected_card.card_name, r, c]
 		var placed_name: String = selected_card.card_name
@@ -4934,6 +4981,7 @@ func _refresh_boards_only():
 	_refresh_board(player_board_container, human, true)
 
 func _on_end_turn():
+	_sfx("end_turn", -2.0)
 	if is_tutorial:
 		if tutorial_step == 2:
 			# First End Turn - Housing placed, AI plays 2 drones
@@ -5136,6 +5184,7 @@ func _animate_live_entry(entry: Dictionary):
 	# Barracks buff has no special attack animation (removed per request)
 	# Projectile: unique per-card 20-frame high-rectangle derived from regular sprite
 	_spawn_attack_projectile(attacker_card, atk_btn, tgt_btn if not is_direct else tgt_hp_bar)
+	_sfx(SHOT_SFX.get(attacker_card.card_name, "shot_rifle"), -3.0)
 	# Attacker punch: scale+modulate in parallel, pivot-centered
 	if atk_btn != null and is_instance_valid(atk_btn):
 		atk_btn.pivot_offset = atk_btn.size * 0.5
@@ -5150,6 +5199,7 @@ func _animate_live_entry(entry: Dictionary):
 		_play_attack_anim(atk_btn)
 	_log_combat(_combat_line(entry))
 	await get_tree().create_timer(0.24).timeout
+	_sfx(_impact_sfx(entry), -2.0)
 	if is_direct:
 		if tgt_hp_bar != null and is_instance_valid(tgt_hp_bar):
 			# HP bar flash + shake via modulate, and value already updated live by _execute_combat_live
@@ -5638,6 +5688,7 @@ func _spawn_damage_number(anchor: Control, dmg: int):
 	tw.tween_callback(func(): if is_instance_valid(lbl): lbl.queue_free())
 
 func _spawn_heal_number(anchor: Control, amt: int):
+	_sfx("heal", -4.0)
 	if anchor == null or not is_instance_valid(anchor):
 		return
 	if amt <= 0:
@@ -5673,6 +5724,7 @@ func _spawn_income_effect(anchor: Control, kind: String, amount: int):
 		return
 	if amount <= 0:
 		return
+	_sfx("coin" if kind == "money" else "bio", -6.0)
 	# particle effect from Assets/Effects/income_*
 	var eff_kind: String = "income_money" if kind == "money" else "income_bio"
 	_spawn_special_effect(anchor, eff_kind)
@@ -5903,6 +5955,7 @@ func _check_game_over() -> bool:
 		end_turn_btn.disabled = true
 		return true
 	elif ai_player.HitPoints <= 0:
+		_sfx("victory")
 		if is_run:
 			var gained: int = ai_player.Influence
 			# Gain starting influence per Main Game Rules
@@ -5937,6 +5990,7 @@ func _check_game_over() -> bool:
 			end_turn_btn.disabled = true
 			return true
 	elif human.HitPoints <= 0:
+		_sfx("defeat")
 		if is_run and gs.map_mode and gs.map_campaign != null:
 			var tiles_lost: int = gs.map_campaign.conquer(ai_player.display_name, gs.selected_player_name, ai_player.HitPoints)
 			human.HitPoints = human.MaxHitPoints

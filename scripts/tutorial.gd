@@ -1,6 +1,9 @@
 extends Control
 
 func _ready():
+	var sm = get_node_or_null("/root/SoundManager")
+	if sm != null:
+		sm.play_music("menu")
 	var back = get_node_or_null("CenterContainer/VBox/BackButton")
 	if back and not back.pressed.is_connected(_on_back):
 		back.pressed.connect(_on_back)

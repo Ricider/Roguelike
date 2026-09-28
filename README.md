@@ -15,7 +15,7 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
 - **Touch / Mouse**: Tap a neighboring tile to move there, tap player to wait. On-screen D-pad (bottom right) also works on mobile/web
 
 ## World Map campaign (Civ-style)
-- Main menu -> **World Map**: Earth on a 60x30 square grid (ocean, grassland, desert, mountain, snow, jungle). Pick your nation in the chooser first.
+- Main menu -> **World Map**: Earth on a 60x30 hex grid (pointy-top hexes, odd rows offset half a hex; every tile has 6 neighbors) (ocean, grassland, desert, mountain, snow, jungle). Pick your nation in the chooser first.
 - Every nation starts with connected territory around its capital (Antarctica/NZ are unclaimed wilderness; the map wraps east-west at the Bering Strait).
 - Tap a tile to inspect it. You can only declare war on **neighbors** (shared border).
 - Each war is one normal card battle, then a shop, then back to the map. Winner takes **1 tile per 10 HP left** (min 1) from the shared border; the loser stays connected when possible, so no border gore. Lose and you cede land but your army rebuilds.
@@ -63,6 +63,14 @@ Screenshot helper for checking UI changes without clicking through the game:
 ```
 godot --path . -s tools/dev/screenshot.gd -- res://scenes/Game.tscn /tmp/shot.png 160 battle_select
 ```
+
+## Sound & music
+All audio is 8-bit chiptune synthesized by `tools/chiptune.py` (stdlib-only Python emulating 2 pulse channels, a triangle and a noise channel). It writes about 24 sound effects to `Assets/Audio/sfx/` and three looping tracks (menu, world map, battle) to `Assets/Audio/music/`:
+```
+python3 tools/chiptune.py          # everything
+python3 tools/chiptune.py sfx      # or: music
+```
+`GodotHelpers/SoundManager.gd` (autoload) plays them. It crossfades music between scenes, gives every text button a click and hover sound, and each weapon has its own firing sound. **M** or the **Sound: On/Off** button mutes, and the setting is saved in `user://audio.cfg`.
 
 ## Tweaking
 - `scripts/main.gd` top constants: `GRID_WIDTH`, `GRID_HEIGHT`, `TILE_SIZE`, `NUM_ROOMS`, `NUM_ENEMIES`

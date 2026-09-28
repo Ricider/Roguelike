@@ -22,6 +22,7 @@ name="Geopolitics"
 [autoload]
 
 GameState="*res://GodotHelpers/GameState.gd"
+SoundManager="*res://GodotHelpers/SoundManager.gd"
 
 [display]
 
