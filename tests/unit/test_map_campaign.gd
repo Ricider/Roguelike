@@ -164,8 +164,10 @@ func test_capital_site_dead_nation():
 	c.owner = {"30,7": "Horde", "31,7": "Coalition Army"}
 	c.conquer("Horde", "Coalition Army", 50)
 	assert_eq(c.capital_site("Coalition Army"), WorldMap.nation_start("Coalition Army"), "dead flag stays home")
-	assert_eq(c.capital_holder_at(30, 7), "", "dead nation flies no flag at Paris")
-	assert_eq(c.capital_holder_at(31, 7), "Horde", "living flag reported")
+	var hs := c.capital_site("Horde")
+	assert_eq(c.capital_holder_at(hs.x, hs.y), "Horde", "living flag reported")
+	for t in [Vector2i(30, 7), Vector2i(31, 7)]:
+		assert_ne(c.capital_holder_at(t.x, t.y), "Coalition Army", "dead nation flies no flag")
 
 func test_map_battle_active_flag():
 	var gs = load("res://GodotHelpers/GameState.gd").new()

@@ -58,14 +58,15 @@ func test_place_rules_and_cost():
 	p.MoneySupply = 100
 	p.BioSupply = 100
 	assert_ne(w.can_place(A, tank, Vector2i(20, 10)), "", "cannot build on enemy land")
-	assert_eq(w.can_place(A, tank, Vector2i(12, 10)), "", "own empty hex ok")
-	assert_true(w.place(A, tank, Vector2i(12, 10)), "placed")
+	# A's flag sits at the centre of its land (x=12), so build next to it
+	assert_eq(w.can_place(A, tank, Vector2i(11, 10)), "", "own empty hex ok")
+	assert_true(w.place(A, tank, Vector2i(11, 10)), "placed")
 	assert_eq(p.MoneySupply, 100 - tank.MoneyCost, "money paid")
 	assert_eq(p.BioSupply, 100 - tank.BioCost, "bio paid")
 	assert_false(p.Hand.has(tank), "left the hand")
 	var inf := Infantry.new()
 	p.Hand = [inf]
-	assert_ne(w.can_place(A, inf, Vector2i(12, 10)), "", "occupied hex rejected")
+	assert_ne(w.can_place(A, inf, Vector2i(11, 10)), "", "occupied hex rejected")
 	p.MoneySupply = 0
 	assert_true(w.can_place(A, inf, Vector2i(13, 10)).contains("Money"), "shortfall explained")
 
@@ -144,6 +145,8 @@ func test_rocket_launcher_fires_four_times():
 func test_collapse_cedes_border_to_top_damager():
 	var w := _war()
 	var bcard := _drop(w, B, Wall.new(), 15)
+	for x in [20, 21, 22]:
+		_drop(w, B, Infantry.new(), x) # 3 units: not weak, normal speed
 	(w.players[B] as Player).HitPoints = 0
 	w.ledger[B] = {A: 40, C: 10}
 	(w.players[A] as Player).HitPoints = 35
@@ -155,10 +158,90 @@ func test_collapse_cedes_border_to_top_damager():
 	assert_eq(events.size(), 1, "one collapse")
 	assert_eq(events[0]["winner"], A, "top damager wins land")
 	assert_eq(events[0]["tiles"], 3, "1 tile per 10 HP the victor has left")
+	assert_false(events[0]["doubled"], "3 units: normal speed")
 	assert_eq(w.campaign.tile_count(A), before_a + 3, "A grew")
 	assert_eq(w.campaign.owner_of(15, 10), A, "border hex taken")
 	assert_false(w.units.has(bcard), "loser's card on the lost hex is gone")
 	assert_eq((w.players[B] as Player).HitPoints, (w.players[B] as Player).MaxHitPoints, "loser rebuilds")
+
+func test_weak_nation_loses_territory_twice_as_fast():
+	var w := _war()
+	_drop(w, B, Infantry.new(), 20)
+	_drop(w, B, Infantry.new(), 21) # only 2 units (walls/buildings don't count)
+	_drop(w, B, Wall.new(), 22)
+	assert_true(w.is_weak(B), "fewer than 3 units is weak")
+	(w.players[B] as Player).HitPoints = 0
+	w.ledger[B] = {A: 40}
+	(w.players[A] as Player).HitPoints = 35
+	var events := w.resolve_collapses()
+	assert_true(events[0]["doubled"], "doubled")
+	assert_eq(events[0]["tiles"], 6, "3 hexes x2")
+
+func test_flag_needs_its_own_hex():
+	var w := _war()
+	var p: Player = w.players[A]
+	var flag: Vector2i = w.campaign.capital_site(A)
+	var inf := Infantry.new()
+	p.Hand = [inf]
+	assert_ne(w.can_place(A, inf, flag), "", "cannot build on the flag hex")
+	p.Hand = [Infantry.new(), Infantry.new(), Infantry.new(), Infantry.new(), Infantry.new()]
+	var placed := w.ai_build(A)
+	for pl in placed:
+		assert_ne(pl[1], flag, "AI never builds on its flag")
+
+func test_fallen_flag_moves_to_free_centre():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(15, 10) # B's flag on the border hex
+	for x in [22, 24, 25]:
+		_drop(w, B, Infantry.new(), x)
+	(w.players[B] as Player).HitPoints = 0
+	w.ledger[B] = {A: 40}
+	(w.players[A] as Player).HitPoints = 35 # takes 15, 16, 17
+	var events := w.resolve_collapses()
+	assert_true(events[0]["flag_moved"], "flag relocated")
+	var site: Vector2i = w.campaign.capital_site(B)
+	assert_eq(w.campaign.owner_of(site.x, site.y), B, "inside B's land")
+	assert_false(w.units.has(MapCampaign.key_of(site.x, site.y)), "on a free hex")
+	# B keeps 18..25: centre 21.5 -> 21 (22 holds a card)
+	assert_eq(site, Vector2i(21, 10), "nearest free hex to the centre")
+
+func test_starting_territory_stays_on_its_continent():
+	var c := MapCampaign.new("Horde")
+	for k in c.owner.keys():
+		var t := MapWar.key_to_hex(k)
+		var o := str(c.owner[k])
+		if WorldMap.region_of(t.x, t.y) == 1:
+			assert_eq(o, "Peace Keepers", "Americas hex %s belongs to Peace Keepers" % k)
+		else:
+			assert_ne(o, "Peace Keepers", "Old World hex %s is not Peace Keepers" % k)
+	var alaska := WorldMap.hex_for_latlon(64.0, -150.0)
+	assert_eq(c.owner_of(alaska.x, alaska.y), "Peace Keepers", "Alaska starts American")
+
+func test_conquest_erodes_border_evenly():
+	# Whoever holds Chukotka invades the Americas over the Bering bridge: the
+	# gains must stay near the old front instead of a thin wedge into Canada.
+	var c := MapCampaign.new("Horde")
+	var pk_neighbors: Array = c.neighbors_of("Peace Keepers")
+	assert_eq(pk_neighbors.size(), 1, "the Americas touch the Old World only at the Bering bridge")
+	var winner := str(pk_neighbors[0])
+	# rings of Peace Keepers land by distance from the pre-war front
+	var ring: Dictionary = c._depth_from_front(winner, "Peace Keepers")
+	var per_ring: Dictionary = {}
+	for k in ring.keys():
+		per_ring[ring[k]] = int(per_ring.get(ring[k], 0)) + 1
+	var need := 0
+	var minimal := 0
+	while need < 15:
+		minimal += 1
+		need += int(per_ring.get(minimal, 0))
+	var before: Array = c.tiles_of(winner)
+	var moved := c.conquer(winner, "Peace Keepers", 150) # 15 hexes
+	assert_eq(moved, 15, "15 hexes taken")
+	var deepest := 0
+	for t in c.tiles_of(winner):
+		if not before.has(t):
+			deepest = maxi(deepest, int(ring[MapCampaign.key_of(t.x, t.y)]))
+	assert_eq(deepest, minimal, "front advances ring by ring: no deeper than the geography forces (%d)" % minimal)
 
 func test_map_buildings_pay_income():
 	var w := _war()

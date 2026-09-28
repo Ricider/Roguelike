@@ -108,6 +108,19 @@ const NATIONS: Array = [
 	},
 ]
 
+# Real-world latitude/longitude at the centre of hex (x, y), as Vector2(lat, lon).
+static func hex_latlon(x: int, y: int) -> Vector2:
+	var fx: float = (x + 0.5 * float(y & 1) + 0.5) / GRID_W
+	var fy: float = (y + 0.5) / GRID_H
+	var lon: float = fposmod(LON0 + fx * 360.0 + 180.0, 360.0) - 180.0
+	return Vector2(LAT_TOP - fy * (LAT_TOP - LAT_BOT), lon)
+
+# 1 for the Americas (and Greenland), 0 for the Old World. Starting territories
+# never spread across this line, so no nation begins with land on another continent.
+static func region_of(x: int, y: int) -> int:
+	var lon: float = hex_latlon(x, y).y
+	return 1 if (lon > -170.0 and lon <= -20.0) else 0
+
 # Hex containing a real-world latitude/longitude (same projection as make_world.py).
 static func hex_for_latlon(lat: float, lon: float) -> Vector2i:
 	var fy: float = (LAT_TOP - lat) / (LAT_TOP - LAT_BOT)

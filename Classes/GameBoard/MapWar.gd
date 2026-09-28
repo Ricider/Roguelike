@@ -11,14 +11,18 @@
 # from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
-# cedes border hexes (1 per 10 HP the victor has left) to whoever damaged it
-# most, loses the cards on those hexes, then rebuilds to full HP. The winner earns
-# INFLUENCE_PER_HEX Influence per hex taken (spent in the shop).
+# cedes border hexes (1 per 10 HP the victor has left, doubled when it fields
+# fewer than 3 units) to whoever damaged it most, loses the cards on those
+# hexes, then rebuilds to full HP. A fallen flag moves to the free hex nearest
+# the centre of the remaining territory; flags always keep a hex to themselves.
+# The winner earns INFLUENCE_PER_HEX Influence per hex taken (spent in the shop).
 extends RefCounted
 class_name MapWar
 
 # Influence (the shop currency) a nation earns per hex it takes.
 const INFLUENCE_PER_HEX: int = 5
+# A nation fielding fewer than this many units loses territory twice as fast.
+const WEAK_UNIT_COUNT: int = 3
 
 var campaign: MapCampaign = null
 var players: Dictionary = {} # nation -> Player
@@ -53,17 +57,7 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 
 # ------------------------------------------------------------------ geometry
 static func hex_distance(a: Vector2i, b: Vector2i) -> int:
-	var best: int = 1 << 30
-	for shift in [-WorldMap.GRID_W, 0, WorldMap.GRID_W]:
-		best = mini(best, _cube_distance(a, Vector2i(b.x + int(shift), b.y)))
-	return best
-
-static func _cube_distance(a: Vector2i, b: Vector2i) -> int:
-	var aq: int = a.x - (a.y - (a.y & 1)) / 2
-	var bq: int = b.x - (b.y - (b.y & 1)) / 2
-	var dq: int = aq - bq
-	var dr: int = a.y - b.y
-	return (absi(dq) + absi(dr) + absi(dq + dr)) / 2
+	return MapCampaign.hex_distance(a, b)
 
 static func key_to_hex(k: String) -> Vector2i:
 	var parts := k.split(",")
@@ -116,6 +110,8 @@ func can_place(nation: String, card: Card, t: Vector2i) -> String:
 		return "You can only build on your own territory"
 	if units.has(MapCampaign.key_of(t.x, t.y)):
 		return "That hex is taken"
+	if campaign.capital_site(nation) == t:
+		return "Your flag stands here; it needs its own hex"
 	var p: Player = players[nation]
 	if not p.Hand.has(card):
 		return "That card is not in your hand"
@@ -196,9 +192,10 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 		fdist = frontier_distance(nation)
 	var best := Vector2i(-1, -1)
 	var best_score: float = -1e9
+	var flag := campaign.capital_site(nation)
 	for t in campaign.tiles_of(nation):
 		var tv := t as Vector2i
-		if units.has(MapCampaign.key_of(tv.x, tv.y)):
+		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag:
 			continue
 		var d: float = float(fdist.get(MapCampaign.key_of(tv.x, tv.y), 50))
 		var score: float
@@ -235,6 +232,16 @@ func ai_build(nation: String) -> Array:
 	return placed
 
 # ----------------------------------------------------------------- combat
+func unit_count(nation: String) -> int:
+	var n := 0
+	for k in cards_of(nation):
+		if units[k]["card"] is Unit:
+			n += 1
+	return n
+
+func is_weak(nation: String) -> bool:
+	return unit_count(nation) < WEAK_UNIT_COUNT
+
 func attackers_of(nation: String) -> Array:
 	var out: Array = []
 	for k in cards_of(nation):
@@ -415,7 +422,7 @@ func fire(k: String) -> Array:
 			"victim": victim2, "damage": actual, "direct": false, "intercepted": actual < before, "destroyed": destroyed, "splash": splash})
 	return log
 
-# Nations at 0 HP cede border hexes to their top damager and rebuild.
+# Nations at 0 HP cede border hexes to their top damager (double when weak) and rebuild.
 # Returns [{loser, winner, tiles}] (winner "" when nobody could take land).
 func resolve_collapses() -> Array:
 	var events: Array = []
@@ -426,13 +433,15 @@ func resolve_collapses() -> Array:
 		var row: Dictionary = ledger.get(loser, {})
 		var ranked: Array = row.keys()
 		ranked.sort_custom(func(a, b): return int(row[a]) > int(row[b]))
+		var weak := is_weak(loser)
+		var old_flag := campaign.capital_site(loser)
 		var winner := ""
 		var moved := 0
 		for cand in ranked:
 			var w := str(cand)
 			if w == loser or not alive(w):
 				continue
-			moved = campaign.conquer(w, loser, (players[w] as Player).HitPoints)
+			moved = campaign.conquer(w, loser, (players[w] as Player).HitPoints, 2 if weak else 1)
 			if moved > 0:
 				winner = w
 				break
@@ -441,6 +450,20 @@ func resolve_collapses() -> Array:
 			var t := key_to_hex(k)
 			if campaign.owner_of(t.x, t.y) != loser:
 				_remove(k)
+		# Flag fell: move it to the free hex nearest the centre of what's left.
+		var flag_moved := false
+		if alive(loser) and campaign.owner_of(old_flag.x, old_flag.y) != loser:
+			var blocked: Dictionary = {}
+			for k in cards_of(loser):
+				blocked[k] = true
+			var site := campaign.relocate_flag(loser, blocked)
+			var fk := MapCampaign.key_of(site.x, site.y)
+			if units.has(fk):
+				# every hex was full: the card there makes way for the flag
+				(players[loser] as Player).DiscardPile.append(units[fk]["card"])
+				(players[loser] as Player).MapCards.erase(units[fk]["card"])
+				units.erase(fk)
+			flag_moved = true
 		var gained: int = 0
 		if winner != "":
 			gained = moved * INFLUENCE_PER_HEX
@@ -448,7 +471,8 @@ func resolve_collapses() -> Array:
 		var lp: Player = players[loser]
 		lp.HitPoints = lp.MaxHitPoints
 		ledger[loser] = {}
-		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser), "influence": gained})
+		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser), "influence": gained,
+			"doubled": weak, "flag_moved": flag_moved, "flag": campaign.capital_site(loser) if alive(loser) else Vector2i(-1, -1)})
 	return events
 
 # --------------------------------------------------------------- save/load

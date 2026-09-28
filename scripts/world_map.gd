@@ -488,7 +488,7 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 	row.add_child(_icon("res://Assets/Players/%s/flag.png" % nm, 28))
 	var name_lbl := Label.new()
 	name_lbl.text = nm
-	name_lbl.custom_minimum_size = Vector2(128, 0)
+	name_lbl.custom_minimum_size = Vector2(118, 0)
 	name_lbl.add_theme_font_size_override("font_size", 15)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if nm == c.player_nation:
@@ -503,7 +503,13 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 	row.add_child(hp_bar)
 	var count := Label.new()
 	count.text = ("%d hex" % c.tile_count(nm)) if alive else "out"
-	count.custom_minimum_size = Vector2(54, 0)
+	if alive and _war != null and _war.is_weak(nm):
+		# fewer than 3 units: this nation loses land twice as fast
+		count.text = "2x " + count.text
+		count.add_theme_color_override("font_color", Color(1, 0.55, 0.4))
+	if _war != null and alive:
+		btn.tooltip_text += " · %d units on the map%s" % [_war.unit_count(nm), " (under %d: loses land twice as fast)" % MapWar.WEAK_UNIT_COUNT if _war.is_weak(nm) else ""]
+	count.custom_minimum_size = Vector2(76, 0)
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count.add_theme_font_size_override("font_size", 14)
 	count.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -610,9 +616,10 @@ func _select_card(stack: Array) -> void:
 	_sfx("card_select", -3.0)
 	_selected = card
 	var keys: Dictionary = {}
+	var flag := _campaign().capital_site(_me())
 	for t in _campaign().tiles_of(_me()):
 		var tv := t as Vector2i
-		if not _war.units.has(MapCampaign.key_of(tv.x, tv.y)):
+		if not _war.units.has(MapCampaign.key_of(tv.x, tv.y)) and tv != flag:
 			keys[MapCampaign.key_of(tv.x, tv.y)] = true
 	_view.placeable = keys
 	_view.ghost_card = card.card_name
@@ -809,7 +816,12 @@ func _resolve_collapses() -> void:
 		if winner != "":
 			_sfx("war")
 			var tail := ("[b]%s is eliminated.[/b]" % loser) if bool(ev["eliminated"]) else ("%s rebuilds." % loser)
-			_log_line("[color=#ff7a70]%s collapses![/color] %s takes %d hex%s. %s" % [loser, winner, int(ev["tiles"]), "" if int(ev["tiles"]) == 1 else "es", tail])
+			var weak_note := " [color=#ffb070](under %d units: double losses)[/color]" % MapWar.WEAK_UNIT_COUNT if bool(ev.get("doubled", false)) else ""
+			_log_line("[color=#ff7a70]%s collapses![/color] %s takes %d hex%s%s. %s" % [loser, winner, int(ev["tiles"]), "" if int(ev["tiles"]) == 1 else "es", weak_note, tail])
+			if bool(ev.get("flag_moved", false)) and not bool(ev["eliminated"]):
+				var fs: Vector2i = ev["flag"]
+				_log_line("%s's flag falls back to the heart of its land %s." % [loser, str(fs)])
+				_view.add_place(fs)
 		else:
 			_log_line("%s is exhausted but nobody can reach its land. It rebuilds." % loser)
 	_refresh()

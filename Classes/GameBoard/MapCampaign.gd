@@ -13,6 +13,7 @@ const HEX_DIRS_ODD: Array = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vec
 
 var player_nation: String = ""
 var owner: Dictionary = {} # "x,y" -> nation name, land tiles only
+var flag_sites: Dictionary = {} # nation -> Vector2i where its flag stands (default: capital)
 
 func _init(nation: String = "") -> void:
 	if nation != "":
@@ -43,16 +44,33 @@ static func wrapped_neighbors(t: Vector2i) -> Array:
 			out.append(n)
 	return out
 
+# Hex distance with east-west wrap (cube distance on the odd-r layout).
+static func hex_distance(a: Vector2i, b: Vector2i) -> int:
+	var best: int = 1 << 30
+	for shift in [-WorldMap.GRID_W, 0, WorldMap.GRID_W]:
+		var bx: int = b.x + int(shift)
+		var aq: int = a.x - (a.y - (a.y & 1)) / 2
+		var bq: int = bx - (b.y - (b.y & 1)) / 2
+		var dq: int = aq - bq
+		var dr: int = a.y - b.y
+		best = mini(best, (absi(dq) + absi(dr) + absi(dq + dr)) / 2)
+	return best
+
 func new_campaign(nation: String) -> void:
 	player_nation = nation
 	owner.clear()
+	flag_sites.clear()
 	# Starting territory: multi-source BFS from every capital over land,
 	# so each nation starts with one connected region (ties -> NATIONS order).
+	# The BFS stays on the capital's own continent (Americas vs Old World), so
+	# e.g. Tokyo can't start out owning Alaska through the Bering land bridge.
 	var queue: Array = []
+	var home_region: Dictionary = {}
 	for n in WorldMap.nations():
 		var d := n as Dictionary
 		var c := Vector2i(int(d["x"]), int(d["y"]))
 		owner[key_of(c.x, c.y)] = str(d["name"])
+		home_region[str(d["name"])] = WorldMap.region_of(c.x, c.y)
 		queue.append(c)
 	var head := 0
 	while head < queue.size():
@@ -65,7 +83,10 @@ func new_campaign(nation: String) -> void:
 			var nk := key_of(t.x, t.y)
 			if owner.has(nk):
 				continue
-			owner[nk] = str(owner[key_of(cur.x, cur.y)])
+			var from_nation := str(owner[key_of(cur.x, cur.y)])
+			if WorldMap.region_of(t.x, t.y) != int(home_region[from_nation]):
+				continue
+			owner[nk] = from_nation
 			queue.append(t)
 	# Land unreachable by land (Antarctica, New Zealand) stays unowned
 	# wilderness: it has no borders, so it can never be fought over, and
@@ -171,11 +192,12 @@ func is_territory_connected(nation: String) -> bool:
 # the loser connected (unless wiping them out), so neither side normally
 # gets border gore. If every border take would split a tiny enclave, one
 # is taken anyway so wars always make progress.
-func conquer(winner: String, loser: String, hp_left: int) -> int:
-	var want := tiles_for_hp(hp_left)
+func conquer(winner: String, loser: String, hp_left: int, multiplier: int = 1) -> int:
+	var want := tiles_for_hp(hp_left) * maxi(multiplier, 1)
 	var moved := 0
+	var depth := _depth_from_front(winner, loser)
 	while moved < want and tile_count(loser) > 0:
-		var pick := _pick_border_tile(winner, loser)
+		var pick := _pick_border_tile(winner, loser, depth)
 		if pick.x < 0:
 			break
 		owner[key_of(pick.x, pick.y)] = winner
@@ -189,31 +211,72 @@ func _adjacent_to(t: Vector2i, nation: String) -> bool:
 			return true
 	return false
 
-func _pick_border_tile(winner: String, loser: String) -> Vector2i:
+func _winner_neighbors(t: Vector2i, nation: String) -> int:
+	var n := 0
+	for nt in wrapped_neighbors(t):
+		var w := nt as Vector2i
+		if owner_of(w.x, w.y) == nation:
+			n += 1
+	return n
+
+# How many steps each loser hex lies from the winner's pre-war border
+# (BFS through the loser's land). Conquest takes whole rings in order, so the
+# front advances evenly instead of a thin wedge driving inland.
+func _depth_from_front(winner: String, loser: String) -> Dictionary:
+	var depth: Dictionary = {}
+	var queue: Array = []
+	for t in tiles_of(loser):
+		if _winner_neighbors(t, winner) > 0:
+			depth[key_of(t.x, t.y)] = 1
+			queue.append(t)
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		var d: int = int(depth[key_of(cur.x, cur.y)])
+		for nt in wrapped_neighbors(cur):
+			var v := nt as Vector2i
+			var k := key_of(v.x, v.y)
+			if owner_of(v.x, v.y) == loser and not depth.has(k):
+				depth[k] = d + 1
+				queue.append(v)
+	return depth
+
+# Next hex the winner takes: always on the shared border, shallowest ring
+# first (see _depth_from_front), then the hex most surrounded by the winner,
+# then the one nearest the winner's flag (wrap-aware).
+func _pick_border_tile(winner: String, loser: String, depth: Dictionary = {}) -> Vector2i:
 	var frontier: Array = []
 	for t in tiles_of(loser):
-		if _adjacent_to(t, winner):
-			frontier.append(t)
+		var wn := _winner_neighbors(t, winner)
+		if wn > 0:
+			frontier.append([t, wn, int(depth.get(key_of(t.x, t.y), 0))])
 	if frontier.is_empty():
 		return Vector2i(-1, -1)
-	var cap := WorldMap.nation_start(winner)
+	var cap := capital_site(winner)
 	frontier.sort_custom(func(a, b):
-		var da: int = absi((a as Vector2i).x - cap.x) + absi((a as Vector2i).y - cap.y)
-		var db: int = absi((b as Vector2i).x - cap.x) + absi((b as Vector2i).y - cap.y)
+		var ta: Vector2i = a[0]
+		var tb: Vector2i = b[0]
+		if int(a[2]) != int(b[2]):
+			return int(a[2]) < int(b[2])
+		if int(a[1]) != int(b[1]):
+			return int(a[1]) > int(b[1])
+		var da: int = hex_distance(ta, cap)
+		var db: int = hex_distance(tb, cap)
 		if da != db:
 			return da < db
-		if (a as Vector2i).x != (b as Vector2i).x:
-			return (a as Vector2i).x < (b as Vector2i).x
-		return (a as Vector2i).y < (b as Vector2i).y)
+		if ta.x != tb.x:
+			return ta.x < tb.x
+		return ta.y < tb.y)
 	if tile_count(loser) <= 1:
-		return frontier[0]
-	for t in frontier:
-		if not _splits_loser(t, loser):
-			return t
+		return frontier[0][0]
+	for f in frontier:
+		if not _splits_loser(f[0], loser):
+			return f[0]
 	# Last resort: every border tile would split the loser (tiny enclave
 	# wedged between nations). Take one anyway so wars always make progress
 	# and a full conquest stays possible; later takes rejoin the pieces.
-	return frontier[0]
+	return frontier[0][0]
 
 func _splits_loser(t: Vector2i, loser: String) -> bool:
 	var k := key_of(t.x, t.y)
@@ -222,23 +285,60 @@ func _splits_loser(t: Vector2i, loser: String) -> bool:
 	owner[k] = loser
 	return not ok
 
-# Current flag site: the original capital while owned, else the owned tile
-# nearest to it (deterministic), so the flag always sits inside friendly
-# borders. Dead nations keep their original site (drawn grayed out).
+# Current flag site: the capital until it falls, then wherever the flag was
+# last moved (see relocate_flag). The flag always stands inside friendly
+# borders. Dead nations keep their original site (drawn greyed out).
 func capital_site(nation: String) -> Vector2i:
 	var home := WorldMap.nation_start(nation)
 	if not is_alive(nation):
 		return home
-	if owner_of(home.x, home.y) == nation:
-		return home
-	var best := home
-	var best_key: Array = [1 << 30, 0, 0]
-	for t in tiles_of(nation):
-		var tile := t as Vector2i
-		var key: Array = [absi(tile.x - home.x) + absi(tile.y - home.y), tile.x, tile.y]
-		if _key_less(key, best_key):
-			best_key = key
-			best = tile
+	var site: Vector2i = flag_sites.get(nation, home)
+	if owner_of(site.x, site.y) == nation:
+		return site
+	return relocate_flag(nation, {})
+
+# Move a nation's flag to the owned hex nearest the centre of its territory,
+# skipping hexes in `blocked` ("x,y" -> true, e.g. hexes holding cards) when
+# possible. Returns the new site.
+func relocate_flag(nation: String, blocked: Dictionary) -> Vector2i:
+	var tiles := tiles_of(nation)
+	if tiles.is_empty():
+		return WorldMap.nation_start(nation)
+	# centroid in hex-pixel space, unwrapped around the first tile (east-west wrap)
+	const ROW_H := 0.8660254 # hex row spacing / hex width
+	var ref: Vector2i = tiles[0]
+	var sum := Vector2.ZERO
+	var pts: Array = []
+	for t in tiles:
+		var tv := t as Vector2i
+		var px: float = tv.x + 0.5 * float(tv.y & 1)
+		var dx: float = px - (ref.x + 0.5 * float(ref.y & 1))
+		if dx > WorldMap.GRID_W * 0.5:
+			px -= WorldMap.GRID_W
+		elif dx < -WorldMap.GRID_W * 0.5:
+			px += WorldMap.GRID_W
+		var p := Vector2(px, tv.y * ROW_H)
+		pts.append(p)
+		sum += p
+	var centre := sum / float(tiles.size())
+	var best := Vector2i(-1, -1)
+	var best_d: float = INF
+	var best_any := Vector2i(-1, -1)
+	var best_any_d: float = INF
+	for i in range(tiles.size()):
+		var tv2: Vector2i = tiles[i]
+		var d: float = (pts[i] as Vector2).distance_squared_to(centre)
+		if d < best_any_d or (d == best_any_d and _key_less([0, tv2.x, tv2.y], [0, best_any.x, best_any.y])):
+			best_any_d = d
+			best_any = tv2
+		if blocked.has(key_of(tv2.x, tv2.y)):
+			continue
+		if d < best_d or (d == best_d and _key_less([0, tv2.x, tv2.y], [0, best.x, best.y])):
+			best_d = d
+			best = tv2
+	if best.x < 0:
+		best = best_any
+	flag_sites[nation] = best
 	return best
 
 static func _key_less(a: Array, b: Array) -> bool:
@@ -268,7 +368,11 @@ func has_lost() -> bool:
 	return player_nation != "" and not is_alive(player_nation)
 
 func to_data() -> Dictionary:
-	return {"player_nation": player_nation, "owner": owner.duplicate(), "grid": [WorldMap.GRID_W, WorldMap.GRID_H]}
+	var flags: Dictionary = {}
+	for n in flag_sites.keys():
+		var t: Vector2i = flag_sites[n]
+		flags[n] = [t.x, t.y]
+	return {"player_nation": player_nation, "owner": owner.duplicate(), "grid": [WorldMap.GRID_W, WorldMap.GRID_H], "flags": flags}
 
 # Saves from an older map layout (different grid) can't be mapped onto the
 # current world, so they restart the campaign for the same nation.
@@ -284,4 +388,10 @@ static func from_data(d: Dictionary) -> MapCampaign:
 	var o = d.get("owner", {})
 	if o is Dictionary:
 		c.owner = (o as Dictionary).duplicate()
+	var fl = d.get("flags", {})
+	if fl is Dictionary:
+		for n in (fl as Dictionary).keys():
+			var xy = fl[n]
+			if xy is Array and (xy as Array).size() == 2:
+				c.flag_sites[str(n)] = Vector2i(int(xy[0]), int(xy[1]))
 	return c
