@@ -29,6 +29,61 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 	for i in range(frames):
 		await process_frame
 	var gc = current_scene
+	if setup.begins_with("map_fx") and gc != null and gc.has_method("_nation_attacks"):
+		# stage: player Barracks + Infantry (buffed) and an enemy Infantry beside an enemy Interceptor
+		var w: MapWar = gc._war
+		var me: String = gc._me()
+		var flag: Vector2i = gc._campaign().capital_site(me)
+		var free: Array = []
+		for t in gc._campaign().tiles_of(me):
+			if not w.units.has(MapCampaign.key_of(t.x, t.y)) and t != flag:
+				free.append(t)
+		free.sort_custom(func(a, b): return MapCampaign.hex_distance(a, flag) < MapCampaign.hex_distance(b, flag))
+		var bar_hex: Vector2i = free[0]
+		var inf_hex: Vector2i = Vector2i(-1, -1)
+		for t in free:
+			if MapCampaign.hex_distance(t, bar_hex) == 1:
+				inf_hex = t
+				break
+		w._put(me, Barracks.new(), bar_hex)
+		w._put(me, Drone.new(), inf_hex) # flying + melee: hits the closest target and triggers Interceptors
+		# enemy: the nearest foreign hex pair gets an Interceptor + Infantry
+		var enemy_hex := Vector2i(-1, -1)
+		var best := 1 << 30
+		for k in gc._campaign().owner.keys():
+			var o := str(gc._campaign().owner[k])
+			if o == me:
+				continue
+			var t2 := MapWar.key_to_hex(k)
+			var d := MapCampaign.hex_distance(t2, inf_hex)
+			if d < best and not w.units.has(k) and t2 != gc._campaign().capital_site(o):
+				best = d
+				enemy_hex = t2
+		var foe: String = gc._campaign().owner_of(enemy_hex.x, enemy_hex.y)
+		for nb in MapCampaign.wrapped_neighbors(enemy_hex):
+			if gc._campaign().owner_of(nb.x, nb.y) == foe and not w.units.has(MapCampaign.key_of(nb.x, nb.y)):
+				w._put(foe, Interceptor.new(), nb)
+				break
+		(w.players[foe] as Player).MoneySupply = 100
+		var tough := Wall.new()
+		tough.HitPoints = 500
+		w._put(foe, tough, enemy_hex)
+		gc._view.center_on(inf_hex, gc._view.zoom_for_hex_size(26.0))
+		for i in range(20):
+			await process_frame
+		if setup == "map_fx_fire":
+			gc._speed_idx = 0
+			var entries: Array = w.fire(MapCampaign.key_of(inf_hex.x, inf_hex.y))
+			for e in entries:
+				gc._view.add_shot(e["from"], e["to"], "shot_cannon", 0.28)
+				if e.get("buffed", false):
+					gc._view.add_buff(e["from"])
+				if e.get("intercepted", false):
+					gc._view.add_intercept(e["intercept_from"], e["to"], 0.28)
+				gc._view.add_number(e["to"], "-%d" % int(e["damage"]), Color(1, 0.45, 0.4), 0.28)
+				print("fx shot buffed=", e.get("buffed"), " intercepted=", e.get("intercepted"), " from=", e.get("intercept_from"))
+			for i in range(int(OS.get_environment("FX_FRAMES")) if OS.get_environment("FX_FRAMES") != "" else 20):
+				await process_frame
 	if setup.begins_with("map_hover") and gc != null and gc.has_method("_show_map_hover"):
 		# hover the player's first unit on the map (or a hand card with map_hover_hand)
 		if setup == "map_hover_hand":

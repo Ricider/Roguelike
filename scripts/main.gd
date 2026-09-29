@@ -605,7 +605,7 @@ func _show_map_chooser():
 	var title := Label.new()
 	title.text = "CHOOSE A MAP"
 	title.theme_type_variation = &"TitleLabel"
-	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)

@@ -127,7 +127,7 @@ func _section_label(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.theme_type_variation = &"TitleLabel"
-	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_font_size_override("font_size", 16) # Press Start 2P is an 8px font: keep sizes on its grid
 	l.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
 	return l
 
@@ -193,6 +193,7 @@ func _build_ui() -> void:
 	zoom_bar.offset_right = -10
 	zoom_bar.offset_top = 10
 	zoom_bar.offset_bottom = 54
+	zoom_bar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR # the map view is NEAREST; keep button text smooth
 	_view.add_child(zoom_bar)
 	for spec in [["-", func(): _view.zoom_by(1.0 / 1.3)], ["+", func(): _view.zoom_by(1.3)], ["Home", _go_home]]:
 		var zb := Button.new()
@@ -270,8 +271,7 @@ func _build_ui() -> void:
 	gauge_row.add_child(inf_col)
 	var inf_title := Label.new()
 	inf_title.text = "INFLUENCE"
-	inf_title.theme_type_variation = &"TitleLabel"
-	inf_title.add_theme_font_size_override("font_size", 10)
+	inf_title.add_theme_font_size_override("font_size", 17) # body font: the 8px title font can't fit this column crisply
 	inf_title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
 	inf_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inf_col.add_child(inf_title)
@@ -898,6 +898,11 @@ func _nation_attacks(n: String) -> void:
 			var destroyed: Array = e["destroyed"]
 			_view.add_shot(e["from"], e["to"], kind, travel)
 			_sfx(kind, -6.0)
+			if bool(e.get("buffed", false)):
+				_view.add_buff(e["from"]) # Barracks +2: golden burst at the shooter
+			if bool(e.get("intercepted", false)):
+				_view.add_intercept(e.get("intercept_from", Vector2i(-1, -1)), e["to"], travel)
+				_log_line("[color=#7fd8ff]%s's Interceptor halves a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
 			for dinfo in destroyed:
 				_view.add_wreck(dinfo["hex"], str(dinfo["name"]), str(dinfo["owner"]), travel)
 				_view.add_boom(dinfo["hex"], true, travel)
@@ -1057,7 +1062,7 @@ func _build_shop(remove_mode: bool) -> void:
 	var title := Label.new()
 	title.text = "REMOVE A CARD" if remove_mode else "SHOP"
 	title.theme_type_variation = &"TitleLabel"
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	head.add_child(title)
 	var sp := Control.new()

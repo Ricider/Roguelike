@@ -63,6 +63,9 @@ var placeable: Dictionary = {} # "x,y" -> true while a hand card is selected
 var ghost_card: String = "" # card name previewed under the cursor
 var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
 var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
+var _text_layer: Control = null # damage numbers: smooth filtering (the overlay is NEAREST for pixel sprites)
+const GOLD := Color(1.0, 0.82, 0.3)
+const CYAN := Color(0.45, 0.9, 1.0)
 var _clock: float = 0.0
 var _fx_clock: float = 0.0
 var _unit_tex: Dictionary = {} # card name -> Array[Texture2D] (32px idle frames)
@@ -96,6 +99,13 @@ func _ready() -> void:
 	_overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
+	_text_layer = Control.new()
+	_text_layer.name = "TextFX"
+	_text_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_text_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_text_layer.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_text_layer.draw.connect(_draw_text_fx)
+	add_child(_text_layer)
 	resized.connect(_redraw_all)
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
@@ -177,6 +187,7 @@ func _process(delta: float) -> void:
 		if _fx_clock >= 1.0 / 40.0:
 			_fx_clock = 0.0
 			_overlay.queue_redraw()
+			_text_layer.queue_redraw()
 		var keep: Array = []
 		for e in effects:
 			if _clock < float(e["t0"]) + float(e["dur"]):
@@ -557,6 +568,17 @@ func add_number(at: Vector2i, text: String, col: Color, delay: float) -> void:
 func add_wreck(at: Vector2i, card_name: String, owner: String, until_delay: float) -> void:
 	effects.append({"kind": "wreck", "to": at, "t0": _clock, "dur": until_delay, "name": card_name, "owner": owner})
 
+# Barracks buff firing: golden burst + rising chevrons at the attacker.
+func add_buff(at: Vector2i) -> void:
+	effects.append({"kind": "buff", "to": at, "t0": _clock, "dur": 0.6})
+
+# Interception: a counter-missile from the Interceptor meets the shot, then a
+# hexagonal shield flashes over the protected card.
+func add_intercept(interceptor: Vector2i, target: Vector2i, impact_delay: float) -> void:
+	if interceptor.x >= 0:
+		effects.append({"kind": "counter", "from": interceptor, "to": target, "t0": _clock + impact_delay * 0.3, "dur": impact_delay * 0.7})
+	effects.append({"kind": "shield", "to": target, "t0": _clock + impact_delay, "dur": 0.7})
+
 func add_place(at: Vector2i) -> void:
 	effects.append({"kind": "place", "to": at, "t0": _clock, "dur": 0.45})
 
@@ -568,9 +590,71 @@ func _wrap_target(a: Vector2, b: Vector2, m: Array) -> Vector2:
 	b.x = b.x + roundf((a.x - b.x) / period) * period
 	return b
 
+func _hex_poly(c: Vector2, r: float) -> PackedVector2Array:
+	var pts := _hex_points(c, r)
+	pts.append(pts[0])
+	return pts
+
+# Glowing line helper: wide faint stroke under a thin bright one.
+func _glow_polyline(pts: PackedVector2Array, col: Color, width: float) -> void:
+	_overlay.draw_polyline(pts, Color(col.r, col.g, col.b, col.a * 0.25), width * 3.0)
+	_overlay.draw_polyline(pts, col, width)
+
+# Barracks: golden hex ripples washing over the ring of hexes it buffs.
+func _draw_barracks_ripples(m: Array) -> void:
+	var s: float = m[0]
+	for k in war.units.keys():
+		if not (war.units[k]["card"] is Barracks):
+			continue
+		var t := MapWar.key_to_hex(str(k))
+		for cp in _visible_copies(t, m, s * 3.0):
+			for wave_i in range(2):
+				var ph: float = fposmod(_clock * 0.45 + wave_i * 0.5 + float(t.x * 7 + t.y) * 0.013, 1.0)
+				var a: float = (1.0 - ph) * 0.6 * minf(ph * 6.0, 1.0)
+				_glow_polyline(_hex_poly(cp as Vector2, s * (0.9 + ph * 1.35)), Color(GOLD.r, GOLD.g, GOLD.b, a), 2.0)
+
+# Buffed unit: warm glow + rotating dashed gold ring at its feet, bobbing double chevron.
+func _draw_buff_aura(c: Vector2, s: float, seed_i: int) -> void:
+	var base := c + Vector2(0, s * 0.45)
+	var pulse: float = 0.5 + 0.5 * sin(_clock * 3.0 + seed_i)
+	_overlay.draw_set_transform(base, 0.0, Vector2(1.0, 0.45))
+	_overlay.draw_circle(Vector2.ZERO, s * 1.05, Color(GOLD.r, GOLD.g, GOLD.b, 0.12 + 0.1 * pulse))
+	var rot: float = _clock * 1.6 + seed_i
+	for i in range(6):
+		var a0: float = rot + i * TAU / 6.0
+		_overlay.draw_arc(Vector2.ZERO, s * 0.92, a0, a0 + TAU / 11.0, 8, Color(GOLD.r, GOLD.g, GOLD.b, 0.35), maxf(6.0, s * 0.3))
+		_overlay.draw_arc(Vector2.ZERO, s * 0.92, a0, a0 + TAU / 11.0, 8, Color(1, 0.93, 0.6), maxf(2.5, s * 0.12))
+	_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var bob: float = sin(_clock * 3.0 + seed_i) * s * 0.08
+	var p := c + Vector2(s * 0.8, -s * 0.85 + bob)
+	var w: float = s * 0.3
+	for j in range(2):
+		var y: float = p.y + j * s * 0.26
+		var chev := PackedVector2Array([Vector2(p.x - w, y + w * 0.75), Vector2(p.x, y), Vector2(p.x + w, y + w * 0.75)])
+		_overlay.draw_polyline(chev, Color8(20, 16, 30), maxf(5.0, s * 0.24))
+		_overlay.draw_polyline(chev, Color(1, 0.93, 0.55).lerp(GOLD, 0.5 * j), maxf(2.5, s * 0.12))
+
+# Shielded unit: faint cyan hex bubble with a bright glint running round its edge.
+func _draw_shield_aura(c: Vector2, s: float, seed_i: int) -> void:
+	var r: float = s * 0.95
+	var pts := _hex_points(c, r)
+	_overlay.draw_colored_polygon(pts, Color(CYAN.r, CYAN.g, CYAN.b, 0.07))
+	var shimmer: float = 0.35 + 0.15 * sin(_clock * 2.5 + seed_i)
+	_glow_polyline(_hex_poly(c, r), Color(CYAN.r, CYAN.g, CYAN.b, shimmer), 1.5)
+	var u: float = fposmod(_clock * 0.55 + seed_i * 0.17, 1.0) * 6.0
+	var e := int(u)
+	var f: float = u - e
+	var a := pts[e]
+	var b := pts[(e + 1) % 6]
+	var head := a.lerp(b, f)
+	var tail := a.lerp(b, maxf(0.0, f - 0.45))
+	_overlay.draw_line(tail, head, Color(1, 1, 1, 0.9), 2.5)
+	_overlay.draw_circle(head, maxf(1.5, s * 0.07), Color(0.85, 1, 1, 0.95))
+
 func _draw_units(m: Array) -> void:
 	var s: float = m[0]
 	var margin: float = s * 2.0
+	_draw_barracks_ripples(m)
 	for k in war.units.keys():
 		var info: Dictionary = war.units[k]
 		var t := MapWar.key_to_hex(str(k))
@@ -580,6 +664,9 @@ func _draw_units(m: Array) -> void:
 		var hp: int = war.card_hp(card)
 		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
 		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
+		var buffed: bool = war.is_buffed(str(k))
+		var shielded: bool = war.is_shielded(str(k)) and not (card is Interceptor)
+		var seed_i: int = t.x * 13 + t.y * 7
 		for cp in _visible_copies(t, m, margin):
 			var c := cp as Vector2
 			# owner base: flat ellipse in nation colour under the sprite
@@ -587,7 +674,11 @@ func _draw_units(m: Array) -> void:
 			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
 			_overlay.draw_circle(Vector2.ZERO, s * 0.6, nc)
 			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			if buffed:
+				_draw_buff_aura(c, s, seed_i)
 			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y)
+			if shielded:
+				_draw_shield_aura(c, s, seed_i)
 			# HP bar under the unit
 			var bwid: float = s * 1.3
 			var r := Rect2(c + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, maxf(2.0, s * 0.16)))
@@ -612,7 +703,6 @@ func _draw_flag_hp(m: Array) -> void:
 
 func _draw_effects(m: Array) -> void:
 	var s: float = m[0]
-	var font := ThemeDB.fallback_font
 	for e in effects:
 		var age: float = _clock - float(e["t0"])
 		if age < 0.0:
@@ -635,16 +725,80 @@ func _draw_effects(m: Array) -> void:
 				_overlay.draw_circle(to_c, rad, Color(1.0, 0.55, 0.15, 0.55 * alpha))
 				_overlay.draw_circle(to_c, rad * 0.6, Color(1.0, 0.92, 0.5, 0.8 * alpha))
 				_overlay.draw_arc(to_c, rad * 1.1, 0.0, TAU, 18, Color(1, 1, 1, 0.6 * alpha), 1.5)
-			"num":
-				var p := to_c + Vector2(-s * 0.5, -s * 0.9 - k * s * 1.4)
-				var col2: Color = e["color"]
-				var fs := int(clampf(s * 0.95, 12.0, 28.0))
-				_overlay.draw_string_outline(font, p, str(e["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.05, 0.04, 0.08, 1.0 - k))
-				_overlay.draw_string(font, p, str(e["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col2.r, col2.g, col2.b, 1.0 - k))
+			"buff":
+				var ease_k: float = 1.0 - pow(1.0 - k, 3.0)
+				var fade: float = 1.0 - k
+				_overlay.draw_circle(to_c, s * (0.5 + ease_k * 0.9), Color(GOLD.r, GOLD.g, GOLD.b, 0.18 * fade))
+				_overlay.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(GOLD.r, GOLD.g, GOLD.b, 0.35 * fade), 6.0)
+				_overlay.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(1, 0.95, 0.7, fade), 2.0)
+				for ray in range(8):
+					var ang: float = ray * TAU / 8.0 + k * 1.2
+					var d0: float = s * (0.35 + ease_k * 0.9)
+					var d1: float = d0 + s * 0.45 * fade
+					_overlay.draw_line(to_c + Vector2(cos(ang), sin(ang)) * d0, to_c + Vector2(cos(ang), sin(ang)) * d1, Color(GOLD.r, GOLD.g, GOLD.b, fade), 2.0)
+				var cy: float = to_c.y - s * (0.7 + ease_k * 1.3)
+				var w: float = s * 0.3
+				for j in range(2):
+					var yy: float = cy + j * s * 0.26
+					var chev := PackedVector2Array([Vector2(to_c.x - w, yy + w * 0.7), Vector2(to_c.x, yy), Vector2(to_c.x + w, yy + w * 0.7)])
+					_overlay.draw_polyline(chev, Color(0.08, 0.06, 0.12, fade), maxf(4.0, s * 0.2))
+					_overlay.draw_polyline(chev, Color(GOLD.r, GOLD.g, GOLD.b, fade), maxf(2.0, s * 0.1))
+			"counter":
+				var fa := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.6)
+				var fb := _wrap_target(fa, to_c, m)
+				var hk: float = k * k # accelerates towards the hit
+				var head2 := fa.lerp(fb, hk)
+				var tail2 := fa.lerp(fb, maxf(0.0, hk - 0.3))
+				_overlay.draw_line(tail2, head2, Color(CYAN.r, CYAN.g, CYAN.b, 0.35), maxf(4.0, s * 0.25))
+				_overlay.draw_line(tail2, head2, Color(0.9, 1, 1, 0.95), maxf(1.5, s * 0.09))
+				_overlay.draw_circle(head2, maxf(2.0, s * 0.13), Color(1, 1, 1))
+			"shield":
+				var ek: float = 1.0 - pow(1.0 - k, 2.0)
+				var fade2: float = 1.0 - k
+				var r: float = s * (0.95 + ek * 0.35)
+				var hex := _hex_points(to_c, r)
+				_overlay.draw_colored_polygon(hex, Color(CYAN.r, CYAN.g, CYAN.b, 0.32 * fade2))
+				for cc in range(3):
+					_overlay.draw_line(hex[cc], hex[cc + 3], Color(0.85, 1, 1, 0.45 * fade2), 1.5)
+				var inner := _hex_poly(to_c, r * 0.55)
+				_overlay.draw_polyline(inner, Color(0.85, 1, 1, 0.5 * fade2), 1.5)
+				_glow_polyline(_hex_poly(to_c, r), Color(0.8, 1, 1, fade2), 2.5)
+				for sp in range(10):
+					var sa: float = sp * TAU / 10.0 + 0.3
+					var sd: float = s * (1.0 + ek * 1.0)
+					_overlay.draw_circle(to_c + Vector2(cos(sa), sin(sa)) * sd, maxf(1.0, s * 0.06 * fade2), Color(0.85, 1, 1, fade2))
 			"wreck":
 				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k))
 			"place":
 				_overlay.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
+
+# Floating damage numbers, drawn with the UI font on a smoothly filtered layer.
+func _draw_text_fx() -> void:
+	var m := metrics()
+	var s: float = m[0]
+	if s < 2.0:
+		return
+	var font := get_theme_default_font()
+	for e in effects:
+		if str(e["kind"]) != "num":
+			continue
+		var age: float = _clock - float(e["t0"])
+		if age < 0.0:
+			continue
+		var k: float = clampf(age / float(e["dur"]), 0.0, 1.0)
+		var to_c := screen_pos(e["to"] as Vector2i, m)
+		var fs := int(clampf(s * 1.1, 16.0, 40.0))
+		var txt := str(e["text"])
+		var tw: float = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		# pop in, then float up and fade
+		var pop: float = 1.0 + 0.35 * maxf(0.0, 1.0 - k * 6.0)
+		var p := to_c + Vector2(-tw * 0.5, -s * 0.8 - k * s * 1.5)
+		var col2: Color = e["color"]
+		var a: float = 1.0 - maxf(0.0, (k - 0.55) / 0.45)
+		_text_layer.draw_set_transform(p + Vector2(tw * 0.5, 0), 0.0, Vector2(pop, pop))
+		_text_layer.draw_string_outline(font, Vector2(-tw * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0.05, 0.04, 0.08, a))
+		_text_layer.draw_string(font, Vector2(-tw * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col2.r, col2.g, col2.b, a))
+		_text_layer.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_overlay() -> void:
 	var m := metrics()

@@ -37,6 +37,7 @@ var turn: int = 1
 var rng := RandomNumberGenerator.new()
 var deck_weights: Dictionary = {} # nation -> {card name: copies in its starting deck}
 var shops: Dictionary = {} # nation -> {"cards": Array[Card], "mods": Array[Modifier], "remove_used": bool}
+var _last_intercept_from := Vector2i(-1, -1) # hex of the Interceptor that halved the latest hit
 
 # make_player: Callable(nation: String) -> Player for the AI nations.
 func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
@@ -383,6 +384,25 @@ func _barracks_bonus(nation: String, t: Vector2i) -> int:
 			return 2
 	return 0
 
+# Hover/animation helpers: is the card on hex key `k` boosted by an adjacent Barracks,
+# and is it covered by an adjacent Interceptor that can still pay (6 Money)?
+func is_buffed(k: String) -> bool:
+	if not units.has(k) or not (units[k]["card"] is Unit):
+		return false
+	return _barracks_bonus(str(units[k]["owner"]), key_to_hex(k)) > 0
+
+func is_shielded(k: String) -> bool:
+	if not units.has(k):
+		return false
+	var owner := str(units[k]["owner"])
+	if (players[owner] as Player).MoneySupply < 6:
+		return false
+	for nb in MapCampaign.wrapped_neighbors(key_to_hex(k)):
+		var info := unit_at(nb as Vector2i)
+		if not info.is_empty() and str(info["owner"]) == owner and info["card"] is Interceptor and card_hp(info["card"]) > 0:
+			return true
+	return false
+
 func effective_damage(nation: String, unit: Unit, t: Vector2i) -> int:
 	var p: Player = players[nation]
 	return p.effective_damage_for(unit, null) + _barracks_bonus(nation, t)
@@ -502,6 +522,7 @@ func _reap(attacker: String) -> Array:
 	return out
 
 func _intercept(victim: String, t: Vector2i, unit: Unit, attacker: String, dmg: int) -> int:
+	_last_intercept_from = Vector2i(-1, -1)
 	var vp: Player = players[victim]
 	var ranged: bool = (players[attacker] as Player).has_range_for(unit)
 	if vp.MoneySupply < 6 or not (ranged or unit.Flying):
@@ -511,6 +532,7 @@ func _intercept(victim: String, t: Vector2i, unit: Unit, attacker: String, dmg: 
 		if not info.is_empty() and str(info["owner"]) == victim and info["card"] is Interceptor and card_hp(info["card"]) > 0:
 			(info["card"] as Building).HitPoints -= 2
 			vp.MoneySupply = maxi(0, vp.MoneySupply - 6)
+			_last_intercept_from = nb as Vector2i
 			return maxi(1, dmg / 2)
 	return dmg
 
@@ -536,6 +558,7 @@ func fire(k: String) -> Array:
 		if tgt.is_empty():
 			break
 		var dmg := effective_damage(nation, unit, from)
+		var buffed := _barracks_bonus(nation, from) > 0
 		if tgt.has("flag"):
 			# Flag hit: the damage goes to the nation's HP (Fighter Jets still splash around it).
 			var victim := str(tgt["flag"])
@@ -549,7 +572,8 @@ func fire(k: String) -> Array:
 						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, dmg))
 						fsplash.append(nb)
 			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
-				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash})
+				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash,
+				"buffed": buffed, "intercept_from": Vector2i(-1, -1)})
 			continue
 		var tk := str(tgt["key"])
 		var tinfo: Dictionary = units[tk]
@@ -565,6 +589,7 @@ func fire(k: String) -> Array:
 			actual = maxi(1, actual / 2)
 		var before := actual
 		actual = _intercept(victim2, to, unit, nation, actual)
+		var intercept_from := _last_intercept_from
 		var pre_terrain := actual
 		actual = terrain_adjusted(target, to, actual)
 		_damage_card(tk, actual)
@@ -578,7 +603,7 @@ func fire(k: String) -> Array:
 		var destroyed := _reap(nation)
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,
 			"victim": victim2, "damage": actual, "direct": false, "intercepted": pre_terrain < before, "mountain": actual < pre_terrain,
-			"destroyed": destroyed, "splash": splash})
+			"destroyed": destroyed, "splash": splash, "buffed": buffed, "intercept_from": intercept_from})
 	return log
 
 # Nations at 0 HP cede border hexes to their top damager (x2 when weak, x4 with no units) and rebuild.

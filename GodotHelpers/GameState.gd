@@ -325,6 +325,20 @@ func remove_card_from_deck(card: Card) -> bool:
 	return true
 const SAVE_PATH := "user://savegame.json"
 
+# Sharp text at any window size: render the UI fonts as MSDF (signed distance
+# fields) with mipmaps. Done here rather than in the .import files because those
+# are gitignored, so the setting would not survive a fresh checkout.
+const UI_FONTS := ["res://Assets/Fonts/PixelifySans.ttf", "res://Assets/Fonts/PressStart2P.ttf"]
+
+func _ready() -> void:
+	for path in UI_FONTS:
+		var f := load(path) as FontFile
+		if f != null:
+			f.multichannel_signed_distance_field = true
+			f.msdf_size = 64
+			f.msdf_pixel_range = 8
+			f.generate_mipmaps = true
+
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
