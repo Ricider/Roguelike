@@ -536,7 +536,19 @@ func _refresh_legend() -> void:
 	var c := _campaign()
 	for child in _legend.get_children():
 		child.queue_free()
-	for n in WorldMap.nations():
+	# most hexes first; nations that are out drop to the bottom (ties keep map order)
+	var order: Array = WorldMap.nations().duplicate()
+	var idx := {}
+	for i in range(order.size()):
+		idx[str(order[i]["name"])] = i
+	var hexes := func(d: Dictionary) -> int:
+		var nm := str(d["name"])
+		return c.tile_count(nm) if c.is_alive(nm) else -1
+	order.sort_custom(func(a, b):
+		var ha: int = hexes.call(a)
+		var hb: int = hexes.call(b)
+		return ha > hb if ha != hb else idx[str(a["name"])] < idx[str(b["name"])])
+	for n in order:
 		_legend.add_child(_nation_row(c, n as Dictionary))
 
 func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
@@ -858,7 +870,13 @@ func _show_map_hover(x: int, y: int) -> void:
 	var holder := _campaign().capital_holder_at(x, y)
 	if holder != "":
 		var hp_p: Player = _war.players[holder]
-		_hover.show_text("[%s flag]: %s. HP %d/%d. Any hit on this flag comes straight off %s's HP. When the hex falls, the flag moves to the heart of its remaining land." % [holder, str(WorldMap.nation_by_name(holder).get("capital", "")), hp_p.HitPoints, hp_p.MaxHitPoints, holder], _view.hex_global_rect(t))
+		var mods: Array = []
+		for m in hp_p.Modifiers:
+			var mod_name: String = (m as Modifier).modifier_name if m is Modifier else str(m)
+			var eff: String = (m as Modifier).Effect if m is Modifier else ""
+			mods.append("[%s]%s" % [mod_name, (": " + eff) if eff != "" else ""])
+		var mods_text := "\nModifiers: none" if mods.is_empty() else "\nModifiers:\n" + "\n".join(mods)
+		_hover.show_text("[%s flag]: %s. HP %d/%d. Any hit on this flag comes straight off %s's HP. When the hex falls, the flag moves to the heart of its remaining land.%s" % [holder, str(WorldMap.nation_by_name(holder).get("capital", "")), hp_p.HitPoints, hp_p.MaxHitPoints, holder, mods_text], _view.hex_global_rect(t))
 		return
 	_hover.hide_all()
 
