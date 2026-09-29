@@ -28,7 +28,7 @@ func test_every_map_starts_a_playable_campaign():
 		for n in WorldMap.nations():
 			var nm := str((n as Dictionary)["name"])
 			assert_false(c.neighbors_of(nm).is_empty(), "%s: %s has a neighbour to fight" % [id, nm])
-			assert_true(c.is_territory_connected(nm), "%s: %s starts connected" % [id, nm])
+			assert_true(_pieces_hold_cities(c, nm), "%s: every piece of %s holds one of its cities" % [id, nm])
 
 func test_regional_maps_do_not_wrap():
 	WorldMap.use_map("europe")
@@ -113,3 +113,26 @@ func test_ground_units_on_mountains_take_one_less_damage():
 	assert_eq(_hit(Drone.new(), spots[0]), tank_dmg / 2, "drones get no mountain cover")
 	assert_eq(MapWar.terrain_adjusted(Infantry.new(), spots[0], 1), 1, "never below 1")
 	assert_eq(MapWar.terrain_adjusted(Wall.new(), spots[0], 5), 5, "buildings/walls get no cover")
+
+func _pieces_hold_cities(c: MapCampaign, nm: String) -> bool:
+	var seeds: Array = WorldMap.nation_seeds(nm)
+	var seen := {}
+	for t in c.tiles_of(nm):
+		if seen.has(t):
+			continue
+		var piece: Array = [t]
+		seen[t] = true
+		var i := 0
+		while i < piece.size():
+			for nb in MapCampaign.wrapped_neighbors(piece[i]):
+				if not seen.has(nb) and c.owner_of(nb.x, nb.y) == nm:
+					seen[nb] = true
+					piece.append(nb)
+			i += 1
+		var ok := false
+		for sd in seeds:
+			if piece.has(sd):
+				ok = true
+		if not ok:
+			return false
+	return true

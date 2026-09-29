@@ -227,7 +227,40 @@ func buy_modifier(nation: String, mod: Modifier) -> bool:
 	p.Influence -= mod.InfluenceCost
 	p.Modifiers.append(mod)
 	(shop["mods"] as Array).erase(mod)
+	last_modifier_changes = apply_modifiers_to_map(nation)
+	last_modifier_changes_nation = nation
 	return true
+
+# HP changes from the latest modifier purchase, for the log: [{key, name, delta}]
+var last_modifier_changes: Array = []
+var last_modifier_changes_nation: String = ""
+
+# Modifiers take effect on cards already on the map, not just new deployments.
+# Damage, cost and Range modifiers are read live on every shot; HP modifiers are
+# re-applied here: each card's max HP is recomputed with all of the nation's
+# modifiers and its current HP shifts by the same amount (damage taken is kept).
+# A card whose HP would drop to 0 or below is pinned at 1.
+func apply_modifiers_to_map(nation: String) -> Array:
+	var p: Player = players[nation]
+	var changes: Array = []
+	for k in cards_of(nation):
+		var card: Card = units[k]["card"]
+		var fresh := p._base_card_by_name(card.card_name)
+		if fresh == null:
+			continue
+		var new_max: int = maxi(1, p.effective_hitpoints_for(fresh))
+		var old_max: int = int(card.get_meta("map_max_hp", card_hp(card)))
+		var delta: int = new_max - old_max
+		if delta == 0:
+			continue
+		var hp: int = maxi(1, card_hp(card) + delta)
+		if card is Unit:
+			(card as Unit).HitPoints = hp
+		elif card is Building:
+			(card as Building).HitPoints = hp
+		card.set_meta("map_max_hp", new_max)
+		changes.append({"key": k, "name": card.card_name, "delta": delta})
+	return changes
 
 # Remove one card (by instance, else by name) from the draw/discard piles or hand.
 func remove_card(nation: String, card: Card) -> bool:
@@ -249,6 +282,8 @@ func ai_shop(nation: String) -> Array:
 	var p: Player = players[nation]
 	var shop := shop_of(nation)
 	var bought: Array = []
+	last_modifier_changes = []
+	last_modifier_changes_nation = ""
 	# a random affordable modifier, so nations don't all converge on the same one
 	var affordable: Array = []
 	for m in shop["mods"]:

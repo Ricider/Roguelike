@@ -64,22 +64,71 @@ func new_campaign(nation: String) -> void:
 	player_nation = nation
 	owner.clear()
 	flag_sites.clear()
-	# Starting territory: multi-source BFS from every capital over land,
-	# so each nation starts with one connected region (ties -> NATIONS order).
-	# The BFS stays on the capital's own continent (Americas vs Old World), so
-	# e.g. Tokyo can't start out owning Alaska through the Bering land bridge.
-	var queue: Array = []
-	var home_region: Dictionary = {}
+	# 1. Every nation's capital and extra seed cities.
+	var seeds_of: Dictionary = {}
 	for n in WorldMap.nations():
-		var d := n as Dictionary
-		var c := Vector2i(int(d["x"]), int(d["y"]))
-		owner[key_of(c.x, c.y)] = str(d["name"])
-		home_region[str(d["name"])] = WorldMap.region_of(c.x, c.y)
-		queue.append(c)
+		var nm := str((n as Dictionary)["name"])
+		seeds_of[nm] = WorldMap.nation_seeds(nm)
+		for sd in seeds_of[nm]:
+			var sv := sd as Vector2i
+			owner[key_of(sv.x, sv.y)] = nm
+	# 2. Territory claims (maps that define them, e.g. the world map's continents).
+	for y in range(WorldMap.GRID_H):
+		for x in range(WorldMap.GRID_W):
+			if not WorldMap.is_land(x, y) or owner.has(key_of(x, y)):
+				continue
+			var claimant := WorldMap.claim_at(x, y)
+			if claimant != "":
+				owner[key_of(x, y)] = claimant
+	# 3. Claimed land cut off from all of its nation's cities goes back to the pool,
+	#    so no nation starts with stray enclaves (islands, slivers beyond a strait).
+	for nm in seeds_of.keys():
+		var keep: Dictionary = {}
+		var queue: Array = []
+		for sd in seeds_of[nm]:
+			var sv := sd as Vector2i
+			keep[key_of(sv.x, sv.y)] = true
+			queue.append(sv)
+		var h := 0
+		while h < queue.size():
+			var cur: Vector2i = queue[h]
+			h += 1
+			for nt in wrapped_neighbors(cur):
+				var t := nt as Vector2i
+				var k := key_of(t.x, t.y)
+				if not keep.has(k) and str(owner.get(k, "")) == nm:
+					keep[k] = true
+					queue.append(t)
+		for k in owner.keys().duplicate():
+			if str(owner[k]) == nm and not keep.has(k):
+				owner.erase(k)
+	# 4. Remaining land: multi-source BFS outward from owned hexes. Nations with a
+	#    claim keep to their claimed borders, so leftovers first grow from the
+	#    nations without one; only land none of those can reach (e.g. Korea and Japan
+	#    behind a claimed coast) then goes to a claimed neighbour. The BFS never
+	#    crosses the Americas/Old World line (world map), so nobody starts with a
+	#    foothold on another continent through the Bering land bridge.
+	var claimed_nations: Dictionary = {}
+	for c in WorldMap.CLAIMS:
+		claimed_nations[str(c["nation"])] = true
+	_grow_into_unowned(func(o: String) -> bool: return not claimed_nations.has(o))
+	_grow_into_unowned(func(_o: String) -> bool: return true)
+	# Land unreachable by land (Antarctica, New Zealand) stays unowned
+	# wilderness: it has no borders, so it can never be fought over, and
+	# the win check only covers owned tiles.
+
+# Multi-source BFS from every hex owned by a nation accepted by `source_ok`,
+# claiming unowned land within the same region.
+func _grow_into_unowned(source_ok: Callable) -> void:
+	var queue: Array = []
+	for k in owner.keys():
+		if source_ok.call(str(owner[k])):
+			queue.append(MapWar.key_to_hex(str(k)))
 	var head := 0
 	while head < queue.size():
 		var cur: Vector2i = queue[head]
 		head += 1
+		var from_nation := str(owner[key_of(cur.x, cur.y)])
 		for nt in wrapped_neighbors(cur):
 			var t := nt as Vector2i
 			if not WorldMap.is_land(t.x, t.y):
@@ -87,14 +136,10 @@ func new_campaign(nation: String) -> void:
 			var nk := key_of(t.x, t.y)
 			if owner.has(nk):
 				continue
-			var from_nation := str(owner[key_of(cur.x, cur.y)])
-			if WorldMap.region_of(t.x, t.y) != int(home_region[from_nation]):
+			if WorldMap.region_of(t.x, t.y) != WorldMap.region_of(cur.x, cur.y):
 				continue
 			owner[nk] = from_nation
 			queue.append(t)
-	# Land unreachable by land (Antarctica, New Zealand) stays unowned
-	# wilderness: it has no borders, so it can never be fought over, and
-	# the win check only covers owned tiles.
 
 func owner_of(x: int, y: int) -> String:
 	return str(owner.get(key_of(x, y), ""))

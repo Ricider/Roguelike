@@ -54,10 +54,30 @@ MAPS = {
         "antarctica": True, "americas_split": True, "regional": False,
         "cities": {
             "Insurgents": ("Kabul", 34.53, 69.17), "State Troops": ("Baghdad", 33.31, 44.36),
-            "Fundamentalists": ("London", 51.51, -0.13), "Mercenaries": ("Kinshasa", -4.32, 15.31),
-            "Peace Keepers": ("New York", 40.71, -74.01), "Horde": ("Moscow", 55.76, 37.62),
-            "Coalition Army": ("Paris", 48.86, 2.35), "Corporate Troops": ("Tokyo", 35.68, 139.69),
+            "Fundamentalists": ("Timbuktu", 16.77, -3.01), "Mercenaries": ("Kinshasa", -4.32, 15.31),
+            "Peace Keepers": ("Rio de Janeiro", -22.91, -43.17), "Horde": ("Moscow", 55.76, 37.62),
+            "Coalition Army": ("Paris", 48.86, 2.35), "Corporate Troops": ("San Francisco", 37.77, -122.42),
         },
+        # Sulawesi -> New Guinea: joins Australia/New Guinea to Asia so every
+        # territory there can be fought over (the gap is too wide to auto-bridge).
+        "bridges": [(-2.0, 121.0, -2.5, 133.5)],
+        # Extra starting cities for nations spread over more than one area.
+        "seeds": {
+            "Peace Keepers": [("Sydney", -33.87, 151.21)],
+            "Horde": [("Beijing", 39.90, 116.40)],
+        },
+        # Starting territory claims, first match wins: (lat_min, lat_max, lon_min, lon_max)
+        # in -180..180 longitudes. Land nobody claims (and claim fragments cut off from
+        # a nation's cities) goes to the nearest territory, as on the other maps.
+        "claims": [
+            ("Fundamentalists", [(0, 37.2, -18, 11.5)]),                           # West & North-West Africa
+            ("Corporate Troops", [(8.5, 84, -170, -52), (59, 84, -75, -20)]),       # North America + Greenland
+            ("Peace Keepers", [(-60, 8.5, -95, -30), (-45, -9, 110, 156)]),         # South America + Australia
+            ("Coalition Army", [(43, 72, -25, 28.5), (36, 44, -10, 28.5), (59.5, 71, 20, 32),
+                                (44, 53, 22, 40.5), (51, 57, 22, 32.5)]),           # all of Europe
+            ("Horde", [(50, 82, 27, 180), (50, 82, -180, -168), (41, 50, 36, 50), (42, 50, 127, 142),
+                       (18, 42, 108, 123), (40, 54, 115, 135)]),                    # Russia + eastern China
+        ],
     },
     "europe": {
         "name": "Europe", "blurb": "From Iberia to the Urals, Scandinavia to the North African coast.",
@@ -317,7 +337,16 @@ def build(map_id, spec, polys):
             return math.hypot(hlat - lat, dlon2 * math.cos(math.radians(lat)))
         best = min((h for h in land if h not in taken), key=geo_d)
         taken.add(best)
-        nations.append({"name": name, "capital": city, "x": best[0], "y": best[1]})
+        nations.append({"name": name, "capital": city, "x": best[0], "y": best[1], "seeds": []})
+    for n in nations:
+        for (city, lat, lon) in spec.get("seeds", {}).get(n["name"], []):
+            def geo_d2(h):
+                hlat, hlon = g.center(*h)
+                dlon2 = (hlon - lon + 180.0) % 360.0 - 180.0
+                return math.hypot(hlat - lat, dlon2 * math.cos(math.radians(lat)))
+            best = min((h for h in land if h not in taken), key=geo_d2)
+            taken.add(best)
+            n["seeds"].append({"city": city, "x": best[0], "y": best[1]})
     comps, owner = components(g, land)
     main = max(comps, key=len)
     print("%-10s grid %dx%d, land %d, landmasses %d" % (map_id, W, H, len(land), len(comps)))
@@ -332,6 +361,7 @@ def build(map_id, spec, polys):
         "americas_split": bool(spec.get("americas_split", False)),
         "rows": ["".join(r) for r in grid],
         "nations": nations,
+        "claims": [{"nation": n, "boxes": [list(b) for b in boxes]} for (n, boxes) in spec.get("claims", [])],
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     with open(os.path.join(OUT_DIR, map_id + ".json"), "w") as f:

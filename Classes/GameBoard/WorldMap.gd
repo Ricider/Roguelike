@@ -44,6 +44,8 @@ static var LAT_BOT: float = 0.0
 static var AMERICAS_SPLIT: bool = false # world only: starting land never crosses the Americas/Old World line
 static var ROWS: Array = []
 static var NATIONS: Array = []
+# Optional starting-territory claims, first match wins: [{"nation", "boxes": [[lat0, lat1, lon0, lon1], ...]}]
+static var CLAIMS: Array = []
 
 static func _static_init() -> void:
 	use_map("world")
@@ -82,9 +84,36 @@ static func use_map(map_id: String) -> bool:
 		var nd: Dictionary = n
 		var nm := str(nd["name"])
 		var style: Dictionary = NATION_STYLE.get(nm, {"color": "888888", "blurb": ""})
+		var seeds: Array = []
+		for sd in nd.get("seeds", []):
+			seeds.append({"city": str(sd["city"]), "x": int(sd["x"]), "y": int(sd["y"])})
 		NATIONS.append({"name": nm, "capital": str(nd["capital"]), "x": int(nd["x"]), "y": int(nd["y"]),
-			"color": style["color"], "blurb": style["blurb"], "region": MAP_NAME})
+			"color": style["color"], "blurb": style["blurb"], "region": MAP_NAME, "seeds": seeds})
+	CLAIMS = []
+	for c in d.get("claims", []):
+		CLAIMS.append({"nation": str(c["nation"]), "boxes": c["boxes"]})
 	return true
+
+# A nation's starting cities: its capital plus any extra seeds (e.g. Peace Keepers' Sydney).
+static func nation_seeds(nation_name: String) -> Array:
+	var n := nation_by_name(nation_name)
+	if n.is_empty():
+		return []
+	var out: Array = [Vector2i(int(n["x"]), int(n["y"]))]
+	for sd in n.get("seeds", []):
+		out.append(Vector2i(int(sd["x"]), int(sd["y"])))
+	return out
+
+# The nation whose territory claim covers hex (x, y), or "".
+static func claim_at(x: int, y: int) -> String:
+	if CLAIMS.is_empty():
+		return ""
+	var ll := hex_latlon(x, y)
+	for c in CLAIMS:
+		for b in c["boxes"]:
+			if ll.x >= float(b[0]) and ll.x <= float(b[1]) and ll.y >= float(b[2]) and ll.y <= float(b[3]):
+				return str(c["nation"])
+	return ""
 
 # Real-world latitude/longitude at the centre of hex (x, y), as Vector2(lat, lon).
 static func hex_latlon(x: int, y: int) -> Vector2:

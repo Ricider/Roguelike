@@ -44,9 +44,9 @@ func test_world_map_nation_count_and_starts():
 # the hex containing that point.
 const CAPITAL_LATLON := {
 	"Insurgents": Vector2(34.53, 69.17), "State Troops": Vector2(33.31, 44.36),
-	"Fundamentalists": Vector2(51.51, -0.13), "Mercenaries": Vector2(-4.32, 15.31),
-	"Peace Keepers": Vector2(40.71, -74.01), "Horde": Vector2(55.76, 37.62),
-	"Coalition Army": Vector2(48.86, 2.35), "Corporate Troops": Vector2(35.68, 139.69),
+	"Fundamentalists": Vector2(16.77, -3.01), "Mercenaries": Vector2(-4.32, 15.31), # Timbuktu
+	"Peace Keepers": Vector2(-22.91, -43.17), "Horde": Vector2(55.76, 37.62), # Rio de Janeiro
+	"Coalition Army": Vector2(48.86, 2.35), "Corporate Troops": Vector2(37.77, -122.42), # San Francisco
 }
 
 func test_world_map_expected_capitals():

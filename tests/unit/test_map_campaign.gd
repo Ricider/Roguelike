@@ -11,7 +11,7 @@ func test_starting_territory_valid():
 		var nm := str(d["name"])
 		assert_true(c.is_alive(nm), "%s alive" % nm)
 		assert_eq(c.owner_of(int(d["x"]), int(d["y"])), nm, "%s owns its capital" % nm)
-		assert_true(c.is_territory_connected(nm), "%s starts connected" % nm)
+		assert_true(_every_piece_has_a_city(c, nm), "%s: every piece of territory holds one of its cities" % nm)
 	for k in c.owner.keys():
 		var parts := str(k).split(",")
 		assert_true(WorldMap.is_land(int(parts[0]), int(parts[1])), "owned tile %s is land" % k)
@@ -32,7 +32,7 @@ func test_wilderness_and_bering_bridge():
 			break
 	assert_true(by >= 0, "Bering bridge exists at the wrap seam")
 	assert_true(c.owner_of(0, by) != "", "Bering bridge west owned")
-	assert_eq(c.owner_of(0, by), c.owner_of(last, by), "Bering wraps east-west")
+	assert_true(c.owner_of(last, by) != "", "Bering bridge east owned")
 	assert_true(MapCampaign.wrapped_neighbors(Vector2i(0, by)).has(Vector2i(last, by)), "wrap adjacency")
 
 func test_neighbors_symmetric_and_sane():
@@ -42,9 +42,21 @@ func test_neighbors_symmetric_and_sane():
 		assert_false(c.neighbors_of(nm).is_empty(), "%s has a neighbor" % nm)
 		for m in c.neighbors_of(nm):
 			assert_true(c.neighbors_of(m).has(nm), "symmetric %s/%s" % [nm, m])
-	assert_eq(c.neighbors_of("Peace Keepers"), ["Corporate Troops"], "Americas link Asia only")
-	assert_true(c.neighbors_of("Corporate Troops").has("Insurgents"), "Japan borders mainland")
-	assert_false(c.neighbors_of("Peace Keepers").has("Horde"), "no NYC-Moscow border")
+	# North America (Corporate Troops) meets Asia only at the Bering bridge, where Horde holds Siberia
+	var ct: Array = c.neighbors_of("Corporate Troops")
+	assert_true(ct.has("Horde"), "Alaska borders Russia over the Bering bridge")
+	assert_true(ct.has("Peace Keepers"), "North America meets South America at Panama")
+	assert_eq(ct.size(), 2, "no Atlantic border: Corporate Troops don't touch Europe or Africa")
+	assert_true(c.neighbors_of("Peace Keepers").has("Insurgents"), "Australia is reachable through New Guinea")
+	# Japan's main islands (east of Korea) are owned, so they can be fought over
+	# (a lone far-north islet can stay wilderness, like New Zealand)
+	var japan_owned := 0
+	for y in range(WorldMap.GRID_H):
+		for x in range(WorldMap.GRID_W):
+			var ll := WorldMap.hex_latlon(x, y)
+			if WorldMap.is_land(x, y) and ll.x > 31.0 and ll.x < 41.0 and ll.y > 131.0 and ll.y < 146.0 and c.owner_of(x, y) != "":
+				japan_owned += 1
+	assert_true(japan_owned > 0, "Japan is owned and reachable")
 
 func test_can_attack_rules():
 	var c := MapCampaign.new("State Troops")
@@ -211,3 +223,29 @@ func test_old_grid_save_restarts_campaign():
 	assert_eq(c.player_nation, "Horde", "same nation")
 	assert_true(c.has_meta("restarted"), "flagged as restarted")
 	assert_eq(c.alive_nations().size(), 8, "fresh world, not the stale layout")
+
+
+# Every connected piece of a nation's starting land contains its capital or a seed city
+# (Peace Keepers start on two continents: South America and Australia).
+func _every_piece_has_a_city(c: MapCampaign, nm: String) -> bool:
+	var seeds: Array = WorldMap.nation_seeds(nm)
+	var seen := {}
+	for t in c.tiles_of(nm):
+		if seen.has(t):
+			continue
+		var piece: Array = [t]
+		seen[t] = true
+		var i := 0
+		while i < piece.size():
+			for nb in MapCampaign.wrapped_neighbors(piece[i]):
+				if not seen.has(nb) and c.owner_of(nb.x, nb.y) == nm:
+					seen[nb] = true
+					piece.append(nb)
+			i += 1
+		var has_city := false
+		for sd in seeds:
+			if piece.has(sd):
+				has_city = true
+		if not has_city:
+			return false
+	return true

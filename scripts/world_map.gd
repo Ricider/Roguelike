@@ -36,6 +36,8 @@ var _inf_box: Control = null
 var _shop_btn: Button = null
 var _shop_panel: PanelContainer = null
 var _stat_tiles: Label = null
+var _mods_box: HFlowContainer = null # your modifiers as animated badges (hover for the effect)
+var _mods_sig: String = "" # rebuild the badges only when the list changes
 var _hover_bar: Label = null
 var _hand_box: HBoxContainer = null
 var _end_btn: Button = null
@@ -302,6 +304,22 @@ func _build_ui() -> void:
 	_shop_btn.focus_mode = Control.FOCUS_NONE
 	_shop_btn.pressed.connect(_open_shop)
 	_tip(_shop_btn, func(): return TIP_SHOP)
+	# Modifiers you own, like the old battle screen's modifier stack
+	var mods_row := HBoxContainer.new()
+	mods_row.add_theme_constant_override("separation", 8)
+	card_v.add_child(mods_row)
+	var mods_lbl := Label.new()
+	mods_lbl.text = "Modifiers"
+	mods_lbl.add_theme_font_size_override("font_size", 16)
+	mods_lbl.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
+	mods_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mods_row.add_child(mods_lbl)
+	_mods_box = HFlowContainer.new()
+	_mods_box.name = "Modifiers"
+	_mods_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mods_box.add_theme_constant_override("h_separation", 4)
+	_mods_box.add_theme_constant_override("v_separation", 4)
+	mods_row.add_child(_mods_box)
 	inf_col.add_child(_shop_btn)
 	_status = Label.new()
 	_status.name = "Status"
@@ -391,6 +409,42 @@ func _show_banner(text: String, col: Color) -> void:
 	_banner.visible = true
 	_end_btn.disabled = true
 
+# Animated badge per owned modifier; hover shows its name and effect.
+func _refresh_modifiers(p: Player) -> void:
+	var names: Array = []
+	for m in p.Modifiers:
+		names.append((m as Modifier).modifier_name if m is Modifier else str(m))
+	var sig := ",".join(names)
+	if sig == _mods_sig and _mods_box.get_child_count() > 0:
+		return
+	_mods_sig = sig
+	for ch in _mods_box.get_children():
+		ch.queue_free()
+	if p.Modifiers.is_empty():
+		var none := Label.new()
+		none.text = "none yet (see Shop)"
+		none.add_theme_font_size_override("font_size", 14)
+		none.add_theme_color_override("font_color", Color(0.7, 0.72, 0.8))
+		_mods_box.add_child(none)
+		return
+	for m in p.Modifiers:
+		if not (m is Modifier):
+			continue
+		var mod := m as Modifier
+		var badge := Control.new()
+		badge.custom_minimum_size = Vector2(40, 40)
+		badge.add_child(Modifier.create_sprite_for(mod.modifier_name, Vector2(40, 40)))
+		var tip_text := "[%s]: %s" % [mod.modifier_name, mod.Effect]
+		_tip(badge, func(): return tip_text)
+		_mods_box.add_child(badge)
+
+# "Modifiers: A, B" for a nation's tooltip.
+func _modifier_names(p: Player) -> String:
+	var names: Array = []
+	for m in p.Modifiers:
+		names.append((m as Modifier).modifier_name if m is Modifier else str(m))
+	return ", ".join(names) if not names.is_empty() else "none"
+
 # Vertical pixel gauge like the battle screen: +income on top, bar, value, icon.
 func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: String) -> Control:
 	var col := VBoxContainer.new()
@@ -474,6 +528,8 @@ func _refresh_player_card() -> void:
 		_set_gauge("money", p.MoneySupply, 200, p.predicted_money_gain())
 		_inf_label.text = str(p.Influence)
 	_shop_btn.disabled = _busy or c.has_won() or c.has_lost()
+	if p != null:
+		_refresh_modifiers(p)
 	_stat_tiles.text = "%d hexes · %d cards on the map · turn %d" % [c.tile_count(c.player_nation), _war.cards_of(c.player_nation).size() if _war != null else 0, _war.turn if _war != null else 1]
 
 func _refresh_legend() -> void:
@@ -511,7 +567,7 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 	if p != null:
 		hp_bar.max_value = maxi(p.MaxHitPoints, 1)
 		hp_bar.value = p.HitPoints if alive else 0
-		btn.tooltip_text = "%s · capital %s · HP %d/%d" % [nm, str(d["capital"]), p.HitPoints, p.MaxHitPoints]
+		btn.tooltip_text = "%s · capital %s · HP %d/%d\nModifiers: %s" % [nm, str(d["capital"]), p.HitPoints, p.MaxHitPoints, _modifier_names(p)]
 	row.add_child(hp_bar)
 	var count := Label.new()
 	count.text = ("%d hex" % c.tile_count(nm)) if alive else "out"
@@ -871,6 +927,7 @@ func _on_end_turn() -> void:
 		var bought: Array = _war.ai_shop(n)
 		if not bought.is_empty():
 			_log_line("[color=#%s]%s[/color] shops: %s." % [_nation_hex_color(n), n, ", ".join(bought)])
+			_show_modifier_changes(_war.last_modifier_changes if _war.last_modifier_changes_nation == n else [])
 		var placed: Array = _war.ai_build(n)
 		for pl in placed:
 			_view.add_place(pl[1] as Vector2i)
@@ -1145,7 +1202,8 @@ func _build_shop(remove_mode: bool) -> void:
 			var item_m := _shop_item(mod.modifier_name, Modifier.create_sprite_for(mod.modifier_name, Vector2(64, 64)), [mod.Effect], mod.InfluenceCost, can_m, owned, func():
 				if _war.buy_modifier(_me(), mod):
 					_sfx("shop_buy")
-					_log_line("You adopt %s." % mod.modifier_name)
+					_log_line("You adopt %s.%s" % [mod.modifier_name, _modifier_effect_note(_war.last_modifier_changes)])
+					_show_modifier_changes(_war.last_modifier_changes)
 					_after_purchase()
 					_build_shop(false))
 			item_m.custom_minimum_size = Vector2(290, 222)
@@ -1196,6 +1254,30 @@ func _odds_text(nation: String) -> String:
 	for cn in names:
 		parts.append("%s %d%%" % [cn, roundi(100.0 * int(w[cn]) / maxi(total, 1))])
 	return " · ".join(parts)
+
+# " Applied now: 6 cards +10 HP, 2 buildings -25 HP." for the log
+func _modifier_effect_note(changes: Array) -> String:
+	if changes.is_empty():
+		return ""
+	var up := 0
+	var down := 0
+	for c in changes:
+		if int(c["delta"]) > 0:
+			up += 1
+		else:
+			down += 1
+	var parts: Array = []
+	if up > 0:
+		parts.append("%d card%s gain HP" % [up, "" if up == 1 else "s"])
+	if down > 0:
+		parts.append("%d lose HP" % down)
+	return " Applied to the map now: %s." % ", ".join(parts)
+
+# Float the HP change over every affected card on the map.
+func _show_modifier_changes(changes: Array) -> void:
+	for c in changes:
+		var d := int(c["delta"])
+		_view.add_number(MapWar.key_to_hex(str(c["key"])), ("+%d" % d) if d > 0 else str(d), Color(0.5, 1, 0.5) if d > 0 else Color(1, 0.55, 0.3), 0.0)
 
 func _after_purchase() -> void:
 	_refresh_player_card()

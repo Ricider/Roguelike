@@ -228,27 +228,41 @@ func test_fallen_flag_moves_to_free_centre():
 	# B keeps 18..25: centre 21.5 -> 21 (22 holds a card)
 	assert_eq(site, Vector2i(21, 10), "nearest free hex to the centre")
 
-func test_starting_territory_stays_on_its_continent():
+func test_world_starting_territories():
 	var c := MapCampaign.new("Horde")
+	var at := func(lat: float, lon: float) -> String:
+		var h := WorldMap.hex_for_latlon(lat, lon)
+		return c.owner_of(h.x, h.y)
+	# (inland points: at 4 degrees per hex, coastal cities can fall on sea hexes)
+	# North America (+Greenland) is Corporate Troops, South America + Australia Peace Keepers
+	for spot in [Vector2(41.0, -82.0), Vector2(64.0, -150.0), Vector2(45.0, -100.0), Vector2(19.4, -99.1)]:
+		assert_eq(at.call(spot.x, spot.y), "Corporate Troops", "North America at %s" % spot)
+	for spot in [Vector2(-15.8, -47.9), Vector2(-34.6, -58.4), Vector2(-25.0, 134.0), Vector2(-31.0, 145.0)]:
+		assert_eq(at.call(spot.x, spot.y), "Peace Keepers", "South America / Australia at %s" % spot)
+	# Horde: Russia and eastern China
+	for spot in [Vector2(55.8, 37.6), Vector2(55.0, 83.0), Vector2(62.0, 130.0), Vector2(39.9, 116.4), Vector2(33.0, 116.0)]:
+		assert_eq(at.call(spot.x, spot.y), "Horde", "Russia / east China at %s" % spot)
+	# Coalition Army: all of Europe, London included
+	for spot in [Vector2(51.5, -0.1), Vector2(48.9, 2.35), Vector2(52.5, 13.4), Vector2(40.4, -3.7), Vector2(52.2, 21.0), Vector2(50.45, 30.5), Vector2(62.0, 15.0)]:
+		assert_eq(at.call(spot.x, spot.y), "Coalition Army", "Europe at %s" % spot)
+	# Fundamentalists: West Africa
+	for spot in [Vector2(15.0, -12.0), Vector2(16.8, -3.0), Vector2(12.6, -8.0), Vector2(31.6, -7.99)]:
+		assert_eq(at.call(spot.x, spot.y), "Fundamentalists", "West Africa at %s" % spot)
+	# nobody starts with land on a continent that isn't theirs through the Bering bridge
 	for k in c.owner.keys():
 		var t := MapWar.key_to_hex(k)
-		var o := str(c.owner[k])
 		if WorldMap.region_of(t.x, t.y) == 1:
-			assert_eq(o, "Peace Keepers", "Americas hex %s belongs to Peace Keepers" % k)
-		else:
-			assert_ne(o, "Peace Keepers", "Old World hex %s is not Peace Keepers" % k)
-	var alaska := WorldMap.hex_for_latlon(64.0, -150.0)
-	assert_eq(c.owner_of(alaska.x, alaska.y), "Peace Keepers", "Alaska starts American")
+			assert_true(str(c.owner[k]) in ["Corporate Troops", "Peace Keepers"], "Americas hex %s is American" % k)
 
 func test_conquest_erodes_border_evenly():
-	# Whoever holds Chukotka invades the Americas over the Bering bridge: the
+	# Horde (Chukotka) invades Corporate Troops' Alaska over the Bering bridge: the
 	# gains must stay near the old front instead of a thin wedge into Canada.
 	var c := MapCampaign.new("Horde")
-	var pk_neighbors: Array = c.neighbors_of("Peace Keepers")
-	assert_eq(pk_neighbors.size(), 1, "the Americas touch the Old World only at the Bering bridge")
-	var winner := str(pk_neighbors[0])
-	# rings of Peace Keepers land by distance from the pre-war front
-	var ring: Dictionary = c._depth_from_front(winner, "Peace Keepers")
+	var winner := "Horde" # Siberia
+	var loser := "Corporate Troops" # Alaska
+	assert_true(c.neighbors_of(loser).has(winner), "they meet at the Bering bridge")
+	# rings of the loser's land by distance from the pre-war front
+	var ring: Dictionary = c._depth_from_front(winner, loser)
 	var per_ring: Dictionary = {}
 	for k in ring.keys():
 		per_ring[ring[k]] = int(per_ring.get(ring[k], 0)) + 1
@@ -258,7 +272,7 @@ func test_conquest_erodes_border_evenly():
 		minimal += 1
 		need += int(per_ring.get(minimal, 0))
 	var before: Array = c.tiles_of(winner)
-	var moved := c.conquer(winner, "Peace Keepers", 150) # 15 hexes
+	var moved := c.conquer(winner, loser, 150) # 15 hexes
 	assert_eq(moved, 15, "15 hexes taken")
 	var deepest := 0
 	for t in c.tiles_of(winner):
@@ -442,3 +456,27 @@ func test_predict_target_matches_what_fires():
 	var arty := _drop(w, A, Artilery.new(), 13)
 	assert_true(w.predict_target(arty)["ranged"], "Artillery reports ranged targeting")
 	assert_true(w.predict_target(MapCampaign.key_of(16, 10)).is_empty(), "buildings don't shoot")
+
+
+func test_modifiers_apply_to_cards_already_on_the_map():
+	var w := _war()
+	var p: Player = w.players[A]
+	var inf := Infantry.new()
+	var inf_k := _drop(w, A, inf, 11) # 12 HP
+	inf.HitPoints = 5 # damaged: 7 HP lost
+	var house := Housing.new()
+	var house_k := _drop(w, A, house, 12) # 50 HP
+	house.HitPoints = 3
+	var dd := Modifier.new("Defensive Doctrine", "+10 HP", 0)
+	w.shops[A] = {"cards": [], "mods": [dd], "remove_used": false}
+	p.Influence = 100
+	assert_true(w.buy_modifier(A, dd), "bought")
+	assert_eq(inf.HitPoints, 15, "+10 HP right away, damage kept (5 -> 15)")
+	assert_eq(int(inf.get_meta("map_max_hp")), 22, "max HP 12 -> 22")
+	assert_eq(house.HitPoints, 13, "buildings too")
+	var fan := Modifier.new("Fanaticism", "buildings -50% HP, units +40%", 0)
+	w.shops[A] = {"cards": [], "mods": [fan], "remove_used": false}
+	assert_true(w.buy_modifier(A, fan), "bought")
+	assert_eq(house.HitPoints, 1, "a card pushed to 0 or below is pinned at 1")
+	assert_true(w.units.has(house_k) and w.units.has(inf_k), "nobody dies from a modifier")
+	assert_eq(w.last_modifier_changes.size(), 2, "both cards changed")
