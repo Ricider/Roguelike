@@ -62,6 +62,7 @@ var war: MapWar = null
 var placeable: Dictionary = {} # "x,y" -> true while a hand card is selected
 var ghost_card: String = "" # card name previewed under the cursor
 var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
+var walks: Dictionary = {} # "x,y" -> {"path": [hexes, home first], "t0", "step", "back"}: visual-only march
 var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
 var _text_layer: Control = null # damage numbers: smooth filtering (the overlay is NEAREST for pixel sprites)
 const GOLD := Color(1.0, 0.82, 0.3)
@@ -182,7 +183,7 @@ func _process(delta: float) -> void:
 	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
 		_overlay.queue_redraw()
-	if not effects.is_empty():
+	if not effects.is_empty() or not walks.is_empty():
 		_fx_clock += delta
 		if _fx_clock >= 1.0 / 40.0:
 			_fx_clock = 0.0
@@ -193,6 +194,10 @@ func _process(delta: float) -> void:
 			if _clock < float(e["t0"]) + float(e["dur"]):
 				keep.append(e)
 		effects = keep
+	for wk in walks.keys():
+		var w: Dictionary = walks[wk]
+		if bool(w["back"]) and _walk_progress(w) <= 0.0:
+			walks.erase(wk)
 
 func _variant_for(x: int, y: int) -> int:
 	return absi(x * 73856093 ^ y * 19349663) % TileArt.VARIANTS
@@ -579,6 +584,52 @@ func add_intercept(interceptor: Vector2i, target: Vector2i, impact_delay: float)
 		effects.append({"kind": "counter", "from": interceptor, "to": target, "t0": _clock + impact_delay * 0.3, "dur": impact_delay * 0.7})
 	effects.append({"kind": "shield", "to": target, "t0": _clock + impact_delay, "dur": 0.7})
 
+# Visual only: the card at key `k` marches hex by hex along `path` (home first),
+# `step` seconds per hex, and waits at the end until walk_back(). It never moves on the board.
+func walk_out(k: String, path: Array, step: float) -> void:
+	walks[k] = {"path": path, "t0": _clock, "step": maxf(step, 0.001), "back": false}
+
+func walk_back(k: String) -> void:
+	if walks.has(k):
+		walks[k]["back"] = true
+		walks[k]["t0"] = _clock
+
+func clear_walks() -> void:
+	walks.clear()
+
+# How many path steps the walker has covered right now (0 = at home).
+func _walk_progress(w: Dictionary) -> float:
+	var n: float = float((w["path"] as Array).size() - 1)
+	var steps: float = (_clock - float(w["t0"])) / float(w["step"])
+	return clampf(n - steps, 0.0, n) if bool(w["back"]) else clampf(steps, 0.0, n)
+
+# Current pixel offset of a marching card from its home hex (zero at rest).
+func unit_offset(k: String, m: Array) -> Vector2:
+	var w: Dictionary = walks.get(k, {})
+	if w.is_empty():
+		return Vector2.ZERO
+	var path: Array = w["path"]
+	var pos: float = _walk_progress(w)
+	var i: int = mini(int(pos), path.size() - 2)
+	var f: float = pos - float(i)
+	# screen points along the path, unwrapped across the east-west seam
+	var home := screen_pos(path[0] as Vector2i, m)
+	var prev := home
+	var a := home
+	var b := home
+	for j in range(1, i + 2):
+		var nxt := _wrap_target(prev, screen_pos(path[j] as Vector2i, m), m)
+		if j == i:
+			a = nxt
+		if j == i + 1:
+			b = nxt
+		prev = nxt
+	if i == 0:
+		a = home
+	var s: float = m[0]
+	var hop: float = absf(sin(f * PI)) * s * 0.18 if pos > 0.0 and pos < float(path.size() - 1) else 0.0
+	return a.lerp(b, f) - home - Vector2(0, hop)
+
 func add_place(at: Vector2i) -> void:
 	effects.append({"kind": "place", "to": at, "t0": _clock, "dur": 0.45})
 
@@ -667,8 +718,9 @@ func _draw_units(m: Array) -> void:
 		var buffed: bool = war.is_buffed(str(k))
 		var shielded: bool = war.is_shielded(str(k)) and not (card is Interceptor)
 		var seed_i: int = t.x * 13 + t.y * 7
+		var shift := unit_offset(str(k), m)
 		for cp in _visible_copies(t, m, margin):
-			var c := cp as Vector2
+			var c := (cp as Vector2) + shift
 			# owner base: flat ellipse in nation colour under the sprite
 			_overlay.draw_set_transform(c + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
 			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
@@ -711,7 +763,8 @@ func _draw_effects(m: Array) -> void:
 		var to_c := screen_pos(e["to"] as Vector2i, m)
 		match str(e["kind"]):
 			"shot":
-				var a := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.3)
+				var fh := e["from"] as Vector2i
+				var a := screen_pos(fh, m) + unit_offset(MapCampaign.key_of(fh.x, fh.y), m) - Vector2(0, s * 0.3)
 				var b := _wrap_target(a, to_c, m)
 				var col: Color = e["color"]
 				var head := a.lerp(b, k)

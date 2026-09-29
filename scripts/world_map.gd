@@ -13,6 +13,7 @@ const ICON_MONEY := "res://Assets/UI/money_icon.png"
 const SPEEDS := [1.0, 2.0, 4.0]
 const SHOT_GAP := 0.07 # seconds between shots at 1x
 const TRAVEL := 0.28 # projectile flight time at 1x
+const WALK_STEP := 0.08 # seconds per hex when melee units march to the front (visual only)
 const START_HEX_PX := 18.0 # open zoomed in on your capital: same hex size on every map
 const PAN_STEP := 60.0
 const SHOT_SFX := {
@@ -964,6 +965,24 @@ func _on_end_turn() -> void:
 
 func _nation_attacks(n: String) -> void:
 	var shots := 0
+	# melee units march together, hex by hex, to the spot nearest their target (visual
+	# only: the cards stay on their hexes), fire from there, then march home; ranged ones stay put
+	var walkers: Array = []
+	var taken := {}
+	var longest := 0
+	for k in _war.attackers_of(n):
+		var aim := _war.predict_target(k)
+		if aim.is_empty() or bool(aim["ranged"]):
+			continue
+		var path := _walk_path(k, aim["hex"], taken)
+		if path.size() < 2:
+			continue
+		taken[path[path.size() - 1]] = true
+		_view.walk_out(k, path, WALK_STEP / _speed())
+		walkers.append(k)
+		longest = maxi(longest, path.size() - 1)
+	if longest > 0:
+		await _wait(WALK_STEP * longest + 0.05)
 	for k in _war.attackers_of(n):
 		var entries: Array = _war.fire(k)
 		for e in entries:
@@ -995,9 +1014,90 @@ func _nation_attacks(n: String) -> void:
 		_refresh_player_card()
 	if shots > 0:
 		await _wait(TRAVEL + 0.15)
+	if longest > 0:
+		for k in walkers:
+			_view.walk_back(k)
+		await _wait(WALK_STEP * longest + 0.05)
+		_view.clear_walks()
 	_refresh_legend()
 	_refresh_player_card()
 	_resolve_collapses()
+
+# Visual march route for the card at `k` towards `target` (home first). Ground units walk
+# over their own land; flying ones go straight over anything. It ends on the free hex
+# closest to the target (the border, or right beside it). Free means no card stands there
+# and no other walker has claimed it (`taken`), so marching units never overlap.
+# A single-hex path means stay put.
+func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
+	var home := MapWar.key_to_hex(k)
+	var info: Dictionary = _war.units[k]
+	var nation := str(info["owner"])
+	var flying: bool = info["card"] is Unit and (info["card"] as Unit).Flying
+	var free := func(t: Vector2i) -> bool:
+		return t == home or (not taken.has(t) and not _war.units.has(MapCampaign.key_of(t.x, t.y)))
+	var home_d := MapCampaign.hex_distance(home, target)
+	if flying:
+		# rings around the target, nearest first: the free hex closest to home wins
+		var goal := home
+		var seen := {target: true}
+		var ring: Array = [target]
+		for radius in range(1, home_d):
+			var next: Array = []
+			for t in ring:
+				for nb in MapCampaign.wrapped_neighbors(t):
+					if not seen.has(nb):
+						seen[nb] = true
+						next.append(nb)
+			ring = next
+			var best_h := 1 << 30
+			for t in ring:
+				var h := MapCampaign.hex_distance(home, t)
+				if free.call(t) and h < best_h:
+					best_h = h
+					goal = t
+			if goal != home:
+				break
+		# fly there in a straight hex line
+		var path: Array = [home]
+		var cur := home
+		while cur != goal:
+			var step := cur
+			var step_d := MapCampaign.hex_distance(cur, goal)
+			for nb in MapCampaign.wrapped_neighbors(cur):
+				var d := MapCampaign.hex_distance(nb, goal)
+				if d < step_d:
+					step_d = d
+					step = nb
+			if step == cur:
+				break
+			cur = step
+			path.append(cur)
+		return path if cur == goal else [home]
+	# ground: breadth-first over the nation's own land
+	var c := _campaign()
+	var parent := {home: home}
+	var depth_of := {home: 0}
+	var queue: Array = [home]
+	var best := home
+	var best_score := Vector2i(home_d, 0)
+	var head := 0
+	while head < queue.size():
+		var t: Vector2i = queue[head]
+		head += 1
+		var score := Vector2i(MapCampaign.hex_distance(t, target), int(depth_of[t]))
+		if free.call(t) and score < best_score:
+			best_score = score
+			best = t
+		for nb in MapCampaign.wrapped_neighbors(t):
+			if parent.has(nb) or c.owner_of(nb.x, nb.y) != nation or not WorldMap.is_land(nb.x, nb.y):
+				continue
+			parent[nb] = t
+			depth_of[nb] = int(depth_of[t]) + 1
+			queue.append(nb)
+	var out: Array = [best]
+	while out[0] != home:
+		out.push_front(parent[out[0]])
+	return out
 
 func _resolve_collapses() -> void:
 	var events: Array = _war.resolve_collapses()

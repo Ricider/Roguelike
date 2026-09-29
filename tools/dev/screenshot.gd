@@ -74,6 +74,10 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		if setup == "map_fx_fire":
 			gc._speed_idx = 0
 			var entries: Array = w.fire(MapCampaign.key_of(inf_hex.x, inf_hex.y))
+			# march the unit to its target (FX_FRAMES decides how far along the frame catches it)
+			var walk_path: Array = gc._walk_path(MapCampaign.key_of(inf_hex.x, inf_hex.y), enemy_hex, {})
+			gc._view.walk_out(MapCampaign.key_of(inf_hex.x, inf_hex.y), walk_path, 0.08)
+			print("walk path ", walk_path)
 			for e in entries:
 				gc._view.add_shot(e["from"], e["to"], "shot_cannon", 0.28)
 				if e.get("buffed", false):
