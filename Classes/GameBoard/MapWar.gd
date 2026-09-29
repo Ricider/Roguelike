@@ -774,6 +774,10 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 	var wd = d.get("weights", {})
 	if wd is Dictionary and not (wd as Dictionary).is_empty():
 		w.deck_weights = (wd as Dictionary).duplicate(true)
+	else:
+		# older saves: rebuild from fresh starting decks, never the (bought/trimmed) current ones
+		for nm in w.players.keys():
+			w.deck_weights[nm] = starting_deck_weights(make_player.call(nm))
 	var sd = d.get("shops", {})
 	if sd is Dictionary:
 		for nm in (sd as Dictionary).keys():

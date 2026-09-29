@@ -480,3 +480,27 @@ func test_modifiers_apply_to_cards_already_on_the_map():
 	assert_eq(house.HitPoints, 1, "a card pushed to 0 or below is pinned at 1")
 	assert_true(w.units.has(house_k) and w.units.has(inf_k), "nobody dies from a modifier")
 	assert_eq(w.last_modifier_changes.size(), 2, "both cards changed")
+
+func test_shop_odds_stay_on_the_starting_deck():
+	var c := MapCampaign.new("State Troops")
+	var w := MapWar.new()
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	var human: Player = gs.make_player_by_name("State Troops", true)
+	w.setup(c, func(nm): return gs.make_player_by_name(nm), human)
+	var start: Dictionary = w.deck_weights["State Troops"].duplicate(true)
+	# buying and trimming the deck leaves the odds alone
+	human.Influence = 999
+	for card in (w.shop_of("State Troops")["cards"] as Array).duplicate():
+		w.buy_card("State Troops", card)
+	for i in range(10):
+		human.DrawPile.append(Drone.new())
+	human.DrawPile.pop_front()
+	w.restock_shop("State Troops")
+	assert_eq(w.deck_weights["State Troops"], start, "odds unchanged by purchases")
+	assert_false(w.deck_weights["State Troops"].has("Drone"), "no Drone odds from bought Drones")
+	# an old save without stored odds rebuilds them from a fresh starting deck
+	var data := w.to_data()
+	data.erase("weights")
+	var w2 := MapWar.from_data(data, c, func(nm): return gs.make_player_by_name(nm), human)
+	assert_eq(w2.deck_weights["State Troops"], start, "old saves get starting-deck odds")
+	gs.free()
