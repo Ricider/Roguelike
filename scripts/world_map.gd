@@ -13,7 +13,8 @@ const ICON_MONEY := "res://Assets/UI/money_icon.png"
 const SPEEDS := [1.0, 2.0, 4.0]
 const SHOT_GAP := 0.07 # seconds between shots at 1x
 const TRAVEL := 0.28 # projectile flight time at 1x
-const WALK_STEP := 0.08 # seconds per hex when melee units march to the front (visual only)
+const WALK_STEP := 0.08 # seconds per hex when units march to the front (visual only)
+const WALK_MAX := 1.0 # longest march out (or back) at 1x; long routes step faster to fit
 const START_HEX_PX := 18.0 # open zoomed in on your capital: same hex size on every map
 const PAN_STEP := 60.0
 const SHOT_SFX := {
@@ -971,24 +972,28 @@ func _on_end_turn() -> void:
 
 func _nation_attacks(n: String) -> void:
 	var shots := 0
-	# melee units march together, hex by hex, to the spot nearest their target (visual
-	# only: the cards stay on their hexes), fire from there, then march home; ranged ones stay put
+	# melee and flying units march together, hex by hex, to the spot nearest their target
+	# (visual only: the cards stay on their hexes), fire from there, then march home.
+	# Ground units cross sea in boats; ranged ground units fire from where they stand.
 	var walkers: Array = []
 	var taken := {}
-	var longest := 0
+	var march := 0.0 # seconds at 1x for the slowest march
 	for k in _war.attackers_of(n):
 		var aim := _war.predict_target(k)
-		if aim.is_empty() or bool(aim["ranged"]):
+		if aim.is_empty():
+			continue
+		if bool(aim["ranged"]) and not (_war.units[k]["card"] as Unit).Flying:
 			continue
 		var path := _walk_path(k, aim["hex"], taken)
 		if path.size() < 2:
 			continue
 		taken[path[path.size() - 1]] = true
-		_view.walk_out(k, path, WALK_STEP / _speed())
+		var step: float = minf(WALK_STEP, WALK_MAX / float(path.size() - 1))
+		_view.walk_out(k, path, step / _speed())
 		walkers.append(k)
-		longest = maxi(longest, path.size() - 1)
-	if longest > 0:
-		await _wait(WALK_STEP * longest + 0.05)
+		march = maxf(march, step * float(path.size() - 1))
+	if march > 0.0:
+		await _wait(march + 0.05)
 	for k in _war.attackers_of(n):
 		var entries: Array = _war.fire(k)
 		for e in entries:
@@ -1020,17 +1025,18 @@ func _nation_attacks(n: String) -> void:
 		_refresh_player_card()
 	if shots > 0:
 		await _wait(TRAVEL + 0.15)
-	if longest > 0:
+	if march > 0.0:
 		for k in walkers:
 			_view.walk_back(k)
-		await _wait(WALK_STEP * longest + 0.05)
+		await _wait(march + 0.05)
 		_view.clear_walks()
 	_refresh_legend()
 	_refresh_player_card()
 	_resolve_collapses()
 
 # Visual march route for the card at `k` towards `target` (home first). Ground units walk
-# over their own land; flying ones go straight over anything. It ends on the free hex
+# over their own land and sail over open sea (the view draws a boat), never through
+# other nations' land; flying ones go straight over anything. It ends on the free hex
 # closest to the target (the border, or right beside it). Free means no card stands there
 # and no other walker has claimed it (`taken`), so marching units never overlap.
 # A single-hex path means stay put.
@@ -1079,23 +1085,28 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
 			cur = step
 			path.append(cur)
 		return path if cur == goal else [home]
-	# ground: breadth-first over the nation's own land
+	# ground: breadth-first over the nation's own land and the open sea; hexes much
+	# farther from the target than home are never worth the detour
 	var c := _campaign()
+	var reach: int = home_d + 8
 	var parent := {home: home}
 	var depth_of := {home: 0}
 	var queue: Array = [home]
 	var best := home
-	var best_score := Vector2i(home_d, 0)
+	var best_score := Vector3i(home_d, 0, 0)
 	var head := 0
 	while head < queue.size():
 		var t: Vector2i = queue[head]
 		head += 1
-		var score := Vector2i(MapCampaign.hex_distance(t, target), int(depth_of[t]))
+		# closest to the target first, then land over a boat, then the shorter trip
+		var score := Vector3i(MapCampaign.hex_distance(t, target), 0 if WorldMap.is_land(t.x, t.y) else 1, int(depth_of[t]))
 		if free.call(t) and score < best_score:
 			best_score = score
 			best = t
 		for nb in MapCampaign.wrapped_neighbors(t):
-			if parent.has(nb) or c.owner_of(nb.x, nb.y) != nation or not WorldMap.is_land(nb.x, nb.y):
+			if parent.has(nb) or MapCampaign.hex_distance(nb, target) > reach:
+				continue
+			if WorldMap.is_land(nb.x, nb.y) and c.owner_of(nb.x, nb.y) != nation:
 				continue
 			parent[nb] = t
 			depth_of[nb] = int(depth_of[t]) + 1

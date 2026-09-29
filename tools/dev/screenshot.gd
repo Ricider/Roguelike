@@ -2,7 +2,7 @@
 # godot --path . -s tools/dev/screenshot.gd -- <scene> <out.png> [frames] [setup]
 # setup: "battle" starts a run first, "battle_select" also selects the first hand card
 # and hovers a square, "battle_endturn" plays one full combat turn,
-# "press:<Button>" presses a named button, "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round.
+# "press:<Button>" presses a named button, "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round, "map_boat" stages two units sailing out to sea.
 extends SceneTree
 
 func _initialize() -> void:
@@ -88,6 +88,39 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 				print("fx shot buffed=", e.get("buffed"), " intercepted=", e.get("intercepted"), " from=", e.get("intercept_from"))
 			for i in range(int(OS.get_environment("FX_FRAMES")) if OS.get_environment("FX_FRAMES") != "" else 20):
 				await process_frame
+	if setup == "map_boat" and gc != null and gc.has_method("_walk_path"):
+		# a Tank and an Infantry on the player's coast sail 3 sea hexes out (slow, to catch the boats)
+		var w2: MapWar = gc._war
+		var me2: String = gc._me()
+		var sailed := 0
+		for t in gc._campaign().tiles_of(me2):
+			if sailed >= 2:
+				break
+			if w2.units.has(MapCampaign.key_of(t.x, t.y)) or t == gc._campaign().capital_site(me2):
+				continue
+			var path: Array = [t]
+			var cur: Vector2i = t
+			for i in range(3):
+				var nxt := Vector2i(-1, -1)
+				for nb in MapCampaign.wrapped_neighbors(cur):
+					if not WorldMap.is_land(nb.x, nb.y) and not path.has(nb):
+						nxt = nb
+						break
+				if nxt.x < 0:
+					break
+				path.append(nxt)
+				cur = nxt
+			if path.size() < 4:
+				continue
+			var unit: Card = Tank.new() if sailed == 0 else Infantry.new()
+			w2._put(me2, unit, t)
+			gc._view.walk_out(MapCampaign.key_of(t.x, t.y), path, 1.5)
+			if sailed == 0:
+				gc._view.center_on(path[2], gc._view.zoom_for_hex_size(34.0))
+			print("boat path ", path)
+			sailed += 1
+		for i in range(int(OS.get_environment("FX_FRAMES")) if OS.get_environment("FX_FRAMES") != "" else 150):
+			await process_frame
 	if setup.begins_with("map_hover") and gc != null and gc.has_method("_show_map_hover"):
 		# hover the player's first unit on the map (or a hand card with map_hover_hand)
 		if setup == "map_hover_hand":

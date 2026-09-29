@@ -627,8 +627,59 @@ func unit_offset(k: String, m: Array) -> Vector2:
 	if i == 0:
 		a = home
 	var s: float = m[0]
-	var hop: float = absf(sin(f * PI)) * s * 0.18 if pos > 0.0 and pos < float(path.size() - 1) else 0.0
+	var hop: float
+	if at_sea(k):
+		hop = sin(_clock * 9.0) * s * 0.05 # a boat bobs instead of hopping
+	else:
+		hop = absf(sin(f * PI)) * s * 0.18 if pos > 0.0 and pos < float(path.size() - 1) else 0.0
 	return a.lerp(b, f) - home - Vector2(0, hop)
+
+# True while a marching ground card is on a sea hex (it rides a boat there).
+func at_sea(k: String) -> bool:
+	var w: Dictionary = walks.get(k, {})
+	if w.is_empty() or war == null or not war.units.has(k):
+		return false
+	var card: Card = war.units[k]["card"]
+	if card is Unit and (card as Unit).Flying:
+		return false
+	var path: Array = w["path"]
+	var t: Vector2i = path[clampi(roundi(_walk_progress(w)), 0, path.size() - 1)]
+	return not WorldMap.is_land(t.x, t.y)
+
+# +1 when the marching card heads east on screen, -1 west.
+func _walk_facing(k: String, m: Array) -> float:
+	var w: Dictionary = walks.get(k, {})
+	if w.is_empty():
+		return 1.0
+	var path: Array = w["path"]
+	var a := screen_pos(path[0] as Vector2i, m)
+	var b := _wrap_target(a, screen_pos(path[path.size() - 1] as Vector2i, m), m)
+	var dx: float = (b.x - a.x) * (-1.0 if bool(w["back"]) else 1.0)
+	return -1.0 if dx < 0.0 else 1.0
+
+# Pixel boat under a card crossing the sea: wake behind, then the hull drawn over
+# the sprite's feet so the unit stands inside it. Bow points along `facing`.
+func _draw_boat_wake(c: Vector2, s: float, facing: float) -> void:
+	var foam := Color(0.85, 0.95, 1.0, 0.75)
+	for i in range(3):
+		var wx: float = -facing * s * (1.15 + i * 0.32)
+		var ph: float = fmod(_clock * 3.0 + i * 0.33, 1.0)
+		_overlay.draw_line(c + Vector2(wx, s * (0.6 - 0.12 * i)), c + Vector2(wx - facing * s * 0.25, s * (0.66 - 0.08 * i)), Color(foam.r, foam.g, foam.b, foam.a * (1.0 - ph * 0.6)), maxf(1.5, s * 0.08))
+	_overlay.draw_line(c + Vector2(-s * 1.0, s * 0.7), c + Vector2(s * 1.0, s * 0.7), Color(foam.r, foam.g, foam.b, 0.35), maxf(1.5, s * 0.09))
+
+func _draw_boat_hull(c: Vector2, s: float, nc: Color, facing: float) -> void:
+	var pts := PackedVector2Array()
+	for p in [Vector2(-0.98, 0.24), Vector2(1.35, 0.0), Vector2(0.66, 0.68), Vector2(-0.88, 0.68)]:
+		pts.append(c + Vector2(p.x * facing, p.y) * s)
+	var outline := pts.duplicate()
+	outline.append(pts[0])
+	_overlay.draw_colored_polygon(pts, Color(0.46, 0.28, 0.15))
+	# nation-coloured stripe under the gunwale, then plank lines
+	var stripe := PackedVector2Array([pts[0], pts[1], pts[1].lerp(pts[2], 0.32), pts[0].lerp(pts[3], 0.32)])
+	_overlay.draw_colored_polygon(stripe, nc)
+	_overlay.draw_line(pts[0].lerp(pts[3], 0.66), pts[1].lerp(pts[2], 0.66), Color(0.3, 0.17, 0.09), maxf(1.0, s * 0.06))
+	_overlay.draw_polyline(outline, Color(0.08, 0.05, 0.1), maxf(1.5, s * 0.09))
+	_overlay.draw_line(pts[0], pts[1], Color(0.8, 0.6, 0.38), maxf(1.0, s * 0.06))
 
 func add_place(at: Vector2i) -> void:
 	effects.append({"kind": "place", "to": at, "t0": _clock, "dur": 0.45})
@@ -719,16 +770,23 @@ func _draw_units(m: Array) -> void:
 		var shielded: bool = war.is_shielded(str(k)) and not (card is Interceptor)
 		var seed_i: int = t.x * 13 + t.y * 7
 		var shift := unit_offset(str(k), m)
+		var sea := at_sea(str(k))
+		var facing := _walk_facing(str(k), m) if sea else 1.0
 		for cp in _visible_copies(t, m, margin):
 			var c := (cp as Vector2) + shift
-			# owner base: flat ellipse in nation colour under the sprite
-			_overlay.draw_set_transform(c + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
-			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
-			_overlay.draw_circle(Vector2.ZERO, s * 0.6, nc)
-			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			if sea:
+				_draw_boat_wake(c, s, facing)
+			else:
+				# owner base: flat ellipse in nation colour under the sprite
+				_overlay.draw_set_transform(c + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
+				_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
+				_overlay.draw_circle(Vector2.ZERO, s * 0.6, nc)
+				_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			if buffed:
 				_draw_buff_aura(c, s, seed_i)
 			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y)
+			if sea:
+				_draw_boat_hull(c, s, nc, facing)
 			if shielded:
 				_draw_shield_aura(c, s, seed_i)
 			# HP bar under the unit
