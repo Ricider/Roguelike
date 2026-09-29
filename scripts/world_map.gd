@@ -45,6 +45,7 @@ var _selected: Card = null
 var _busy: bool = false
 var _speed_idx: int = 1 # 2x: a full round of 8 nations stays snappy
 var _log_lines: Array = []
+var _hover: CardHover = null # description cards + tooltips (see scripts/card_hover.gd)
 
 func _ready() -> void:
 	_sfx_music("map")
@@ -177,7 +178,11 @@ func _build_ui() -> void:
 	_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_view.tile_selected.connect(_on_tile_selected)
 	_view.tile_hovered.connect(_on_tile_hovered)
+	_view.hover_cleared.connect(_clear_map_hover)
 	map_col.add_child(_view)
+	_hover = CardHover.new()
+	_hover.name = "CardHover"
+	add_child(_hover)
 	# zoom controls floating in the map's top-right corner
 	var zoom_bar := HBoxContainer.new()
 	zoom_bar.name = "ZoomBar"
@@ -281,6 +286,7 @@ func _build_ui() -> void:
 	_inf_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	inf_row.add_child(_inf_label)
 	_inf_box = inf_row
+	_tip(inf_row, func(): return TIP_INFLUENCE % MapWar.INFLUENCE_PER_HEX)
 	var inf_hint := Label.new()
 	inf_hint.text = "+%d per hex won" % MapWar.INFLUENCE_PER_HEX
 	inf_hint.add_theme_font_size_override("font_size", 13)
@@ -295,6 +301,7 @@ func _build_ui() -> void:
 	_shop_btn.add_theme_font_size_override("font_size", 18)
 	_shop_btn.focus_mode = Control.FOCUS_NONE
 	_shop_btn.pressed.connect(_open_shop)
+	_tip(_shop_btn, func(): return TIP_SHOP)
 	inf_col.add_child(_shop_btn)
 	_status = Label.new()
 	_status.name = "Status"
@@ -407,6 +414,7 @@ func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: Str
 	bar.stretch_margin_bottom = 9
 	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bar.custom_minimum_size = Vector2(30, 96)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE # let the gauge column get the hover
 	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(bar)
 	var value := Label.new()
@@ -417,6 +425,10 @@ func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: Str
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(ic)
 	_gauges[key] = {"bar": bar, "value": value, "income": income}
+	match key:
+		"hp": _tip(col, func(): return TIP_HP)
+		"bio": _tip(col, func(): return TIP_BIO)
+		"money": _tip(col, func(): return TIP_MONEY)
 	return col
 
 func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
@@ -525,8 +537,79 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 		btn.pressed.connect(func(): _view.select_tile(c.capital_site(nm), false))
 	return btn
 
+# -------------------------------------------------------------- hover help
+const TIP_HP := "[Health]: Your nation's hit points. You lose HP when one of your cards is destroyed (equal to the BioSupply spent on it) and when enemies hit your flag. At 0 HP you cede border hexes to whoever hurt you most, then rebuild."
+const TIP_BIO := "[BioSupply]: The people you can call up, spent to deploy cards. Grows 10% + 5 each turn, +8 per Housing on the map. Max 200."
+const TIP_MONEY := "[MoneySupply]: Your treasury, spent to deploy cards. +10 each turn plus the Income of your buildings on the map. Max 200."
+const TIP_INFLUENCE := "[Influence]: Earned when your nation takes hexes (+%d per hex). Spend it in the [Shop] on cards and modifiers, or to remove a card from your deck."
+const TIP_SHOP := "[Shop]: 5 cards drawn with your starting deck's odds plus 3 modifiers, restocked every turn. Bought cards are drawn next."
+
+func _tip(node: Control, text_fn: Callable) -> void:
+	# text_fn is called at hover time so numbers are always current
+	node.mouse_filter = Control.MOUSE_FILTER_STOP if not (node is BaseButton) else node.mouse_filter
+	node.mouse_entered.connect(func(): _hover.show_text(str(text_fn.call()), node.get_global_rect()))
+	node.mouse_exited.connect(func(): _hover.hide_all())
+
+# Stats for a card still in a hand or shop: effective values vs the base card.
+func _hand_info(card: Card, p: Player, where: String) -> Dictionary:
+	var d := {"owner": where, "hp": p.effective_hitpoints_for(card), "hp_base": p.base_hitpoints_for(card),
+		"money": p.get_effective_money_cost(card), "money_base": card.MoneyCost}
+	if card is Unit:
+		d["dmg"] = p.effective_damage_for(card, null)
+		d["dmg_base"] = (card as Unit).Damage
+		d["ranged"] = p.has_range_for(card)
+	var notes: Array = []
+	var short := _war.shortfall(_me(), card) if (_war != null and p == _human()) else ""
+	if short != "":
+		notes.append("[color=#ff7a70]Need %s to deploy.[/color]" % short)
+	d["notes"] = notes
+	return d
+
+# Stats for a card standing on the map, plus what it will do next.
+func _unit_info(k: String) -> Dictionary:
+	var info: Dictionary = _war.units[k]
+	var owner := str(info["owner"])
+	var card: Card = info["card"]
+	var p: Player = _war.players[owner]
+	var t := MapWar.key_to_hex(k)
+	var hp: int = _war.card_hp(card)
+	var d := {"owner": owner + ("  (you)" if owner == _me() else ""),
+		"owner_color": Color.html(str(WorldMap.nation_by_name(owner).get("color", "ffffff"))),
+		"hp": hp, "hp_max": int(card.get_meta("map_max_hp", hp))}
+	var notes: Array = []
+	if card is Unit:
+		var u := card as Unit
+		d["dmg"] = _war.effective_damage(owner, u, t)
+		d["dmg_base"] = u.Damage
+		d["ranged"] = p.has_range_for(u)
+		if _war._barracks_bonus(owner, t) > 0:
+			notes.append("[color=#8fe08f]+2 damage from an adjacent Barracks.[/color]")
+		if not u.Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
+			notes.append("[color=#c8b89a]Mountain cover: takes 1 less damage.[/color]")
+		var aim := _war.predict_target(k)
+		if not aim.is_empty():
+			var col := _nation_hex_color(str(aim["owner"]))
+			if bool(aim["ranged"]):
+				notes.append("Next shot: a random target of [color=#%s]%s[/color] (closest nation, %d hexes)." % [col, aim["owner"], int(aim["distance"])])
+			else:
+				var tie := " (or another of %d equally close)" % int(aim["ties"]) if int(aim["ties"]) > 1 else ""
+				notes.append("Next shot: [color=#%s]%s[/color]'s %s, %d hexes away%s." % [col, aim["owner"], str(aim["name"]).trim_prefix(str(aim["owner"]) + " "), int(aim["distance"]), tie])
+			if card is RocketLauncher or card is Howitzer:
+				notes.append("Fires 4 times each turn.")
+	elif card is Building:
+		d["income"] = (card as Building).Income
+	d["notes"] = notes
+	return d
+
+func _clear_map_hover() -> void:
+	_view.aim = {}
+	if _hover != null:
+		_hover.hide_all()
+
 # ------------------------------------------------------------------- hand
 func _refresh_hand() -> void:
+	if _hover != null:
+		_hover.hide_all()
 	for child in _hand_box.get_children():
 		child.queue_free()
 	var p := _human()
@@ -604,6 +687,8 @@ func _hand_button(stack: Array) -> Button:
 	if short != "":
 		btn.modulate = Color(1, 1, 1, 0.55)
 	btn.pressed.connect(func(): _select_card(stack))
+	btn.mouse_entered.connect(func(): _hover.show_card(card, _hand_info(card, p, "In your hand%s" % (" (x%d)" % stack.size() if stack.size() > 1 else "")), btn.get_global_rect()))
+	btn.mouse_exited.connect(func(): _hover.hide_all())
 	return btn
 
 func _select_card(stack: Array) -> void:
@@ -691,6 +776,7 @@ func _describe(x: int, y: int) -> String:
 func _on_tile_hovered(x: int, y: int) -> void:
 	if _campaign() == null or _war == null:
 		return
+	_show_map_hover(x, y)
 	if _selected != null:
 		var why := _war.can_place(_me(), _selected, Vector2i(x, y))
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
@@ -698,6 +784,27 @@ func _on_tile_hovered(x: int, y: int) -> void:
 			_hover_bar.text += " (mountain: takes 1 less damage)"
 		return
 	_hover_bar.text = _describe(x, y)
+
+func _show_map_hover(x: int, y: int) -> void:
+	_view.aim = {}
+	var k := MapCampaign.key_of(x, y)
+	var t := Vector2i(x, y)
+	if _war.units.has(k):
+		var card: Card = _war.units[k]["card"]
+		var aim := _war.predict_target(k)
+		var below := false
+		if not aim.is_empty():
+			_view.aim = {"from": t, "to": aim["hex"], "ranged": aim["ranged"]}
+			# open the card on the side away from the target so the arrow stays visible
+			below = _view.hex_global_rect(aim["hex"]).get_center().y < _view.hex_global_rect(t).get_center().y
+		_hover.show_card(card, _unit_info(k), _view.hex_global_rect(t), below)
+		return
+	var holder := _campaign().capital_holder_at(x, y)
+	if holder != "":
+		var hp_p: Player = _war.players[holder]
+		_hover.show_text("[%s flag]: %s. HP %d/%d. Any hit on this flag comes straight off %s's HP. When the hex falls, the flag moves to the heart of its remaining land." % [holder, str(WorldMap.nation_by_name(holder).get("capital", "")), hp_p.HitPoints, hp_p.MaxHitPoints, holder], _view.hex_global_rect(t))
+		return
+	_hover.hide_all()
 
 func _on_tile_selected(x: int, y: int) -> void:
 	if _war == null or _busy:
@@ -863,11 +970,13 @@ func _open_shop() -> void:
 	_build_shop(false)
 
 func _close_shop() -> void:
+	if _hover != null:
+		_hover.hide_all()
 	if _shop_panel != null and is_instance_valid(_shop_panel):
 		_shop_panel.queue_free()
 	_shop_panel = null
 
-func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: bool, owned: bool, on_buy: Callable) -> Button:
+func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: bool, owned: bool, on_buy: Callable, hover_card: Card = null) -> Button:
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(170, 196)
 	btn.focus_mode = Control.FOCUS_NONE
@@ -917,6 +1026,14 @@ func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: b
 			on_buy.call()
 		else:
 			_sfx("deny", -4.0))
+	if hover_card != null:
+		var p := _human()
+		btn.mouse_entered.connect(func():
+			var info := _hand_info(hover_card, p, "Shop offer")
+			info["influence"] = cost
+			info["notes"] = []
+			_hover.show_card(hover_card, info, btn.get_global_rect()))
+		btn.mouse_exited.connect(func(): _hover.hide_all())
 	return btn
 
 func _build_shop(remove_mode: bool) -> void:
@@ -1007,7 +1124,7 @@ func _build_shop(remove_mode: bool) -> void:
 					_sfx("shop_buy")
 					_log_line("You buy a %s (joins your draw pile)." % card.card_name)
 					_after_purchase()
-					_build_shop(false)))
+					_build_shop(false), card))
 		if (shop["cards"] as Array).is_empty():
 			var none := Label.new()
 			none.text = "Sold out until next turn."

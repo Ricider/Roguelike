@@ -13,6 +13,7 @@ class_name WorldMapView
 
 signal tile_selected(x: int, y: int)
 signal tile_hovered(x: int, y: int)
+signal hover_cleared # mouse left the map or moved off the grid
 
 const TERRAIN_COLORS = {
 	"ocean": Color(0.10, 0.22, 0.38),
@@ -61,6 +62,7 @@ var war: MapWar = null
 var placeable: Dictionary = {} # "x,y" -> true while a hand card is selected
 var ghost_card: String = "" # card name previewed under the cursor
 var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
+var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
 var _clock: float = 0.0
 var _fx_clock: float = 0.0
 var _unit_tex: Dictionary = {} # card name -> Array[Texture2D] (32px idle frames)
@@ -97,7 +99,9 @@ func _ready() -> void:
 	resized.connect(_redraw_all)
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
-		_overlay.queue_redraw())
+		aim = {}
+		_overlay.queue_redraw()
+		hover_cleared.emit())
 
 func _redraw_all() -> void:
 	queue_redraw()
@@ -164,7 +168,7 @@ func _process(delta: float) -> void:
 		_sea_clock = 0.0
 		_sea_phase = (_sea_phase + 1) % TileArt.VARIANTS
 		queue_redraw()
-	var busy := not effects.is_empty() or not placeable.is_empty() or (war != null and not war.units.is_empty())
+	var busy := not effects.is_empty() or not placeable.is_empty() or not aim.is_empty() or (war != null and not war.units.is_empty())
 	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
 		_overlay.queue_redraw()
@@ -379,6 +383,7 @@ func _gui_input(event: InputEvent) -> void:
 				_dragging = true
 			if _dragging:
 				pan_by(mm.relative)
+				hover_cleared.emit()
 				return
 		var h := tile_at_point(mm.position)
 		if h != hovered:
@@ -386,6 +391,8 @@ func _gui_input(event: InputEvent) -> void:
 			_overlay.queue_redraw()
 			if h.x >= 0:
 				tile_hovered.emit(h.x, h.y)
+			else:
+				hover_cleared.emit()
 		return
 	if event is InputEventScreenDrag:
 		pan_by((event as InputEventScreenDrag).relative)
@@ -672,11 +679,44 @@ func _draw_overlay() -> void:
 			for cp in _visible_copies(hovered, m, margin):
 				if (cp as Vector2).distance_to(gp) < s * 2.0:
 					_draw_card(ghost_card, cp as Vector2, s, Color(1, 1, 1, 0.55))
+	if not aim.is_empty():
+		_draw_aim(m)
 	if hovered.x >= 0 and hovered != selected:
 		_hex_outline(hovered, m, Color(1, 1, 1, 0.6), 2.0)
 	if selected.x >= 0:
 		_hex_outline(selected, m, Color8(20, 16, 30), 5.0)
 		_hex_outline(selected, m, Color(1.0, 0.86, 0.3), 2.5)
+
+# Hover help (like the old battle screen's attack arrow): dashed line from the
+# hovered unit to the target it would hit next, with a pulsing crosshair.
+func _draw_aim(m: Array) -> void:
+	var s: float = m[0]
+	var a := screen_pos(aim["from"] as Vector2i, m)
+	var b := _wrap_target(a, screen_pos(aim["to"] as Vector2i, m), m)
+	var col := Color(0.55, 0.85, 1.0, 0.95) if bool(aim.get("ranged", false)) else Color(1.0, 0.45, 0.35, 0.95)
+	var dist := a.distance_to(b)
+	var dash: float = maxf(6.0, s * 0.45)
+	var n := int(dist / (dash * 2.0)) + 1
+	var off := fposmod(_clock * 30.0, dash * 2.0)
+	for i in range(n + 1):
+		var t0 := clampf((i * dash * 2.0 + off - dash) / maxf(dist, 1.0), 0.0, 1.0)
+		var t1 := clampf((i * dash * 2.0 + off) / maxf(dist, 1.0), 0.0, 1.0)
+		if t1 > t0:
+			_overlay.draw_line(a.lerp(b, t0), a.lerp(b, t1), Color(0.05, 0.04, 0.08, 0.8), 5.0)
+			_overlay.draw_line(a.lerp(b, t0), a.lerp(b, t1), col, 2.5)
+	var r: float = s * (0.75 + 0.12 * sin(_clock * 6.0))
+	_overlay.draw_arc(b, r, 0.0, TAU, 20, col, 2.5)
+	_overlay.draw_line(b - Vector2(r * 1.4, 0), b - Vector2(r * 0.5, 0), col, 2.0)
+	_overlay.draw_line(b + Vector2(r * 0.5, 0), b + Vector2(r * 1.4, 0), col, 2.0)
+	_overlay.draw_line(b - Vector2(0, r * 1.4), b - Vector2(0, r * 0.5), col, 2.0)
+	_overlay.draw_line(b + Vector2(0, r * 0.5), b + Vector2(0, r * 1.4), col, 2.0)
+
+# Global-space rectangle around hex t (for anchoring hover cards).
+func hex_global_rect(t: Vector2i) -> Rect2:
+	var m := metrics()
+	var s: float = m[0]
+	var c := screen_pos(t, m)
+	return Rect2(get_global_transform() * (c - Vector2(s, s)), Vector2(s, s) * 2.0)
 
 func _hex_outline(t: Vector2i, m: Array, col: Color, width: float) -> void:
 	for cp in _visible_copies(t, m, m[0] * 2.0):

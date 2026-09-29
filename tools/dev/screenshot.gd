@@ -29,6 +29,33 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 	for i in range(frames):
 		await process_frame
 	var gc = current_scene
+	if setup.begins_with("map_hover") and gc != null and gc.has_method("_show_map_hover"):
+		# hover the player's first unit on the map (or a hand card with map_hover_hand)
+		if setup == "map_hover_hand":
+			var hb = gc._hand_box.get_child(0)
+			hb.mouse_entered.emit()
+		else:
+			for k in gc._war.cards_of(gc._me()):
+				if gc._war.units[k]["card"] is Unit:
+					var t := MapWar.key_to_hex(k)
+					gc._view.center_on(t, gc._view.zoom)
+					for i in range(5):
+						await process_frame
+					# feed mouse motion onto the unit through the normal input path, every frame,
+					# so a real cursor resting over the test window can't steal the hover
+					var gp: Vector2 = gc._view.hex_global_rect(t).get_center()
+					for i in range(20):
+						var mm := InputEventMouseMotion.new()
+						mm.position = gp + Vector2(i % 2, 0)
+						mm.global_position = mm.position
+						root.push_input(mm, true) # viewport coordinates (the window is scaled)
+						await process_frame
+					print("hover unit at ", t)
+					break
+		for i in range(4):
+			await process_frame
+		if setup == "map_hover":
+			print("after frames aim=", gc._view.aim, " hovered=", gc._view.hovered)
 	if setup.begins_with("press:") and gc != null:
 		# press a named button (e.g. press:PlayButton) and report where it leads
 		var names: PackedStringArray = setup.substr(6).split("/")

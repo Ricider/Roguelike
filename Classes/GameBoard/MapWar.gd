@@ -403,6 +403,42 @@ func flag_sites() -> Dictionary:
 func pick_target(nation: String, from: Vector2i, ranged: bool, flags: Dictionary = {}) -> Dictionary:
 	if flags.is_empty():
 		flags = flag_sites()
+	var closest := _closest_targets(nation, from, flags)
+	if closest.is_empty():
+		return {}
+	var pick: Dictionary = closest[rng.randi_range(0, closest.size() - 1)]
+	if not ranged:
+		return pick
+	# Ranged: a random target (card or flag) of the closest enemy nation.
+	var victim := str(pick["owner"])
+	var pool: Array = []
+	for k in cards_of(victim):
+		if card_hp(units[k]["card"]) > 0:
+			pool.append({"key": k, "owner": victim})
+	if flags.has(victim):
+		pool.append({"flag": victim, "hex": flags[victim], "owner": victim})
+	return pool[rng.randi_range(0, pool.size() - 1)]
+
+# Where the unit on hex key `k` would shoot next, without rolling dice (for hover help):
+# {"hex", "owner", "name", "distance", "ranged", "ties"}; ranged units report the nation they aim at.
+func predict_target(k: String) -> Dictionary:
+	if not units.has(k) or not (units[k]["card"] is Unit):
+		return {}
+	var nation := str(units[k]["owner"])
+	var unit := units[k]["card"] as Unit
+	var from := key_to_hex(k)
+	var closest := _closest_targets(nation, from, flag_sites())
+	if closest.is_empty():
+		return {}
+	closest.sort_custom(func(a, b): return str(a.get("key", a.get("flag", ""))) < str(b.get("key", b.get("flag", ""))))
+	var first: Dictionary = closest[0]
+	var hex: Vector2i = first["hex"] if first.has("hex") else key_to_hex(str(first["key"]))
+	var nm: String = (str(first["owner"]) + " flag") if first.has("flag") else (units[first["key"]]["card"] as Card).card_name
+	return {"hex": hex, "owner": str(first["owner"]), "name": nm, "distance": hex_distance(from, hex),
+		"ranged": (players[nation] as Player).has_range_for(unit), "ties": closest.size()}
+
+# Every enemy target (cards and flags) at the smallest hex distance from `from`.
+func _closest_targets(nation: String, from: Vector2i, flags: Dictionary) -> Array:
 	var best: int = 1 << 30
 	var closest: Array = []
 	for k in units.keys():
@@ -427,20 +463,7 @@ func pick_target(nation: String, from: Vector2i, ranged: bool, flags: Dictionary
 			closest = [cand]
 		elif d2 == best:
 			closest.append(cand)
-	if closest.is_empty():
-		return {}
-	var pick: Dictionary = closest[rng.randi_range(0, closest.size() - 1)]
-	if not ranged:
-		return pick
-	# Ranged: a random target (card or flag) of the closest enemy nation.
-	var victim := str(pick["owner"])
-	var pool: Array = []
-	for k in cards_of(victim):
-		if card_hp(units[k]["card"]) > 0:
-			pool.append({"key": k, "owner": victim})
-	if flags.has(victim):
-		pool.append({"flag": victim, "hex": flags[victim], "owner": victim})
-	return pool[rng.randi_range(0, pool.size() - 1)]
+	return closest
 
 func _hurt_nation(victim: String, attacker: String, amount: int) -> void:
 	var p: Player = players[victim]
