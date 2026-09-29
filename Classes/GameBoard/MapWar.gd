@@ -10,7 +10,9 @@
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
 # from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
-# Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1).
+# Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1);
+# units in a forest (jungle hex) take 1 less from flying attackers (minimum 1).
+# Buildings (walls included) can't be placed on mountains.
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
 # cedes border hexes (1 per 10 HP the victor has left; x2 when it fields fewer
 # than 3 units, x4 with none) to whoever damaged it most, loses the cards on those
@@ -121,6 +123,8 @@ func can_place(nation: String, card: Card, t: Vector2i) -> String:
 		return "That hex is taken"
 	if campaign.capital_site(nation) == t:
 		return "Your flag stands here; it needs its own hex"
+	if not can_build_on(card, t):
+		return "Buildings can't be placed on mountains"
 	var p: Player = players[nation]
 	if not p.Hand.has(card):
 		return "That card is not in your hand"
@@ -348,7 +352,7 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 	var flag := campaign.capital_site(nation)
 	for t in campaign.tiles_of(nation):
 		var tv := t as Vector2i
-		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag:
+		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag or not can_build_on(card, tv):
 			continue
 		var d: float = float(fdist.get(MapCampaign.key_of(tv.x, tv.y), 50))
 		var score: float
@@ -528,9 +532,19 @@ func _hurt_nation(victim: String, attacker: String, amount: int) -> void:
 	var row: Dictionary = ledger[victim]
 	row[attacker] = int(row.get(attacker, 0)) + amount
 
-# Mountain cover: a non-flying unit standing on a mountain hex takes 1 less damage (min 1).
-static func terrain_adjusted(card: Card, t: Vector2i, dmg: int) -> int:
-	if card is Unit and not (card as Unit).Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
+# Buildings (walls included) can't stand on mountain hexes; units can.
+static func can_build_on(card: Card, t: Vector2i) -> bool:
+	return not (card is Building and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN)
+
+# Terrain cover, min 1 damage: a non-flying unit on a mountain hex takes 1 less from
+# every hit; any unit in a forest (jungle hex) takes 1 less from flying attackers.
+static func terrain_adjusted(card: Card, t: Vector2i, dmg: int, attacker: Card = null) -> int:
+	if not (card is Unit):
+		return dmg
+	var terrain := WorldMap.terrain_at(t.x, t.y)
+	if terrain == WorldMap.MOUNTAIN and not (card as Unit).Flying:
+		return maxi(1, dmg - 1)
+	if terrain == WorldMap.JUNGLE and attacker is Unit and (attacker as Unit).Flying:
 		return maxi(1, dmg - 1)
 	return dmg
 
@@ -604,7 +618,7 @@ func fire(k: String) -> Array:
 				for nb in MapCampaign.wrapped_neighbors(site):
 					var ninfo := unit_at(nb as Vector2i)
 					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
-						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, dmg))
+						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, dmg, unit))
 						fsplash.append(nb)
 			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
 				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash,
@@ -626,14 +640,14 @@ func fire(k: String) -> Array:
 		actual = _intercept(victim2, to, unit, nation, actual)
 		var intercept_from := _last_intercept_from
 		var pre_terrain := actual
-		actual = terrain_adjusted(target, to, actual)
+		actual = terrain_adjusted(target, to, actual, unit)
 		_damage_card(tk, actual)
 		var splash: Array = []
 		if unit is FighterJet:
 			for nb in MapCampaign.wrapped_neighbors(to):
 				var ninfo := unit_at(nb as Vector2i)
 				if not ninfo.is_empty() and str(ninfo["owner"]) == victim2:
-					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain))
+					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain, unit))
 					splash.append(nb)
 		var destroyed := _reap(nation)
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,

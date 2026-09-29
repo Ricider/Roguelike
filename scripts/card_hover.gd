@@ -165,11 +165,14 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 	_card_panel.visible = true
 	if card is Unit:
 		_trait_box("[Flying]" if flying else "[Grounded]",
-			"Takes half damage from attackers without Range. Gets no mountain cover." if flying
-			else "Standing on a mountain hex, it takes 1 less damage from every hit.")
+			"Takes half damage from attackers without Range. Gets no mountain cover. In a forest it takes 1 less damage from flying attackers." if flying
+			else "On a mountain hex it takes 1 less damage from every hit. In a forest it takes 1 less damage from flying attackers.")
 		_trait_box("[HasRange]" if ranged else "[Melee]",
 			"Fires at a random target (any card or the flag) of the closest enemy nation." if ranged
 			else "Fires at the closest enemy target (card or flag) anywhere on the map. Deals half damage to Flying units.")
+		_traits.visible = true
+	elif card is Building:
+		_trait_box("[Building]", "Can't be placed on mountain hexes.")
 		_traits.visible = true
 	_click_through(_card_panel)
 	_click_through(_traits)

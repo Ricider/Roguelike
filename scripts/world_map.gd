@@ -655,6 +655,8 @@ func _unit_info(k: String) -> Dictionary:
 			notes.append("[color=#8fe08f]+2 damage from an adjacent Barracks.[/color]")
 		if not u.Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
 			notes.append("[color=#c8b89a]Mountain cover: takes 1 less damage.[/color]")
+		if WorldMap.terrain_at(t.x, t.y) == WorldMap.JUNGLE:
+			notes.append("[color=#8fcf7a]Forest cover: takes 1 less damage from flying attackers.[/color]")
 		var aim := _war.predict_target(k)
 		if not aim.is_empty():
 			var col := _nation_hex_color(str(aim["owner"]))
@@ -778,7 +780,7 @@ func _select_card(stack: Array) -> void:
 	var flag := _campaign().capital_site(_me())
 	for t in _campaign().tiles_of(_me()):
 		var tv := t as Vector2i
-		if not _war.units.has(MapCampaign.key_of(tv.x, tv.y)) and tv != flag:
+		if not _war.units.has(MapCampaign.key_of(tv.x, tv.y)) and tv != flag and MapWar.can_build_on(card, tv):
 			keys[MapCampaign.key_of(tv.x, tv.y)] = true
 	_view.placeable = keys
 	_view.ghost_card = card.card_name
@@ -836,6 +838,8 @@ func _describe(x: int, y: int) -> String:
 			text += " · %s's %s  HP %d" % [owner, card.card_name, _war.card_hp(card)]
 			if card is Unit and not (card as Unit).Flying and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN:
 				text += " · mountain cover: takes 1 less damage"
+			if card is Unit and WorldMap.terrain_at(x, y) == WorldMap.JUNGLE:
+				text += " · forest cover: takes 1 less damage from flying attackers"
 			if card is Unit:
 				var u := card as Unit
 				var ranged: bool = (_war.players[owner] as Player).has_range_for(u)
@@ -851,6 +855,8 @@ func _on_tile_hovered(x: int, y: int) -> void:
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
 		if why == "" and _selected is Unit and not (_selected as Unit).Flying and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN:
 			_hover_bar.text += " (mountain: takes 1 less damage)"
+		elif why == "" and _selected is Unit and WorldMap.terrain_at(x, y) == WorldMap.JUNGLE:
+			_hover_bar.text += " (forest: takes 1 less damage from flying attackers)"
 		return
 	_hover_bar.text = _describe(x, y)
 

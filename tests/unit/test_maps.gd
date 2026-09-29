@@ -91,7 +91,7 @@ func _mountain_and_plain() -> Array:
 				plain = Vector2i(x, y)
 	return [mountain, plain]
 
-func _hit(target_card: Card, at: Vector2i) -> int:
+func _hit(target_card: Card, at: Vector2i, shooter: Card = null) -> int:
 	var c := MapCampaign.new("Horde")
 	var w := MapWar.new()
 	w.setup(c, func(_nm): return Player.new(100, 200, 200), Player.new(100, 200, 200))
@@ -99,7 +99,7 @@ func _hit(target_card: Card, at: Vector2i) -> int:
 		w._remove(k)
 	w._put("Coalition Army", target_card, at)
 	var shooter_hex := MapCampaign.wrapped_neighbors(at)[0] as Vector2i
-	w._put("Horde", Tank.new(), shooter_hex)
+	w._put("Horde", shooter if shooter != null else Tank.new(), shooter_hex)
 	var log := w.fire(MapCampaign.key_of(shooter_hex.x, shooter_hex.y))
 	return int(log[0]["damage"])
 
@@ -113,6 +113,54 @@ func test_ground_units_on_mountains_take_one_less_damage():
 	assert_eq(_hit(Drone.new(), spots[0]), tank_dmg / 2, "drones get no mountain cover")
 	assert_eq(MapWar.terrain_adjusted(Infantry.new(), spots[0], 1), 1, "never below 1")
 	assert_eq(MapWar.terrain_adjusted(Wall.new(), spots[0], 5), 5, "buildings/walls get no cover")
+
+func _terrain_hex(kind: String) -> Vector2i:
+	for y in range(2, WorldMap.GRID_H - 2):
+		for x in range(2, WorldMap.GRID_W - 2):
+			if WorldMap.terrain_at(x, y) == kind:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+func test_units_in_forests_take_one_less_damage_from_flying_attackers():
+	var forest := _terrain_hex(WorldMap.JUNGLE)
+	var plain := _terrain_hex(WorldMap.GRASSLAND)
+	assert_true(forest.x >= 0 and plain.x >= 0, "found a forest and a plain hex")
+	var drone_dmg := Drone.new().Damage
+	assert_eq(_hit(Infantry.new(), plain, Drone.new()), drone_dmg, "a drone hits full on grassland")
+	assert_eq(_hit(Infantry.new(), forest, Drone.new()), drone_dmg - 1, "1 less in a forest")
+	assert_eq(_hit(Infantry.new(), forest), Tank.new().Damage, "no forest cover against ground attackers")
+	assert_eq(MapWar.terrain_adjusted(Infantry.new(), forest, 1, Drone.new()), 1, "never below 1")
+	assert_eq(MapWar.terrain_adjusted(Wall.new(), forest, 5, Drone.new()), 5, "buildings get no forest cover")
+
+func test_buildings_cannot_be_placed_on_mountains():
+	var c := MapCampaign.new("Horde")
+	var w := MapWar.new()
+	w.setup(c, func(_nm): return Player.new(100, 200, 200), Player.new(100, 200, 200))
+	for k in w.units.keys().duplicate():
+		w._remove(k)
+	# a mountain hex some nation owns (not its flag hex)
+	var nation := ""
+	var peak := Vector2i(-1, -1)
+	for y in range(WorldMap.GRID_H):
+		for x in range(WorldMap.GRID_W):
+			var o := c.owner_of(x, y)
+			if peak.x < 0 and o != "" and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN and c.capital_site(o) != Vector2i(x, y):
+				peak = Vector2i(x, y)
+				nation = o
+	assert_true(peak.x >= 0, "found an owned mountain hex")
+	var p: Player = w.players[nation]
+	p.MoneySupply = 200
+	p.BioSupply = 200
+	for b in [Barracks.new(), Wall.new(), Housing.new(), Factory.new(), Interceptor.new()]:
+		p.Hand = [b]
+		assert_eq(w.can_place(nation, b, peak), "Buildings can't be placed on mountains", "%s is refused" % (b as Card).card_name)
+	var inf := Infantry.new()
+	p.Hand = [inf]
+	assert_eq(w.can_place(nation, inf, peak), "", "units may stand on mountains")
+	# the AI never picks a mountain for a building either
+	for i in range(20):
+		var t := w.best_hex_for(nation, Barracks.new())
+		assert_ne(WorldMap.terrain_at(t.x, t.y), WorldMap.MOUNTAIN, "AI keeps buildings off mountains")
 
 func _pieces_hold_cities(c: MapCampaign, nm: String) -> bool:
 	var seeds: Array = WorldMap.nation_seeds(nm)
