@@ -66,11 +66,21 @@ func refresh() -> void:
 		_tex = ImageTexture.create_from_image(img)
 	else:
 		_tex.update(img)
+	_last_sig = []
 	queue_redraw()
 
+var _last_sig: Array = []
+
 func _process(_delta: float) -> void:
-	if is_visible_in_tree():
-		queue_redraw() # the camera frame and unit specks follow the main view
+	# redraw only when the camera frame or the cards on the map change
+	if view == null or not is_visible_in_tree():
+		return
+	var m: Array = view.metrics()
+	var sig: Array = [m[0], m[1], m[2], view.size, view.war.units.size() if view.war != null else 0,
+		view.war.turn if view.war != null else 0]
+	if sig != _last_sig:
+		_last_sig = sig
+		queue_redraw()
 
 # hex -> point inside this control
 func _hex_point(t: Vector2i) -> Vector2:

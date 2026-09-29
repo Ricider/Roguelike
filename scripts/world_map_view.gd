@@ -49,6 +49,35 @@ var _campaign: MapCampaign = null
 var _edges: Dictionary = {}
 var _edge_map: Dictionary = {} # "x,y" -> [[edge index, colour], ...]
 var _tiles: Dictionary = {}
+# Terrain is one GPU mesh in map units (hex size 1), built once and moved/scaled
+# for pan and zoom, so the camera never redraws hex by hex:
+#   _sea_meshes[phase] - ocean + deep-sea margin, one per wave phase (map fixed)
+#   _land_mesh         - land hexes tinted by owner (rebuilt when borders change)
+# Grid lines and borders are precomputed segment lists drawn with draw_multiline.
+var _terrain: Control = null # layer behind the view with the tint shader
+var _atlas: ImageTexture = null
+var _sea_meshes: Array = []
+var _sea_map_id: String = ""
+var _land_mesh: ArrayMesh = null
+var _land_dirty: bool = true
+var _land_sel_owner: String = "~"
+var _grid_pts := PackedVector2Array()
+var _border_segs: Array = [] # [[Color, PackedVector2Array]] in map units
+const TERRAIN_SHADER := """
+shader_type canvas_item;
+// vertex colour = owner tint (alpha = strength), blended over the tile texture
+// (fragment COLOR arrives pre-multiplied by the texture, so pass the raw tint)
+varying vec4 tint;
+void vertex() {
+	tint = COLOR;
+}
+void fragment() {
+	vec4 t = texture(TEXTURE, UV);
+	COLOR = vec4(mix(t.rgb, tint.rgb, tint.a), t.a);
+}
+"""
+const HEX_OVERDRAW := 1.015 # a hair over hex size 1 so neighbours never show seams
+const DEEP_SEA_TINT := Color(0.05, 0.08, 0.18, 0.5)
 var _front: Array = [] # enemy hexes touching the player's border (card-battle mode only)
 var _sea_phase: int = 0
 var _sea_clock: float = 0.0
@@ -80,6 +109,20 @@ func _ready() -> void:
 	clip_contents = true
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_tiles = TileArt.make_tile_set()
+	_atlas = _build_atlas()
+	_terrain = Control.new()
+	_terrain.name = "Terrain"
+	_terrain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_terrain.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_terrain.show_behind_parent = true # under the grid, borders and flags drawn by the view
+	_terrain.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var mat := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = TERRAIN_SHADER
+	mat.shader = sh
+	_terrain.material = mat
+	_terrain.draw.connect(_draw_terrain)
+	add_child(_terrain)
 	# Unit pointy-top hex (size 1): corner k at angle 60k-30 deg, edge k runs corner k -> k+1
 	for k in range(6):
 		var a: float = deg_to_rad(60.0 * k - 30.0)
@@ -116,6 +159,8 @@ func _ready() -> void:
 
 func _redraw_all() -> void:
 	queue_redraw()
+	if _terrain != null:
+		_terrain.queue_redraw()
 	if _overlay != null:
 		_overlay.queue_redraw()
 
@@ -147,6 +192,8 @@ func set_campaign(campaign: MapCampaign) -> void:
 			(_edge_map[k] as Array).append([int(entry[2]), bc])
 	# The pulsing "you can attack here" front line only applies to the old card-battle wars.
 	_front = _compute_front(campaign) if war == null else []
+	_land_dirty = true
+	_build_borders()
 	_redraw_all()
 
 func set_war(w: MapWar) -> void:
@@ -178,7 +225,8 @@ func _process(delta: float) -> void:
 	if _sea_clock >= SEA_STEP_SEC:
 		_sea_clock = 0.0
 		_sea_phase = (_sea_phase + 1) % TileArt.VARIANTS
-		queue_redraw()
+		if _terrain != null:
+			_terrain.queue_redraw() # swapping to the next wave mesh is one draw call
 	var busy := not effects.is_empty() or not placeable.is_empty() or not aim.is_empty() or (war != null and not war.units.is_empty())
 	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
@@ -454,61 +502,21 @@ func _visible_range(m: Array) -> Array:
 func _draw() -> void:
 	var m := metrics()
 	var s: float = m[0]
-	var w: float = m[3]
 	if s < 2.0:
 		return
 	var oy: float = m[2]
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
-	var vr := _visible_range(m)
-	var ocean_tiles: Array = _tiles.get("ocean", [])
-	var sel_owner: String = ""
-	if selected.x >= 0:
-		sel_owner = str(_owners.get(MapCampaign.key_of(selected.x, selected.y), ""))
-	var grid_col := Color(0, 0, 0, 0.22)
+	# hex grid (1px hairlines) and nation borders, from precomputed map-unit segments
 	var bw: float = maxf(2.0, floorf(s * 0.22))
-	for y in range(vr[2], vr[3] + 1):
-		for cx in range(vr[0], vr[1] + 1):
-			var c := hex_center(cx, y, m)
-			if y < 0 or y >= WorldMap.GRID_H or (not WorldMap.WRAPS and (cx < 0 or cx >= WorldMap.GRID_W)):
-				# deep sea beyond the poles
-				if not ocean_tiles.is_empty():
-					_draw_hex_tex(self, c, s + 0.5, ocean_tiles[posmod(cx + y + _sea_phase, ocean_tiles.size())] as Texture2D, Color(0.42, 0.47, 0.62))
-				continue
-			var x := posmod(cx, WorldMap.GRID_W)
-			var terrain := WorldMap.terrain_at(x, y)
-			var variants: Array = _tiles.get(terrain, [])
-			# +0.5px overdraw hides hairline seams between neighbouring hexes
-			if variants.is_empty():
-				draw_colored_polygon(_hex_points(c, s + 0.5), TERRAIN_COLORS.get(terrain, Color.BLACK))
-			else:
-				var v := _variant_for(x, y)
-				if terrain == "ocean":
-					v = (v + _sea_phase) % variants.size()
-				_draw_hex_tex(self, c, s + 0.5, variants[v] as Texture2D)
-			var key := MapCampaign.key_of(x, y)
-			var o: String = str(_owners.get(key, ""))
-			if o != "" and _nation_colors.has(o):
-				var nc := _nation_colors[o] as Color
-				draw_colored_polygon(_hex_points(c, s + 0.5), Color(nc.r, nc.g, nc.b, 0.46 if o == sel_owner else 0.30))
-			var pts := _hex_points(c, s)
-			pts.append(pts[0])
-			draw_polyline(pts, grid_col, 1.0)
-	# Nation borders along hex edges (second pass so they sit on top of every hex)
-	for y in range(maxi(vr[2], 0), mini(vr[3], WorldMap.GRID_H - 1) + 1):
-		for cx in range(vr[0], vr[1] + 1):
-			if not WorldMap.WRAPS and (cx < 0 or cx >= WorldMap.GRID_W):
-				continue
-			var key2 := MapCampaign.key_of(posmod(cx, WorldMap.GRID_W), y)
-			if not _edge_map.has(key2):
-				continue
-			var c2 := hex_center(cx, y, m)
-			var inset := s - bw * 0.5
-			for ed in (_edge_map[key2] as Array):
-				var k: int = int(ed[0])
-				var a := c2 + _corner_unit[k] * inset
-				var b := c2 + _corner_unit[(k + 1) % 6] * inset
-				draw_line(a, b, Color(0.05, 0.04, 0.08, 0.85), bw + 2.0)
-				draw_line(a, b, ed[1] as Color, bw)
+	for ox in _copy_origins(m):
+		draw_set_transform(Vector2(ox, m[2]), 0.0, Vector2(s, s))
+		if not _grid_pts.is_empty():
+			draw_multiline(_grid_pts, Color(0, 0, 0, 0.22), -1.0)
+		for seg in _border_segs:
+			draw_multiline(seg[1], Color(0.05, 0.04, 0.08, 0.85), (bw + 2.0) / s)
+		for seg in _border_segs:
+			draw_multiline(seg[1], seg[0], bw / s)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Pixel bezel: polar edges (the world wraps sideways); all four sides on regional maps
 	if WorldMap.WRAPS:
 		for edge_y in [oy - FRAME_PX, oy + map_h]:
@@ -541,6 +549,169 @@ func _draw() -> void:
 				draw_texture_rect(_flags[nm] as Texture2D, Rect2(base - Vector2(fs * 0.12, fs * 0.9), Vector2(fs, fs)), false)
 			if nm == _player_nation:
 				_draw_star(self, base + Vector2(0, -fs * 0.98), maxf(s * 0.5, 4.0), Color(1.0, 0.86, 0.3))
+
+# Map-unit centre of hex (x, y) (hex size 1, origin at the map's top-left).
+static func _unit_center(x: int, y: int) -> Vector2:
+	return Vector2((float(x) + 0.5 * float(y & 1)) * SQRT3 + SQRT3 * 0.5, float(y) * 1.5 + 1.0)
+
+# Screen x of every wrapped copy of the map that touches the view.
+func _copy_origins(m: Array) -> Array:
+	var ox: float = m[1]
+	if not WorldMap.WRAPS:
+		return [ox]
+	var period: float = m[4]
+	var out: Array = []
+	var k0 := int(floor(-(ox + period) / period))
+	var k1 := int(ceil((size.x - ox) / period))
+	for k in range(k0, k1 + 1):
+		var x0: float = ox + k * period
+		if x0 < size.x and x0 + period > 0.0:
+			out.append(x0)
+	return out
+
+func _draw_terrain() -> void:
+	var m := metrics()
+	var s: float = m[0]
+	if s < 2.0 or _atlas == null:
+		return
+	if _sea_map_id != WorldMap.MAP_ID or _sea_meshes.is_empty():
+		_build_sea()
+	var sel_owner: String = ""
+	if selected.x >= 0:
+		sel_owner = str(_owners.get(MapCampaign.key_of(selected.x, selected.y), ""))
+	if _land_dirty or _land_mesh == null or sel_owner != _land_sel_owner:
+		_build_land(sel_owner)
+	for ox in _copy_origins(m):
+		_terrain.draw_set_transform(Vector2(ox, m[2]), 0.0, Vector2(s, s))
+		_terrain.draw_mesh(_sea_meshes[_sea_phase % _sea_meshes.size()], _atlas)
+		_terrain.draw_mesh(_land_mesh, _atlas)
+	_terrain.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# All terrain tiles in one texture: a row per terrain, a column per variant.
+func _build_atlas() -> ImageTexture:
+	var cell: int = TileArt.SIZE
+	var img := Image.create(cell * TileArt.VARIANTS, cell * TileArt.TERRAINS.size(), false, Image.FORMAT_RGBA8)
+	for ti in range(TileArt.TERRAINS.size()):
+		var variants: Array = _tiles.get(TileArt.TERRAINS[ti], [])
+		for v in range(variants.size()):
+			var src: Image = (variants[v] as Texture2D).get_image()
+			if src.is_compressed():
+				src.decompress()
+			src.convert(Image.FORMAT_RGBA8)
+			img.blit_rect(src, Rect2i(0, 0, cell, cell), Vector2i(v * cell, ti * cell))
+	return ImageTexture.create_from_image(img)
+
+# Append one textured hex (7 vertices, 6 triangles) to the mesh arrays.
+func _add_hex(arr: Array, c: Vector2, terrain_idx: int, variant: int, tint: Color) -> void:
+	var verts: PackedVector2Array = arr[0]
+	var uvs: PackedVector2Array = arr[1]
+	var cols: PackedColorArray = arr[2]
+	var idx: PackedInt32Array = arr[3]
+	var cell: float = float(TileArt.SIZE)
+	var aw: float = cell * TileArt.VARIANTS
+	var ah: float = cell * TileArt.TERRAINS.size()
+	var base := Vector2(variant * cell, terrain_idx * cell)
+	var first := verts.size()
+	verts.append(c)
+	uvs.append((base + Vector2(cell, cell) * 0.5) / Vector2(aw, ah))
+	cols.append(tint)
+	for k in range(6):
+		verts.append(c + _corner_unit[k] * HEX_OVERDRAW)
+		# half-texel inset keeps NEAREST sampling inside this tile's cell
+		uvs.append((base + Vector2(0.5, 0.5) + _hex_uvs[k] * (cell - 1.0)) / Vector2(aw, ah))
+		cols.append(tint)
+	for k in range(6):
+		idx.append(first)
+		idx.append(first + 1 + k)
+		idx.append(first + 1 + (k + 1) % 6)
+
+func _mesh_from(arr: Array) -> ArrayMesh:
+	var data := []
+	data.resize(Mesh.ARRAY_MAX)
+	data[Mesh.ARRAY_VERTEX] = arr[0]
+	data[Mesh.ARRAY_TEX_UV] = arr[1]
+	data[Mesh.ARRAY_COLOR] = arr[2]
+	data[Mesh.ARRAY_INDEX] = arr[3]
+	var mesh := ArrayMesh.new()
+	if (arr[0] as PackedVector2Array).size() > 0:
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, data, [], {}, Mesh.ARRAY_FLAG_USE_2D_VERTICES)
+	return mesh
+
+func _new_arrays() -> Array:
+	return [PackedVector2Array(), PackedVector2Array(), PackedColorArray(), PackedInt32Array()]
+
+# Ocean hexes plus a deep-sea margin around the map, once per wave phase; also the
+# hex grid lines (the map's shape never changes during a campaign).
+func _build_sea() -> void:
+	_sea_map_id = WorldMap.MAP_ID
+	_sea_meshes.clear()
+	var ocean_i: int = TileArt.TERRAINS.find("ocean")
+	var W: int = WorldMap.GRID_W
+	var H: int = WorldMap.GRID_H
+	var pad_x: int = 0 if WorldMap.WRAPS else 20
+	var pad_y: int = 14 if WorldMap.WRAPS else 20
+	var clear := Color(0, 0, 0, 0)
+	for phase in range(TileArt.VARIANTS):
+		var arr := _new_arrays()
+		for y in range(-pad_y, H + pad_y):
+			for x in range(-pad_x, W + pad_x):
+				var inside: bool = y >= 0 and y < H and x >= 0 and x < W
+				if inside and WorldMap.terrain_at(x, y) != "ocean":
+					continue
+				if inside:
+					_add_hex(arr, _unit_center(x, y), ocean_i, (_variant_for(x, y) + phase) % TileArt.VARIANTS, clear)
+				else:
+					_add_hex(arr, _unit_center(x, y), ocean_i, posmod(x + y + phase, TileArt.VARIANTS), DEEP_SEA_TINT)
+		_sea_meshes.append(_mesh_from(arr))
+	# grid: each hex contributes its three upper edges once; the bottom row closes the rest
+	_grid_pts = PackedVector2Array()
+	for y in range(H):
+		for x in range(W):
+			var c := _unit_center(x, y)
+			var ks: Array = [3, 4, 5] if y < H - 1 else [0, 1, 2, 3, 4, 5]
+			if x == W - 1 and not WorldMap.WRAPS:
+				ks.append(0)
+			for k in ks:
+				_grid_pts.append(c + _corner_unit[k])
+				_grid_pts.append(c + _corner_unit[(k + 1) % 6])
+
+# Land hexes, tinted by owner (stronger for the selected nation).
+func _build_land(sel_owner: String) -> void:
+	_land_dirty = false
+	_land_sel_owner = sel_owner
+	var arr := _new_arrays()
+	for y in range(WorldMap.GRID_H):
+		for x in range(WorldMap.GRID_W):
+			var terrain := WorldMap.terrain_at(x, y)
+			if terrain == "ocean":
+				continue
+			var ti: int = TileArt.TERRAINS.find(terrain)
+			var tint := Color(0, 0, 0, 0)
+			var o: String = str(_owners.get(MapCampaign.key_of(x, y), ""))
+			if o != "" and _nation_colors.has(o):
+				var nc := _nation_colors[o] as Color
+				tint = Color(nc.r, nc.g, nc.b, 0.46 if o == sel_owner else 0.30)
+			_add_hex(arr, _unit_center(x, y), maxi(ti, 0), _variant_for(x, y), tint)
+	_land_mesh = _mesh_from(arr)
+
+# Border segments per nation colour, inset so both sides of a shared edge show.
+func _build_borders() -> void:
+	var groups: Dictionary = {}
+	for key in _edge_map.keys():
+		var t := MapWar.key_to_hex(str(key))
+		var c := _unit_center(t.x, t.y)
+		for ed in (_edge_map[key] as Array):
+			var k: int = int(ed[0])
+			var col: Color = ed[1]
+			if not groups.has(col):
+				groups[col] = PackedVector2Array()
+			var pts: PackedVector2Array = groups[col]
+			pts.append(c + _corner_unit[k] * 0.89)
+			pts.append(c + _corner_unit[(k + 1) % 6] * 0.89)
+			groups[col] = pts
+	_border_segs.clear()
+	for col in groups.keys():
+		_border_segs.append([col, groups[col]])
 
 # ------------------------------------------------------------ units + FX
 # 32px pixel-exact idle frames made once per card (512px art / 16).
