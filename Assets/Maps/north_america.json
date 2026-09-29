@@ -1,0 +1,120 @@
+{
+ "id": "north_america",
+ "name": "North America",
+ "blurb": "Alaska to the Caribbean: Canada, the United States, Mexico and Cuba.",
+ "grid_w": 60,
+ "grid_h": 46,
+ "wraps": false,
+ "lon0": -170.0,
+ "lon_span": 120.0,
+ "lat_top": 72.0,
+ "lat_bot": 14.0,
+ "americas_split": false,
+ "rows": [
+  ".......................ss.sssssss..s.ss.sssssssss.........ss",
+  "...sssssssss.......ss..s..ssssssss..sss..ssssssssss......sss",
+  "..ssssssssssssssssssssssssssssssss..s.sss.ss...ssss........s",
+  "..ssssssssssssssssssssssssssssssssssssssssss..s.ssss......ss",
+  "..s.sssssssssssssssssssssssssssssssssssssss.....ssssss....ss",
+  ".ssssssssssssssssssssssssssssssssssssssssss..ssssss.s.....ss",
+  "....ggggmmgmmmgmmmmmmggggggggggggggggggg..ggg....gggg......s",
+  "..gggggmmmmmggmmmmmmggggggggggggggggggg..........gg........s",
+  "..ggggggmmmmmmgmmmmmmggggggggggggggggg........gggg..........",
+  "..gggggggg..ggmmmmmmmgggggggggggggggg.........gggg..........",
+  "....gggg........mmgmmggggggggggggggggg........ggggg.g.......",
+  ".....ggg..........ggggggggggggggggggggg.......gggggggg......",
+  "....gg.............ggggggggggggggggggjjjj......jjjjjjj......",
+  "..gg...............gggggmgmmmgggggjjjjjjjjj..jjjjjjjjggg....",
+  "..................g.ggggmmmmgmmmgggjjgjjjjjj.jjjjjjjjgggg...",
+  "....................ggggmggmmmmgggjjgjjjjjjj.jjjjjgjjjggg...",
+  ".....................ggggmmmmmmggggjjjjjjjjjjjjjjjjjjjggg...",
+  ".....................ggggmmmmmggggjjgjjjjjjjjjjjjjj.j..g....",
+  "......................jjgmmmmmmggggjgjgjjjgjgjgjjjjgj..ggg..",
+  "......................jjmmmmmmmggggggggggggggggggggg....gg..",
+  ".......................jmmmmmmggggggggggggggggggggggg.g.....",
+  "......................jjgmmmmmmgggggggggggggggggggg.gg......",
+  ".......................jgmmmmmmmgggggggggggggggggg..........",
+  "......................jggmmmmmggggggggggggggggggg...........",
+  ".......................gmgmmmmmmgggggggggggmmmggg...........",
+  "......................gggmmmmmmggggggggggggmmgg.............",
+  ".......................gggmmmmmggggggggggggmmmmg............",
+  ".......................gmmgmmmmgggggggggggggmgg.............",
+  "........................mmmmgmmmdggggggggggmmmm.............",
+  "........................ggdddddddggggggggggggg..............",
+  "..........................ddddddgdgggggggggggg..............",
+  "..........................dddddddggggggggggg................",
+  "...........................dddddddgggggggggg................",
+  "............................ddddgggggggg..gg................",
+  ".............................ddddgggg......gg...............",
+  "...........................g.ddmmgmg.......g................",
+  "..............................gmmmmg........g...............",
+  "............................g.gmmmmg........g...............",
+  "................................mmmm.........g..............",
+  "................................mmmg........gg..............",
+  "................................mmmm....gg....g.............",
+  "......g.........................mggg...gg.....g.g...........",
+  ".................................mgmggggg.....gggggg........",
+  "..................................ggggjgj...................",
+  "....................................g.ggj.j.................",
+  "......................................jjjjj................."
+ ],
+ "nations": [
+  {
+   "name": "Corporate Troops",
+   "capital": "New York",
+   "x": 47,
+   "y": 24,
+   "seeds": []
+  },
+  {
+   "name": "State Troops",
+   "capital": "Chicago",
+   "x": 40,
+   "y": 23,
+   "seeds": []
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Mexico City",
+   "x": 34,
+   "y": 41,
+   "seeds": []
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Winnipeg",
+   "x": 35,
+   "y": 17,
+   "seeds": []
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Houston",
+   "x": 36,
+   "y": 33,
+   "seeds": []
+  },
+  {
+   "name": "Horde",
+   "capital": "Anchorage",
+   "x": 10,
+   "y": 8,
+   "seeds": []
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Havana",
+   "x": 44,
+   "y": 39,
+   "seeds": []
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Los Angeles",
+   "x": 25,
+   "y": 29,
+   "seeds": []
+  }
+ ],
+ "claims": []
+}

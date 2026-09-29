@@ -1,0 +1,120 @@
+{
+ "id": "balkans",
+ "name": "Balkans",
+ "blurb": "Between the Adriatic, Aegean and Black Sea, up to the Danube.",
+ "grid_w": 44,
+ "grid_h": 46,
+ "wraps": false,
+ "lon0": 13.0,
+ "lon_span": 17.0,
+ "lat_top": 47.5,
+ "lat_bot": 36.0,
+ "americas_split": false,
+ "rows": [
+  "mmmgggggggggggggggggggggggggggggmmgggggggggg",
+  "mmmggggggggggggggggggggggjjjjgjmmmgggggggggg",
+  "mmmmgggggggggggggggggggggggjjjjjmmgggggggggg",
+  "mmmggggggggggggggggggggggjjjjjjjmmgggggggggg",
+  "mmmmgggggggggggggggggggggggjjjjjmmgggggggggg",
+  "mmmgggggggggggggggggggggggjjgggmmmgggggggggg",
+  "ggggggggggggggggggggggggggggggggmmgggggggggg",
+  ".gggggggggggggggggggggggmmgmmgmmggggggggggg.",
+  "..gggggggggggggggggggggggmmmmmmgggggggggggg.",
+  ".gg.ggjjgjjgggggggggggggggggggggggggggggggg.",
+  "..g..gmjmmmjgggggggggggggggggggggggggggggg..",
+  ".....gmmmmjggggggggggggggggggggggggggggg....",
+  "......gmmmjgggggggggggggggggggggggggggggg...",
+  ".....gmmmmmggggggggggggggggggggggggggggg....",
+  ".......mmmmggmmggggggggggggggggggggggggg....",
+  "g......gmmmmmmmggggggggggggggggggggggggg....",
+  "gg.......gmmmmmgggggggggggggggggggggggg.....",
+  "gg........mmmmmggggggggggggggggggggggg......",
+  "ggg........mmmmmmmmgggggggmmmmmmmmmggg......",
+  "ggg.........mgmmmmgggggggggmgmmmgmgggg......",
+  "gggg..........gmmmmggggggggggggggggggg......",
+  "ggggg..........mmmgggggggggmmgmggggggg......",
+  "gggggggg........mggggggggggmmmmmggggggg.....",
+  "ggggggg.........gggggggggggmmmmgggggggg.....",
+  "ggggggggg.......gggggggggggmmmmmggggggggg...",
+  ".ggggggggg......gggggggggggggggggggggggggggg",
+  "..gggggggggg....gggmmggggggggg..ggggg....ggg",
+  "...ggggggggg....gggmmmgggggg.....ggg.....ggg",
+  ".....ggggg.ggg..ggggmmmgggggg.....gg.ggggggg",
+  ".....gggg...gggggggmmmggg.ggg.......gggggggg",
+  "......ggg.........gmmmmgg..........ggggggggg",
+  "......ggg.........gmmmggg.........gggggggggg",
+  ".......gggg........mmmgggg........gggggggggg",
+  ".......ggg.........mgggggg.........ggggggggg",
+  "........gg..........gggggg..........gggggggg",
+  ".......gg...........gggggg.........ggggggggg",
+  ".......gg............ggggggg.......ggggggggg",
+  "...ggggg.............ggggggg......gggggggggg",
+  "gggggg...............gggggggg.......gggggggg",
+  "ggggg................ggggg..........gggggggg",
+  "gggggg................ggggg..........ggggggg",
+  ".ggggg................ggg............ggggggg",
+  "....gg................gggg............gggggg",
+  ".......................ggg..............gggg",
+  "..........................................gg",
+  "............................................"
+ ],
+ "nations": [
+  {
+   "name": "State Troops",
+   "capital": "Belgrade",
+   "x": 19,
+   "y": 10,
+   "seeds": []
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Zagreb",
+   "x": 7,
+   "y": 6,
+   "seeds": []
+  },
+  {
+   "name": "Horde",
+   "capital": "Bucharest",
+   "x": 33,
+   "y": 12,
+   "seeds": []
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Sofia",
+   "x": 26,
+   "y": 19,
+   "seeds": []
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Sarajevo",
+   "x": 14,
+   "y": 14,
+   "seeds": []
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Tirana",
+   "x": 17,
+   "y": 24,
+   "seeds": []
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Athens",
+   "x": 27,
+   "y": 38,
+   "seeds": []
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Istanbul",
+   "x": 41,
+   "y": 26,
+   "seeds": []
+  }
+ ],
+ "claims": []
+}

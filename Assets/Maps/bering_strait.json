@@ -1,0 +1,114 @@
+{
+ "id": "bering_strait",
+ "name": "Bering Strait",
+ "blurb": "Where Asia meets America: Chukotka, Kamchatka, the Bering Sea and Alaska.",
+ "grid_w": 57,
+ "grid_h": 40,
+ "wraps": false,
+ "lon0": 145.0,
+ "lon_span": 75.0,
+ "lat_top": 72.0,
+ "lat_bot": 50.0,
+ "americas_split": false,
+ "rows": [
+  "ssss.....................................................",
+  "sssss....................sss...............ss............",
+  "sssssssssss..............s...............sssssss.........",
+  "sssssssssss.............s..............sssssssssssssss...",
+  "ssssssssssssssssss.ssssss..............ssssssssssssssssss",
+  "ssssssssssssssssss.sssssss............sssssssssssssssssss",
+  "ssssssssssssssssssssssssssss.........ssssssssssssssssssss",
+  "sssssssssssssssssssssssssssss........ssssssssssssssssssss",
+  "ssssssssssssssssssssssssssssss.........ssssssssssssssssss",
+  "sssssssssssssssssssssssssssssssss......ssssssssssssssssss",
+  "gggggggggggggggggmgmmmmmmmmmmmmmggg..gg.ggggggggggggggggg",
+  "ggggggggggggggggggmmmmmmmg.mmmmgg.ggggggggggggggggggggggg",
+  "gggggggggggggggggmmmmmmmmmm..mmm....ggggggggggggggggggggg",
+  "gggggggggggggggggmgmgmmgm.....mg.....gggggggggggggggggggm",
+  "gggggggggggggggggggmmmmmm.......g........gggggggggggggggg",
+  "ggggggggggggggggggggggggg.......gg.....ggjjjggmmmmmmmmjjm",
+  "gggggggggggggggggggggggggg............ggggjjjjmmmmmmmmjjg",
+  "gggggggggggggggggggggggg.g...........ggggjjjjjjmmmmmmmjgm",
+  "ggggggggggggggggggggggg..............ggggggjjjjmmmmmmmmjg",
+  "gggggggg...g..ggggggg................ggggjjjjjmjjmmmmmjgm",
+  "gggggggg...g.ggggggg.................gggggjjjjjjjjj.jjgjg",
+  "ggggggg.....ggggg.g.................g.gggjjjjjj.jj...jjgm",
+  "ggggjjj.....jj..........................ggjjjjj.jj......g",
+  "....jjj....jj...........................ggjjjj...........",
+  "...........jg.............................j.jjg..........",
+  ".........jjjg..............................gg............",
+  ".........mmjjj.............................ggggg.........",
+  "........jjmjj.............................gg.............",
+  "........jmmmjg............................g..............",
+  ".......jjmmm............................gg...............",
+  "........jmmmg..........................gg................",
+  ".......ggmmm..........................g..................",
+  "........gmmm.............................................",
+  "........gmm..............................................",
+  "........ggm..............................................",
+  "........gm...............................................",
+  "........gg...............................................",
+  "........g................................................",
+  ".........................................................",
+  "........................................................."
+ ],
+ "nations": [
+  {
+   "name": "Horde",
+   "capital": "Anadyr",
+   "x": 24,
+   "y": 13,
+   "seeds": []
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Anchorage",
+   "x": 48,
+   "y": 19,
+   "seeds": []
+  },
+  {
+   "name": "Coalition Army",
+   "capital": "Nome",
+   "x": 37,
+   "y": 13,
+   "seeds": []
+  },
+  {
+   "name": "State Troops",
+   "capital": "Magadan",
+   "x": 4,
+   "y": 22,
+   "seeds": []
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Petropavlovsk",
+   "x": 10,
+   "y": 34,
+   "seeds": []
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Fairbanks",
+   "x": 50,
+   "y": 13,
+   "seeds": []
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Bethel",
+   "x": 40,
+   "y": 20,
+   "seeds": []
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Pevek",
+   "x": 19,
+   "y": 4,
+   "seeds": []
+  }
+ ],
+ "claims": []
+}

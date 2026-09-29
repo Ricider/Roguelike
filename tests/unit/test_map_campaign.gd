@@ -249,3 +249,40 @@ func _every_piece_has_a_city(c: MapCampaign, nm: String) -> bool:
 		if not has_city:
 			return false
 	return true
+
+func test_overseas_conquest_takes_the_nearest_hexes():
+	WorldMap.use_map("world")
+	var c := MapCampaign.new("Corporate Troops")
+	var winner := "Corporate Troops"
+	var loser := "Coalition Army"
+	assert_false(c.is_neighbor(winner, loser), "North America and Europe don't touch")
+	var before: Array = c.tiles_of(winner)
+	var gap := func(t: Vector2i) -> int:
+		var best := 1 << 30
+		for w in before:
+			best = mini(best, MapCampaign.hex_distance(t, w))
+		return best
+	var nearest := 1 << 30
+	for t in c.tiles_of(loser):
+		nearest = mini(nearest, gap.call(t))
+	var loser_before: Array = c.tiles_of(loser)
+	var moved := c.conquer(winner, loser, 30)
+	assert_true(moved > 0, "an overseas winner still gains land")
+	var taken: Array = []
+	for t in loser_before:
+		if c.owner_of(t.x, t.y) == winner:
+			taken.append(t)
+	assert_eq(taken.size(), moved, "the hexes came from the loser")
+	# the beachhead is the loser's hex nearest the winner's coast
+	var closest_taken := 1 << 30
+	for t in taken:
+		closest_taken = mini(closest_taken, gap.call(t))
+	assert_eq(closest_taken, nearest, "starts at the nearest hex across the sea")
+	# and the rest spread from it, not from all over the loser's land
+	var joined := 0
+	for t in taken:
+		for nb in MapCampaign.wrapped_neighbors(t):
+			if taken.has(nb):
+				joined += 1
+				break
+	assert_eq(joined, taken.size() if taken.size() > 1 else 0, "taken hexes form one landing zone")

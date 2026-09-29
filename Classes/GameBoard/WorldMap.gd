@@ -8,7 +8,7 @@
 extends RefCounted
 class_name WorldMap
 
-const MAPS: Array = ["world", "europe", "byzantium", "east_asia"]
+const MAPS: Array = ["world", "europe", "byzantium", "east_asia", "north_america", "british_isles", "bering_strait", "balkans"]
 const MAP_DIR := "res://Assets/Maps/%s.json"
 
 const OCEAN: String = "ocean"
@@ -134,7 +134,8 @@ static func region_of(x: int, y: int) -> int:
 static func hex_for_latlon(lat: float, lon: float) -> Vector2i:
 	var fy: float = (LAT_TOP - lat) / (LAT_TOP - LAT_BOT)
 	var y: int = clampi(int(fy * GRID_H), 0, GRID_H - 1)
-	var fx: float = (fposmod(lon - LON0, 360.0) if WRAPS else lon - LON0) / LON_SPAN
+	# offset east of the map's west edge; regional maps may run past 180 (Bering Strait)
+	var fx: float = (fposmod(lon - LON0, 360.0) if WRAPS else fposmod(lon - LON0 + 180.0, 360.0) - 180.0) / LON_SPAN
 	var x: int = int(floor(fx * GRID_W - 0.5 * float(y & 1)))
 	x = posmod(x, GRID_W) if WRAPS else clampi(x, 0, GRID_W - 1)
 	return Vector2i(x, y)

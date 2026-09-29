@@ -15,6 +15,7 @@ const SHOT_GAP := 0.07 # seconds between shots at 1x
 const TRAVEL := 0.28 # projectile flight time at 1x
 const WALK_STEP := 0.08 # seconds per hex when units march to the front (visual only)
 const WALK_MAX := 1.0 # longest march out (or back) at 1x; long routes step faster to fit
+const RANGED_GAP := 3 # ranged units march no closer than this many hexes to their target
 const START_HEX_PX := 18.0 # open zoomed in on your capital: same hex size on every map
 const PAN_STEP := 60.0
 const SHOT_SFX := {
@@ -972,9 +973,9 @@ func _on_end_turn() -> void:
 
 func _nation_attacks(n: String) -> void:
 	var shots := 0
-	# melee and flying units march together, hex by hex, to the spot nearest their target
-	# (visual only: the cards stay on their hexes), fire from there, then march home.
-	# Ground units cross sea in boats; ranged ground units fire from where they stand.
+	# every unit marches, all together, hex by hex, to the spot nearest its target (visual
+	# only: the cards stay on their hexes), fires from there, then marches home. Ground
+	# units cross sea in boats; ranged units keep RANGED_GAP hexes from the target.
 	var walkers: Array = []
 	var taken := {}
 	var march := 0.0 # seconds at 1x for the slowest march
@@ -982,9 +983,7 @@ func _nation_attacks(n: String) -> void:
 		var aim := _war.predict_target(k)
 		if aim.is_empty():
 			continue
-		if bool(aim["ranged"]) and not (_war.units[k]["card"] as Unit).Flying:
-			continue
-		var path := _walk_path(k, aim["hex"], taken)
+		var path := _walk_path(k, aim["hex"], taken, RANGED_GAP if bool(aim["ranged"]) else 1)
 		if path.size() < 2:
 			continue
 		taken[path[path.size() - 1]] = true
@@ -1035,24 +1034,31 @@ func _nation_attacks(n: String) -> void:
 	_resolve_collapses()
 
 # Visual march route for the card at `k` towards `target` (home first). Ground units walk
-# over their own land and sail over open sea (the view draws a boat), never through
-# other nations' land; flying ones go straight over anything. It ends on the free hex
+# over their own land, sail over open sea (the view draws a boat) and cross the border
+# into the land of the nation they attack, never through a third nation's land;
+# flying ones go straight over anything. It never ends nearer than `min_gap` hexes
+# to the target (ranged units keep their distance). It ends on the free hex
 # closest to the target (the border, or right beside it). Free means no card stands there
 # and no other walker has claimed it (`taken`), so marching units never overlap.
 # A single-hex path means stay put.
-func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
+func _walk_path(k: String, target: Vector2i, taken: Dictionary, min_gap: int = 1) -> Array:
 	var home := MapWar.key_to_hex(k)
 	var info: Dictionary = _war.units[k]
 	var nation := str(info["owner"])
 	var flying: bool = info["card"] is Unit and (info["card"] as Unit).Flying
+	var flags := {} # flag hexes are never a place to stand
+	for nm in _war.players.keys():
+		if _campaign().is_alive(str(nm)):
+			flags[_campaign().capital_site(str(nm))] = true
 	var free := func(t: Vector2i) -> bool:
-		return t == home or (not taken.has(t) and not _war.units.has(MapCampaign.key_of(t.x, t.y)))
+		return t == home or (not taken.has(t) and not flags.has(t) and not _war.units.has(MapCampaign.key_of(t.x, t.y)))
 	var home_d := MapCampaign.hex_distance(home, target)
 	if flying:
 		# rings around the target, nearest first: the free hex closest to home wins
 		var goal := home
 		var seen := {target: true}
 		var ring: Array = [target]
+		# (the rings before min_gap are only stepped through, never landed on)
 		for radius in range(1, home_d):
 			var next: Array = []
 			for t in ring:
@@ -1061,6 +1067,8 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
 						seen[nb] = true
 						next.append(nb)
 			ring = next
+			if radius < min_gap:
+				continue
 			var best_h := 1 << 30
 			for t in ring:
 				var h := MapCampaign.hex_distance(home, t)
@@ -1088,6 +1096,7 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
 	# ground: breadth-first over the nation's own land and the open sea; hexes much
 	# farther from the target than home are never worth the detour
 	var c := _campaign()
+	var enemy := c.owner_of(target.x, target.y)
 	var reach: int = home_d + 8
 	var parent := {home: home}
 	var depth_of := {home: 0}
@@ -1100,13 +1109,13 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary) -> Array:
 		head += 1
 		# closest to the target first, then land over a boat, then the shorter trip
 		var score := Vector3i(MapCampaign.hex_distance(t, target), 0 if WorldMap.is_land(t.x, t.y) else 1, int(depth_of[t]))
-		if free.call(t) and score < best_score:
+		if free.call(t) and score.x >= min_gap and score < best_score:
 			best_score = score
 			best = t
 		for nb in MapCampaign.wrapped_neighbors(t):
 			if parent.has(nb) or MapCampaign.hex_distance(nb, target) > reach:
 				continue
-			if WorldMap.is_land(nb.x, nb.y) and c.owner_of(nb.x, nb.y) != nation:
+			if WorldMap.is_land(nb.x, nb.y) and c.owner_of(nb.x, nb.y) != nation and (enemy == "" or c.owner_of(nb.x, nb.y) != enemy):
 				continue
 			parent[nb] = t
 			depth_of[nb] = int(depth_of[t]) + 1

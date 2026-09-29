@@ -615,7 +615,7 @@ func _show_map_chooser():
 	sub.add_theme_font_size_override("font_size", 16)
 	v.add_child(sub)
 	var grid := GridContainer.new()
-	grid.columns = 2 if WorldMap.MAPS.size() == 4 else 3 # 4 maps sit best as a 2x2 grid
+	grid.columns = 2 if WorldMap.MAPS.size() <= 4 else 4 # 4 maps as a 2x2 grid, 8 as two rows of 4
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
 	v.add_child(grid)
@@ -625,7 +625,7 @@ func _show_map_chooser():
 			continue
 		var btn := Button.new()
 		btn.name = "Map_" + id
-		btn.custom_minimum_size = Vector2(300, 268)
+		btn.custom_minimum_size = Vector2(300, 268) if WorldMap.MAPS.size() <= 4 else Vector2(290, 264)
 		btn.focus_mode = Control.FOCUS_NONE
 		var col := VBoxContainer.new()
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE

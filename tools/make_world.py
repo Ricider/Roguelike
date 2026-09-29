@@ -110,6 +110,65 @@ MAPS = {
             "Horde": ("Ulaanbaatar", 47.92, 106.92), "Fundamentalists": ("Shanghai", 31.23, 121.47),
         },
     },
+    "north_america": {
+        "name": "North America", "blurb": "Alaska to the Caribbean: Canada, the United States, Mexico and Cuba.",
+        "grid": (60, 46), "lon": (-170.0, -50.0), "lat": (72.0, 14.0), "wraps": False, "regional": True,
+        "cities": {
+            "Corporate Troops": ("New York", 40.71, -74.01), "State Troops": ("Chicago", 41.88, -87.63),
+            "Peace Keepers": ("Mexico City", 19.43, -99.13), "Coalition Army": ("Winnipeg", 49.90, -97.14),
+            "Mercenaries": ("Houston", 29.76, -95.37), "Horde": ("Anchorage", 61.22, -149.90),
+            "Insurgents": ("Havana", 23.11, -82.37), "Fundamentalists": ("Los Angeles", 34.05, -118.24),
+        },
+        # Appalachians, Sierra Madre, Alaska Range; Pacific rainforest and the boreal belt
+        "mountains": [(35, 42, -83, -77), (18, 28, -108, -99), (61, 64, -154, -143)],
+        "deserts": [(26, 32, -114, -104)],
+        "forests": [(42, 50, -125, -121), (48, 57, -100, -62)],
+    },
+    "british_isles": {
+        "name": "British Isles", "blurb": "Great Britain and Ireland, from Cornwall to the Highlands, with the Channel coast.",
+        "grid": (31, 42), "lon": (-11.0, 3.0), "lat": (59.2, 49.8), "wraps": False, "regional": True,
+        "cities": {
+            "Coalition Army": ("London", 51.51, -0.13), "State Troops": ("Birmingham", 52.49, -1.89),
+            "Corporate Troops": ("Manchester", 53.48, -2.24), "Fundamentalists": ("Dublin", 53.35, -6.26),
+            "Insurgents": ("Belfast", 54.60, -5.93), "Horde": ("Edinburgh", 55.95, -3.19),
+            "Mercenaries": ("Cardiff", 51.48, -3.18), "Peace Keepers": ("Cork", 51.90, -8.47),
+        },
+        # Highlands, Snowdonia/Cambrian Mountains, Lake District/Pennines, Wicklow
+        "mountains": [(56.6, 58.6, -6.2, -3.2), (51.8, 53.2, -4.3, -3.4), (54.0, 55.0, -3.3, -2.0), (52.8, 53.2, -6.6, -6.1)],
+        "forests": [(55.0, 55.5, -2.9, -2.2), (50.7, 51.1, -1.9, -1.3), (51.6, 51.9, -2.7, -2.4)],
+    },
+    "bering_strait": {
+        "name": "Bering Strait", "blurb": "Where Asia meets America: Chukotka, Kamchatka, the Bering Sea and Alaska.",
+        # longitudes run past 180 so the strait sits in the middle of the map
+        "grid": (57, 40), "lon": (145.0, 220.0), "lat": (72.0, 50.0), "wraps": False, "regional": True,
+        "snow_lat": 66.5,  # tundra and taiga below the Arctic Circle, not all snow
+        "cities": {
+            "Horde": ("Anadyr", 64.73, 177.51), "Corporate Troops": ("Anchorage", 61.22, -149.90),
+            "Coalition Army": ("Nome", 64.50, -165.41), "State Troops": ("Magadan", 59.56, 150.80),
+            "Mercenaries": ("Petropavlovsk", 53.02, 158.65), "Insurgents": ("Fairbanks", 64.84, -147.72),
+            "Peace Keepers": ("Bethel", 60.79, -161.76), "Fundamentalists": ("Pevek", 69.70, 170.31),
+        },
+        # Chukotka uplands, Kamchatka volcanoes, Alaska Range; taiga south of the tundra
+        "mountains": [(64, 68, 168, 180), (64, 67, -180, -173), (52, 57.5, 157, 161), (61, 64, -154, -143)],
+        "forests": [(58, 63.5, -160, -141), (55, 60, 150, 163)],
+    },
+    "balkans": {
+        "name": "Balkans", "blurb": "Between the Adriatic, Aegean and Black Sea, up to the Danube.",
+        "grid": (44, 46), "lon": (13.0, 30.0), "lat": (47.5, 36.0), "wraps": False, "regional": True,
+        "cities": {
+            "State Troops": ("Belgrade", 44.79, 20.45), "Coalition Army": ("Zagreb", 45.81, 15.98),
+            "Horde": ("Bucharest", 44.43, 26.10), "Peace Keepers": ("Sofia", 42.70, 23.32),
+            "Insurgents": ("Sarajevo", 43.86, 18.41), "Fundamentalists": ("Tirana", 41.33, 19.82),
+            "Mercenaries": ("Athens", 37.98, 23.73), "Corporate Troops": ("Istanbul", 41.01, 28.98),
+        },
+        # its own ranges instead of the broad shared boxes (which would bury the whole
+        # peninsula): the Dinaric strip along the Adriatic, Pindus, Rhodope, Balkan Mountains,
+        # Transylvanian Alps and the eastern Carpathians, plus the Alps in the corner
+        "regional_mountains": [(43.5, 45.0, 15.5, 17.3), (42.5, 44.0, 17.0, 18.8), (41.8, 43.0, 18.8, 20.3),
+                               (39.0, 41.0, 20.5, 21.8), (41.3, 42.2, 23.5, 25.5), (42.6, 43.0, 23.0, 26.5),
+                               (45.2, 45.7, 22.5, 25.5), (45.7, 47.5, 25.3, 26.3), (46.0, 47.5, 13.0, 14.5)],
+        "forests": [(45.9, 47.3, 23.0, 26.0), (44.0, 45.2, 15.5, 17.5)],
+    },
 }
 
 
@@ -305,14 +364,15 @@ def build(map_id, spec, polys):
                 break
         if not joined:
             break
-    mountains = MOUNTAIN + (REGIONAL_MOUNTAIN if spec.get("regional") else [])
-    deserts = DESERT + (REGIONAL_DESERT if spec.get("regional") else [])
-    forests = JUNGLE + (REGIONAL_FOREST if spec.get("regional") else [])
+    regional_m = spec.get("regional_mountains", REGIONAL_MOUNTAIN)
+    mountains = (MOUNTAIN if "regional_mountains" not in spec else []) + (regional_m if spec.get("regional") else []) + spec.get("mountains", [])
+    deserts = DESERT + (REGIONAL_DESERT if spec.get("regional") else []) + spec.get("deserts", [])
+    forests = JUNGLE + (REGIONAL_FOREST if spec.get("regional") else []) + spec.get("forests", [])
     grid = [["." for _ in range(W)] for _ in range(H)]
     for (x, y) in land:
         lat, lon = g.center(x, y)
         rag = (x, y) if spec.get("regional") else None
-        if abs(lat) >= SNOW_LAT or in_boxes([(58, 84, -60, -18)], lat, lon):
+        if abs(lat) >= spec.get("snow_lat", SNOW_LAT) or in_boxes([(58, 84, -60, -18)], lat, lon):
             t = "s"
         elif in_boxes(mountains, lat, lon, rag):
             t = "m"

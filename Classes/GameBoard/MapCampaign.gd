@@ -243,9 +243,11 @@ func is_territory_connected(nation: String) -> bool:
 func conquer(winner: String, loser: String, hp_left: int, multiplier: int = 1) -> int:
 	var want := tiles_for_hp(hp_left) * maxi(multiplier, 1)
 	var moved := 0
-	var depth := _depth_from_front(winner, loser)
+	# hex distance from the winner's land to every hex (reaches overseas nations)
+	var field := _distance_field(winner)
+	var depth := _depth_from_front(winner, loser, field)
 	while moved < want and tile_count(loser) > 0:
-		var pick := _pick_border_tile(winner, loser, depth)
+		var pick := _pick_border_tile(winner, loser, depth, field)
 		if pick.x < 0:
 			break
 		owner[key_of(pick.x, pick.y)] = winner
@@ -267,16 +269,57 @@ func _winner_neighbors(t: Vector2i, nation: String) -> int:
 			n += 1
 	return n
 
-# How many steps each loser hex lies from the winner's pre-war border
+# Hexes (land or sea) from the winner's territory to every hex on the map:
+# a multi-source breadth-first search, so it is the wrap-aware hex distance.
+func _distance_field(winner: String) -> Dictionary:
+	var dist: Dictionary = {}
+	var queue: Array = []
+	for t in tiles_of(winner):
+		dist[key_of(t.x, t.y)] = 0
+		queue.append(t)
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		var d: int = int(dist[key_of(cur.x, cur.y)])
+		for nt in wrapped_neighbors(cur):
+			var v := nt as Vector2i
+			var k := key_of(v.x, v.y)
+			if not dist.has(k):
+				dist[k] = d + 1
+				queue.append(v)
+	return dist
+
+# The loser's hexes closest to the winner: those on the shared border, or, when
+# the two don't touch (overseas), the ones nearest the winner's land across the sea.
+func _front_tiles(winner: String, loser: String, field: Dictionary) -> Array:
+	var best: int = 1 << 30
+	var out: Array = []
+	for t in tiles_of(loser):
+		var d: int = 1 if _winner_neighbors(t, winner) > 0 else int(field.get(key_of(t.x, t.y), 1 << 20))
+		if d < best:
+			best = d
+			out = [t]
+		elif d == best:
+			out.append(t)
+	return out
+
+# How many steps each loser hex lies from the winner's pre-war front
 # (BFS through the loser's land). Conquest takes whole rings in order, so the
 # front advances evenly instead of a thin wedge driving inland.
-func _depth_from_front(winner: String, loser: String) -> Dictionary:
+func _depth_from_front(winner: String, loser: String, field: Dictionary = {}) -> Dictionary:
 	var depth: Dictionary = {}
 	var queue: Array = []
-	for t in tiles_of(loser):
-		if _winner_neighbors(t, winner) > 0:
-			depth[key_of(t.x, t.y)] = 1
-			queue.append(t)
+	var seeds: Array = []
+	if field.is_empty():
+		for t in tiles_of(loser):
+			if _winner_neighbors(t, winner) > 0:
+				seeds.append(t)
+	else:
+		seeds = _front_tiles(winner, loser, field)
+	for t in seeds:
+		depth[key_of(t.x, t.y)] = 1
+		queue.append(t)
 	var head := 0
 	while head < queue.size():
 		var cur: Vector2i = queue[head]
@@ -290,15 +333,19 @@ func _depth_from_front(winner: String, loser: String) -> Dictionary:
 				queue.append(v)
 	return depth
 
-# Next hex the winner takes: always on the shared border, shallowest ring
-# first (see _depth_from_front), then the hex most surrounded by the winner,
-# then the one nearest the winner's flag (wrap-aware).
-func _pick_border_tile(winner: String, loser: String, depth: Dictionary = {}) -> Vector2i:
+# Next hex the winner takes: on the shared border when there is one, shallowest
+# ring first (see _depth_from_front), then the hex most surrounded by the winner,
+# then the one nearest the winner's flag (wrap-aware). With no shared border
+# (an overseas nation, given `field`), the loser's hexes nearest the winner's land.
+func _pick_border_tile(winner: String, loser: String, depth: Dictionary = {}, field: Dictionary = {}) -> Vector2i:
 	var frontier: Array = []
 	for t in tiles_of(loser):
 		var wn := _winner_neighbors(t, winner)
 		if wn > 0:
 			frontier.append([t, wn, int(depth.get(key_of(t.x, t.y), 0))])
+	if frontier.is_empty() and not field.is_empty():
+		for t in _front_tiles(winner, loser, field):
+			frontier.append([t, 0, int(depth.get(key_of(t.x, t.y), 0))])
 	if frontier.is_empty():
 		return Vector2i(-1, -1)
 	var cap := capital_site(winner)

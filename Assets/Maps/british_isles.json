@@ -1,0 +1,116 @@
+{
+ "id": "british_isles",
+ "name": "British Isles",
+ "blurb": "Great Britain and Ireland, from Cornwall to the Highlands, with the Channel coast.",
+ "grid_w": 31,
+ "grid_h": 42,
+ "wraps": false,
+ "lon0": -11.0,
+ "lon_span": 14.0,
+ "lat_top": 59.2,
+ "lat_bot": 49.8,
+ "americas_split": false,
+ "rows": [
+  "...............................",
+  "...............................",
+  "...............................",
+  "............mmmgm..............",
+  "............mmmmm..............",
+  "...........mmmmm...............",
+  "...........mmmmm...............",
+  "...........mmmmmmggg...........",
+  "...........mmmmmmggg...........",
+  "..........mmmmmmmgg............",
+  "...........mmmmmmgg............",
+  "...........mmggmmg.............",
+  "............gggggg.............",
+  "...........gggggg..............",
+  "............gggggg.............",
+  "...........ggggggggg...........",
+  "..............gggggg...........",
+  ".............ggggjjg...........",
+  ".......ggg...gggggjgg..........",
+  "......gggg..gggggmmgg..........",
+  "......ggggggg...gmmmgg.........",
+  "....ggggggg.....gmmgggg........",
+  "....ggggggg......gmmgggg.......",
+  "...ggggggg.......ggggggg.......",
+  "...gggggggg.......gggggg.......",
+  "...ggggggg.......ggggggg.......",
+  "....ggggggg...ggggggggggg......",
+  "...ggggggm...gmgggggggggg......",
+  "....gggggg....gmggggggggggg....",
+  "...ggggggg....mmgggggggggggg...",
+  "...ggggggg.....mmggggggggggg...",
+  "..gggggg.....ggmggggggggggg....",
+  "..ggggg......ggmmgggggggggg....",
+  "....g........gggggjggggggg.....",
+  "...............gggggggggggg....",
+  "..............ggggggggggggg...g",
+  "..............ggggggjgggggggggg",
+  ".............gggggggjgggg..gggg",
+  ".............gggg.gg........ggg",
+  "............gggg...........gggg",
+  "............gg.............gggg",
+  ".........................gggggg"
+ ],
+ "nations": [
+  {
+   "name": "Coalition Army",
+   "capital": "London",
+   "x": 24,
+   "y": 34,
+   "seeds": []
+  },
+  {
+   "name": "State Troops",
+   "capital": "Birmingham",
+   "x": 19,
+   "y": 29,
+   "seeds": []
+  },
+  {
+   "name": "Corporate Troops",
+   "capital": "Manchester",
+   "x": 18,
+   "y": 25,
+   "seeds": []
+  },
+  {
+   "name": "Fundamentalists",
+   "capital": "Dublin",
+   "x": 10,
+   "y": 26,
+   "seeds": []
+  },
+  {
+   "name": "Insurgents",
+   "capital": "Belfast",
+   "x": 11,
+   "y": 20,
+   "seeds": []
+  },
+  {
+   "name": "Horde",
+   "capital": "Edinburgh",
+   "x": 17,
+   "y": 14,
+   "seeds": []
+  },
+  {
+   "name": "Mercenaries",
+   "capital": "Cardiff",
+   "x": 17,
+   "y": 34,
+   "seeds": []
+  },
+  {
+   "name": "Peace Keepers",
+   "capital": "Cork",
+   "x": 5,
+   "y": 32,
+   "seeds": []
+  }
+ ],
+ "claims": []
+}
