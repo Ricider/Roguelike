@@ -81,7 +81,8 @@ func show_text(bb: String, near: Rect2) -> void:
 
 # ---------------------------------------------------------------- card preview
 # info keys (all optional): owner, owner_color (Color), hp, hp_max, hp_base, dmg, dmg_base,
-# income, money, money_base, bio, influence (shop price), ranged, flying, notes (Array of bbcode lines)
+# income, money, money_base, bio, influence (shop price), ranged, flying, notes (Array of bbcode lines),
+# nation (whose art to show)
 # below=true opens the card under the anchor (e.g. to keep a targeting arrow above it visible).
 func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false) -> void:
 	hide_all()
@@ -98,7 +99,7 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
 	root.add_child(top)
-	var art := Card.create_sprite_for(card.card_name, Vector2(112, 112))
+	var art := Card.create_sprite_for(card.card_name, Vector2(112, 112), str(info.get("nation", "")))
 	art.custom_minimum_size = Vector2(112, 112)
 	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	art.size_flags_vertical = Control.SIZE_SHRINK_CENTER

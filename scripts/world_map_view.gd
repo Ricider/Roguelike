@@ -319,6 +319,18 @@ func center_on(t: Vector2i, new_zoom: float = -1.0) -> void:
 	_normalize_pan()
 	_redraw_all()
 
+# Put a point of the map in the middle of the view: fx, fy are 0..1 across the
+# whole map (the minimap hands these over). Keeps the zoom.
+func center_on_fraction(fx: float, fy: float) -> void:
+	_pan = Vector2.ZERO
+	var m := metrics()
+	var s: float = m[0]
+	var map_px := Vector2((WorldMap.GRID_W + 0.5) * SQRT3 * s, (1.5 * WorldMap.GRID_H + 0.5) * s)
+	var c := Vector2(float(m[1]), float(m[2])) + Vector2(fx, fy) * map_px
+	_pan = size * 0.5 - c
+	_normalize_pan()
+	_redraw_all()
+
 # ------------------------------------------------------------- picking
 func _hex_points(c: Vector2, s: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
@@ -532,12 +544,13 @@ func _draw() -> void:
 
 # ------------------------------------------------------------ units + FX
 # 32px pixel-exact idle frames made once per card (512px art / 16).
-func unit_frames(card_name: String) -> Array:
-	if _unit_tex.has(card_name):
-		return _unit_tex[card_name]
+func unit_frames(card_name: String, nation: String = "") -> Array:
+	var cache_key := card_name + "|" + nation
+	if _unit_tex.has(cache_key):
+		return _unit_tex[cache_key]
 	var out: Array = []
 	for i in UNIT_FRAMES:
-		var path := "res://Assets/Cards/%s/sprite_%d.png" % [card_name, i]
+		var path := Card.idle_frame_path(card_name, i, nation) # each nation's own art
 		if not ResourceLoader.exists(path):
 			continue
 		var tex := load(path) as Texture2D
@@ -550,11 +563,11 @@ func unit_frames(card_name: String) -> Array:
 			img.decompress()
 		img.resize(32, 32, Image.INTERPOLATE_NEAREST)
 		out.append(ImageTexture.create_from_image(img))
-	_unit_tex[card_name] = out
+	_unit_tex[cache_key] = out
 	return out
 
-func _draw_card(card_name: String, c: Vector2, s: float, tint: Color = Color.WHITE, frame_offset: int = 0) -> void:
-	var frames := unit_frames(card_name)
+func _draw_card(card_name: String, c: Vector2, s: float, tint: Color = Color.WHITE, frame_offset: int = 0, nation: String = "") -> void:
+	var frames := unit_frames(card_name, nation)
 	if frames.is_empty():
 		return
 	var tex: Texture2D = frames[(int(_clock * 4.0) + frame_offset) % frames.size()]
@@ -784,7 +797,7 @@ func _draw_units(m: Array) -> void:
 				_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			if buffed:
 				_draw_buff_aura(c, s, seed_i)
-			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y)
+			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y, owner)
 			if sea:
 				_draw_boat_hull(c, s, nc, facing)
 			if shielded:
@@ -879,7 +892,7 @@ func _draw_effects(m: Array) -> void:
 					var sd: float = s * (1.0 + ek * 1.0)
 					_overlay.draw_circle(to_c + Vector2(cos(sa), sin(sa)) * sd, maxf(1.0, s * 0.06 * fade2), Color(0.85, 1, 1, fade2))
 			"wreck":
-				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k))
+				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k), 0, str(e.get("owner", "")))
 			"place":
 				_overlay.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
 
@@ -943,7 +956,7 @@ func _draw_overlay() -> void:
 			var gp := get_local_mouse_position()
 			for cp in _visible_copies(hovered, m, margin):
 				if (cp as Vector2).distance_to(gp) < s * 2.0:
-					_draw_card(ghost_card, cp as Vector2, s, Color(1, 1, 1, 0.55))
+					_draw_card(ghost_card, cp as Vector2, s, Color(1, 1, 1, 0.55), 0, _player_nation)
 	if not aim.is_empty():
 		_draw_aim(m)
 	if hovered.x >= 0 and hovered != selected:

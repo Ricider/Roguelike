@@ -314,6 +314,8 @@ def card_frame(draw_body, i, atk, shadow_spec=None, fx=None):
         shadow(g, cx, gy, hw, a)
     body = Pix(32, 32)
     draw_body(body)
+    if NATION_CTX is not None:
+        nation_touch(body, i)   # per-nation camo pattern + emblem decal (see NATIONS)
     body.outline()
     g.over(body)
     if fx:
@@ -2205,6 +2207,235 @@ def _pile_still(fn):
     return g
 
 
+# ============================================================ nation art
+# Every nation fields its own version of every card: its own colour ramp in place
+# of olive drab, its own accent colour (the nation's map colour), its own headgear
+# on soldiers, a surface pattern and an emblem decal. The shared drawings above are
+# reused: PAL is swapped while a nation's frames are drawn, SOLDIER_TOP /
+# TANK_TURRET are swapped for its versions, and card_frame() calls nation_touch()
+# to lay the pattern and decal over the body before it gets its outline.
+# Output: Assets/Cards/<card>/nations/<nation>/sprite_0..19.png (idle, 256px).
+NATION_CTX = None  # {"style": ..., "card": name, "ref": {card: top y of ref column}} while generating
+
+RAMP = "opqr"
+NATIONS = {
+    "State Troops": {   # classic olive drab, gold star, steel pot helmet
+        "pal": {"R": (228, 182, 52), "e": (150, 110, 24)},
+        "hat": {2: "..pqrrqqRp........"},
+        "pattern": None, "emblem": "star",
+    },
+    "Insurgents": {     # sun-bleached sand, rust patches, chequered shemagh
+        "pal": {"o": (92, 66, 38), "p": (138, 104, 62), "q": (184, 148, 96), "r": (220, 190, 134),
+                "R": (236, 122, 38), "e": (150, 70, 22),
+                "1": (70, 62, 58), "2": (108, 96, 86), "3": (150, 136, 120), "4": (196, 182, 160), "5": (236, 226, 206),
+                "b": (120, 76, 48), "B": (170, 112, 70), "c": (150, 90, 50), "C": (206, 140, 80)},
+        "hat": {0: "....vwwv..........", 1: "...vRvRvv.........", 2: "..vvRvRvRv........",
+                3: "..vRvRvRvvv.......", 4: ".uvvvvvvvvv.......", 5: ".v.zssss..........",
+                6: ".v.zssKs..........", 7: ".u.vRvRvv.........", 8: "....vvvv.........."},
+        "pattern": "rust", "emblem": "sun",
+    },
+    "Fundamentalists": {  # slate green, splinter camo, dark headwrap with a purple band
+        "pal": {"o": (28, 40, 36), "p": (44, 62, 54), "q": (66, 90, 76), "r": (98, 126, 104),
+                "R": (176, 102, 220), "e": (100, 46, 144),
+                "1": (52, 58, 62), "2": (84, 92, 96), "3": (124, 134, 136), "4": (172, 180, 180), "5": (224, 230, 226),
+                "b": (96, 84, 70), "B": (146, 128, 104), "c": (90, 54, 130), "C": (150, 100, 200)},
+        "hat": {0: "....nnnn..........", 1: "...nkkknn.........", 2: "..nkkkkkkn........",
+                3: "..RRRRRRRRR.......", 4: "..nnnnnnnnn.......", 8: "...kkkkk.........."},
+        "pattern": "splinter", "emblem": "flame",
+    },
+    "Mercenaries": {    # black tactical kit, tiger stripes, red beret and shades
+        "pal": {"o": (22, 22, 26), "p": (40, 40, 46), "q": (62, 62, 70), "r": (94, 94, 104),
+                "R": (214, 40, 44), "e": (120, 16, 24),
+                "1": (40, 42, 50), "2": (66, 70, 80), "3": (100, 104, 116), "4": (146, 150, 162), "5": (200, 204, 214),
+                "b": (70, 52, 48), "B": (104, 78, 70), "c": (60, 60, 66), "C": (100, 100, 110)},
+        "hat": {0: "..................", 1: "....eRRRR.........", 2: "..eRRRRRRRR.......",
+                3: "..eRRWRRRRe.......", 4: "...zssss..........", 6: "...znnnnn........."},
+        "pattern": "tiger", "emblem": "skull",
+    },
+    "Peace Keepers": {  # white paint, UN-blue helmets and markings
+        "pal": {"o": (126, 136, 150), "p": (178, 188, 200), "q": (220, 226, 234), "r": (246, 248, 252),
+                "R": (66, 146, 236), "e": (28, 84, 168),
+                "1": (110, 124, 140), "2": (156, 170, 186), "3": (198, 210, 222), "4": (228, 236, 244), "5": (250, 252, 255),
+                "b": (150, 156, 166), "B": (196, 202, 210), "c": (40, 110, 200), "C": (96, 170, 240)},
+        "hat": {0: "....eeee..........", 1: "...eRRCCe.........", 2: "..eRCCRRRe........",
+                3: "..eRRRRRRRe.......", 4: ".keeeeeeeeek......"},
+        "pattern": None, "emblem": "wreath",
+    },
+    "Horde": {          # rust-maroon iron, rivets, fur hats with ear flaps
+        "pal": {"o": (52, 22, 22), "p": (86, 34, 32), "q": (124, 52, 44), "r": (164, 82, 62),
+                "R": (236, 70, 56), "e": (140, 24, 28),
+                "1": (44, 40, 44), "2": (70, 64, 68), "3": (104, 96, 100), "4": (150, 140, 140), "5": (206, 196, 192),
+                "b": (74, 62, 62), "B": (110, 94, 90), "c": (120, 30, 30), "C": (180, 60, 50)},
+        "hat": {0: "...tuuuut.........", 1: "..tuvuvuvt........", 2: "..uuuuRuuu........",
+                3: ".tuvuvuvuvut......", 4: ".tuuuuuuuuut......", 5: ".tuzssss..........",
+                6: ".tuzssKs..........", 7: "..tzsssss........."},
+        "pattern": "rivets", "emblem": "claws",
+    },
+    "Coalition Army": {  # blue-grey digital camo, green markings, goggles and headsets
+        "pal": {"o": (42, 52, 66), "p": (62, 76, 96), "q": (90, 108, 130), "r": (128, 148, 170),
+                "R": (70, 200, 116), "e": (26, 120, 64),
+                "1": (56, 66, 88), "2": (88, 102, 128), "3": (132, 148, 172), "4": (186, 200, 218), "5": (236, 242, 250),
+                "c": (40, 120, 70), "C": (90, 190, 120)},
+        "hat": {3: "..pqqhghgp........", 7: "..kzsssss.........", 8: "..k.zzss.........."},
+        "pattern": "digital", "emblem": "cross",
+    },
+    "Corporate Troops": {  # glossy violet, teal neon, sealed visor helmets
+        "pal": {"o": (42, 24, 62), "p": (70, 40, 102), "q": (104, 66, 146), "r": (146, 106, 196),
+                "R": (40, 226, 196), "e": (16, 140, 120),
+                "1": (64, 58, 86), "2": (100, 94, 128), "3": (146, 140, 176), "4": (198, 194, 224), "5": (244, 242, 255),
+                "b": (56, 50, 80), "B": (88, 80, 120), "c": (90, 50, 140), "C": (40, 226, 196)},
+        "hat": {0: "....2222..........", 1: "...23MM32.........", 2: "..233MM332........",
+                3: "..222MM2222.......", 4: "..1111111111......", 5: "...1RRRRR.........",
+                6: "...1RRWRR.........", 7: "...12222s.........", 8: "....1222.........."},
+        "pattern": "sheen", "emblem": "coin",
+    },
+}
+
+DECALS = {  # 3x3 patches for small surfaces, 5x5 for turrets and walls ('.' = see-through)
+    "star": ([".R.", "RRR", "R.R"], ["..R..", ".RRR.", "RRRRR", ".RRR.", ".R.R."]),
+    "sun": (["R.R", ".W.", "R.R"], ["R.R.R", ".RRR.", "RRWRR", ".RRR.", "R.R.R"]),
+    "flame": ([".R.", "RR.", "RWR"], ["..R..", ".RR..", ".RRR.", "RRWRR", ".RRR."]),
+    "skull": (["W.W", ".W.", "W.W"], [".WWW.", "WKWKW", "WWWWW", ".WKW.", ".W.W."]),
+    "wreath": (["RRR", "R.R", "RRR"], [".R.R.", "R...R", "R.W.R", "R...R", ".RRR."]),
+    "claws": (["R.R", "R.R", "R.R"], ["R.R.R", "R.R.R", "R.R.R", ".R.R.", "....."]),
+    "cross": ([".R.", "RWR", ".R."], ["..R..", "..R..", "RRWRR", "..R..", "..R.."]),
+    "coin": (["RRR", "RWR", "RRR"], [".RRR.", "RRWRR", "RWWWR", "RRWRR", ".RRR."]),
+}
+
+# card -> (x, y, size, reference column). The decal follows the body up and down
+# (tank rumble, drone hover): its y shifts with the top of the reference column.
+DECAL_AT = {
+    "Tank": (13, 11, 5, 15), "Howitzer": (8, 11, 5, 10),
+    "Infantry": (10, 18, 3, 12), "Special Ops": (10, 18, 3, 12),
+    "Drone": (14, 12, 3, 15), "Fighter Jet": (4, 10, 3, 4),
+    "Interceptor": (15, 21, 3, None), "Anti Aircraft": (12, 17, 3, None),
+    "Artilery": (12, 16, 3, None), "Rocket Launcher": (23, 18, 3, None),
+    "Wall": (13, 21, 5, None),
+}
+
+
+def _hash01(x, y, salt=0):
+    return (((x * 73856093) ^ (y * 19349663) ^ (salt * 83492791)) & 0xFFFF) / 65535.0
+
+
+def _top(g, col):
+    for y in range(g.h):
+        if g.get(col, y) is not None:
+            return y
+    return None
+
+
+def nation_touch(body, i):
+    st = NATION_CTX["style"]
+    card = NATION_CTX["card"]
+    spot = DECAL_AT.get(card)
+    shift = 0
+    if spot and spot[3] is not None:
+        t = _top(body, spot[3])
+        if i == 0 or card not in NATION_CTX["ref"]:
+            NATION_CTX["ref"][card] = t
+        ref = NATION_CTX["ref"][card]
+        if t is not None and ref is not None:
+            shift = t - ref
+    ramp = [rgba(ch) for ch in RAMP]
+    kind = st["pattern"]
+    if kind:
+        for y in range(body.h):
+            for x in range(body.w):
+                c = body.px[y * body.w + x]
+                if c not in ramp:
+                    continue
+                k = ramp.index(c)
+                yy = y - shift  # pattern rides with the body
+                if kind == "rust":
+                    h = _hash01(x // 2, yy // 2, 1)
+                    if h < 0.14:
+                        body.px[y * body.w + x] = rgba((150, 78, 38) if h < 0.07 else (112, 56, 30))
+                elif kind == "tiger":
+                    if (x + 2 * yy) % 7 in (0, 1) and _hash01(x // 3, yy // 3, 2) > 0.35:
+                        body.px[y * body.w + x] = ramp[0]
+                elif kind == "splinter":
+                    region = ((x * 2 + yy * 3) // 5 + (x - yy) // 4) % 3
+                    if region == 1 and k >= 2:
+                        body.px[y * body.w + x] = ramp[1]
+                    elif region == 2 and k == 1:
+                        body.px[y * body.w + x] = ramp[0]
+                elif kind == "rivets":
+                    if x % 4 == 1 and yy % 4 == 1 and k >= 2:
+                        body.px[y * body.w + x] = ramp[0]
+                        if body.get(x + 1, y + 1) == ramp[k]:
+                            body.px[(y + 1) * body.w + x + 1] = ramp[3]
+                elif kind == "digital":
+                    h = _hash01(x // 2, yy // 2, 3)
+                    if k >= 2 and h < 0.18:
+                        body.px[y * body.w + x] = ramp[1]
+                    elif k >= 1 and 0.18 <= h < 0.3:
+                        body.px[y * body.w + x] = ramp[3]
+                elif kind == "sheen":
+                    d = (x - yy) % 12
+                    if d in (0, 1) and k >= 1:
+                        r, g2, b, _ = c
+                        body.px[y * body.w + x] = (min(255, r + 70), min(255, g2 + 70), min(255, b + 80), 255)
+    if spot:
+        x0, y0, size, _ = spot
+        small, big = DECALS[st["emblem"]]
+        rows = big if size == 5 else small
+        for j, row in enumerate(rows):
+            for k2, ch in enumerate(row):
+                if ch != "." and body.get(x0 + k2, y0 + shift + j) is not None:
+                    body.p(x0 + k2, y0 + shift + j, ch)
+
+
+TINTED_STEEL = ("Drone", "Fighter Jet", "Special Ops")
+
+
+def nation_frames(nation, card):
+    """20 idle frames of `card` in `nation`'s style."""
+    global NATION_CTX, SOLDIER_TOP, SPECOPS_TOP, TANK_TURRET
+    st = NATIONS[nation]
+    saved_pal = dict(PAL)
+    saved = (SOLDIER_TOP, SPECOPS_TOP, TANK_TURRET)
+    try:
+        PAL.update(st["pal"])
+        if card in TINTED_STEEL:
+            # all-metal cards (air units, special forces) take on the nation's colours too
+            for k, ramp_key in (("1", "o"), ("2", "p"), ("3", "q"), ("4", "r"), ("5", "r")):
+                PAL[k] = lerp_c(PAL[k], PAL[ramp_key], 0.55 if k != "5" else 0.3)[:3]
+        top = list(SOLDIER_TOP)
+        for idx, row in st["hat"].items():
+            top[idx] = row
+        SOLDIER_TOP = top
+        SPECOPS_TOP = [r.replace("GG", "RR") for r in SPECOPS_TOP]
+        TANK_TURRET = [r.replace("W", "q") for r in TANK_TURRET]   # the decal replaces the white star
+        NATION_CTX = {"style": st, "card": card, "ref": {}}
+        return [CARDS[card](i, False) for i in range(FR)]
+    finally:
+        PAL.clear()
+        PAL.update(saved_pal)
+        SOLDIER_TOP, SPECOPS_TOP, TANK_TURRET = saved
+        NATION_CTX = None
+
+
+def gen_nations(only=None):
+    preview = []
+    for nation in NATIONS:
+        row = []
+        for card in CARDS:
+            if card == "RocketLauncher":
+                continue  # legacy alias folder; the game falls back to the shared art there
+            frames = nation_frames(nation, card)
+            base = os.path.join(ROOT, "Assets", "Cards", card, "nations", nation)
+            os.makedirs(base, exist_ok=True)
+            for i, f in enumerate(frames):
+                f.save(os.path.join(base, "sprite_%d.png" % i), 8)
+            row.append(frames[0])
+        preview += row
+        print("nation", nation)
+    out = os.path.join(ROOT, "build", "previews")
+    os.makedirs(out, exist_ok=True)
+    sheet(preview, len(CARDS) - 1, 4, os.path.join(out, "nations.png"))
+
+
 # ============================================================== world map
 # Terrain tiles are generated at runtime by scripts/tile_art.gd; this
 # mirror lets the preview sheet show them too.
@@ -2218,6 +2449,7 @@ GROUPS = {
     "players": gen_players,
     "ui": gen_ui,
     "kit": gen_ui_kit,
+    "nations": gen_nations,
 }
 
 

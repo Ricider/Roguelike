@@ -27,6 +27,7 @@ const SHOT_SFX := {
 }
 
 var _view: WorldMapView = null
+var _minimap: Minimap = null
 var _war: MapWar = null
 var _banner: Label = null
 var _status: Label = null
@@ -185,6 +186,13 @@ func _build_ui() -> void:
 	_view.tile_hovered.connect(_on_tile_hovered)
 	_view.hover_cleared.connect(_clear_map_hover)
 	map_col.add_child(_view)
+	# minimap in the map's bottom-left corner
+	_minimap = Minimap.new()
+	_minimap.name = "Minimap"
+	_minimap.view = _view
+	_minimap.anchor_top = 1.0
+	_minimap.anchor_bottom = 1.0
+	_view.add_child(_minimap)
 	_hover = CardHover.new()
 	_hover.name = "CardHover"
 	add_child(_hover)
@@ -398,6 +406,7 @@ func _refresh() -> void:
 	if c == null:
 		return
 	_view.set_campaign(c)
+	_minimap.refresh()
 	_refresh_legend()
 	_refresh_player_card()
 	_refresh_hand()
@@ -624,7 +633,7 @@ func _tip(node: Control, text_fn: Callable) -> void:
 # Stats for a card still in a hand or shop: effective values vs the base card.
 func _hand_info(card: Card, p: Player, where: String) -> Dictionary:
 	var d := {"owner": where, "hp": p.effective_hitpoints_for(card), "hp_base": p.base_hitpoints_for(card),
-		"money": p.get_effective_money_cost(card), "money_base": card.MoneyCost}
+		"money": p.get_effective_money_cost(card), "money_base": card.MoneyCost, "nation": p.display_name}
 	if card is Unit:
 		d["dmg"] = p.effective_damage_for(card, null)
 		d["dmg_base"] = (card as Unit).Damage
@@ -646,7 +655,7 @@ func _unit_info(k: String) -> Dictionary:
 	var hp: int = _war.card_hp(card)
 	var d := {"owner": owner + ("  (you)" if owner == _me() else ""),
 		"owner_color": Color.html(str(WorldMap.nation_by_name(owner).get("color", "ffffff"))),
-		"hp": hp, "hp_max": int(card.get_meta("map_max_hp", hp))}
+		"hp": hp, "hp_max": int(card.get_meta("map_max_hp", hp)), "nation": owner}
 	var notes: Array = []
 	if card is Unit:
 		var u := card as Unit
@@ -726,7 +735,7 @@ func _hand_button(stack: Array) -> Button:
 	row.offset_right = -6
 	row.add_theme_constant_override("separation", 4)
 	btn.add_child(row)
-	var art := Card.create_sprite_for(card.card_name, Vector2(64, 64))
+	var art := Card.create_sprite_for(card.card_name, Vector2(64, 64), _me())
 	art.custom_minimum_size = Vector2(64, 64)
 	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	art.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1299,7 +1308,7 @@ func _build_shop(remove_mode: bool) -> void:
 			var stack: Array = groups[cn]
 			var card: Card = stack[0]
 			var can: bool = p.Influence >= REMOVE_COST and not bool(shop["remove_used"])
-			var item := _shop_item("%s  x%d" % [cn, stack.size()], Card.create_sprite_for(cn, Vector2(64, 64)), [], REMOVE_COST, can, false, func():
+			var item := _shop_item("%s  x%d" % [cn, stack.size()], Card.create_sprite_for(cn, Vector2(64, 64), _me()), [], REMOVE_COST, can, false, func():
 				if _war.remove_card(_me(), card):
 					_sfx("shop_buy")
 					_log_line("You remove a %s from your deck." % cn)
@@ -1325,7 +1334,7 @@ func _build_shop(remove_mode: bool) -> void:
 				lines.append("HP %d  INC %d" % [(card as Building).HitPoints, (card as Building).Income])
 			lines.append("$%d  Bio %d" % [card.MoneyCost, card.BioCost])
 			var can_c: bool = p.Influence >= card.InfluenceCost
-			cards_row.add_child(_shop_item(card.card_name, Card.create_sprite_for(card.card_name, Vector2(84, 84)), lines, card.InfluenceCost, can_c, false, func():
+			cards_row.add_child(_shop_item(card.card_name, Card.create_sprite_for(card.card_name, Vector2(84, 84), _me()), lines, card.InfluenceCost, can_c, false, func():
 				if _war.buy_card(_me(), card):
 					_sfx("shop_buy")
 					_log_line("You buy a %s (joins your draw pile)." % card.card_name)

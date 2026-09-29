@@ -7,6 +7,10 @@ var InfluenceCost: int = 0
 var card_name: String = "Card"
 var SpecialEffect: String = "" # AIInterpretedString per spec
 
+# Nation whose art to show ("" = the shared art). Each map nation has its own
+# idle frames in Assets/Cards/<card>/nations/<nation>/ (tools/retro_overhaul.py nations).
+var art_nation: String = ""
+
 func get_display_name() -> String:
 	return card_name
 
@@ -22,15 +26,24 @@ func get_static_sprite() -> Texture2D:
 		return load(path_svg) as Texture2D
 	return null
 
+# Path of idle frame i for `nation` (its own art when it exists, else the shared art).
+static func idle_frame_path(card: String, i: int, nation: String = "") -> String:
+	if nation != "":
+		var np := "res://Assets/Cards/%s/nations/%s/sprite_%d.png" % [card, nation, i]
+		if ResourceLoader.exists(np):
+			return np
+	return "res://Assets/Cards/%s/sprite_%d.png" % [card, i]
+
 func get_sprite_frames() -> SpriteFrames:
-	if Card._frames_cache.has(card_name):
-		return Card._frames_cache[card_name] as SpriteFrames
+	var cache_key := card_name + "|" + art_nation
+	if Card._frames_cache.has(cache_key):
+		return Card._frames_cache[cache_key] as SpriteFrames
 	var sf := SpriteFrames.new()
 	sf.add_animation("idle")
 	sf.set_animation_loop("idle", true)
 	sf.set_animation_speed("idle", 10.0)
 	for i in range(20):
-		var fpath: String = "res://Assets/Cards/%s/sprite_%d.png" % [card_name, i]
+		var fpath: String = Card.idle_frame_path(card_name, i, art_nation)
 		if ResourceLoader.exists(fpath):
 			var tex := load(fpath) as Texture2D
 			if tex != null:
@@ -45,7 +58,7 @@ func get_sprite_frames() -> SpriteFrames:
 			var atex := load(apath) as Texture2D
 			if atex != null:
 				sf.add_frame("attack", atex)
-	Card._frames_cache[card_name] = sf
+	Card._frames_cache[cache_key] = sf
 	return sf
 
 func create_animated_sprite(size: Vector2) -> Control:
@@ -86,7 +99,8 @@ static func get_frames_for(card_name: String) -> SpriteFrames:
 	tmp.card_name = card_name
 	return tmp.get_sprite_frames()
 
-static func create_sprite_for(card_name: String, size: Vector2) -> Control:
+static func create_sprite_for(card_name: String, size: Vector2, nation: String = "") -> Control:
 	var tmp := Card.new()
 	tmp.card_name = card_name
+	tmp.art_nation = nation
 	return tmp.create_animated_sprite(size)
