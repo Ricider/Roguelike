@@ -543,3 +543,27 @@ func test_modifiers_cost_four_times_their_base_price():
 				base = (b as Modifier).InfluenceCost
 		assert_eq((m as Modifier).InfluenceCost, base * 4, "%s costs 4x" % (m as Modifier).modifier_name)
 	assert_eq(Modifier.all_modifiers()[0].InfluenceCost, 140, "Conscription 35 -> 140")
+
+func test_round_stats_split_damage_by_source():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(24, 10) # keep B's flag out of reach
+	_drop(w, A, Barracks.new(), 13)
+	var drone := _drop(w, A, Drone.new(), 14)
+	var target := Infantry.new()
+	target.HitPoints = 1
+	_drop(w, B, target, 15)
+	_drop(w, B, Interceptor.new(), 16)
+	w.reset_round_stats()
+	var log := w.fire(drone)
+	assert_eq(log[0]["to"], Vector2i(15, 10), "the drone hits the infantry")
+	var st: Dictionary = w.round_stats[A + "|" + B]
+	var dmg: int = Drone.new().Damage + 2
+	assert_eq(int(st.get("barracks", 0)), 2, "Barracks +2 is credited")
+	assert_true(int(st.get("blocked_interceptor", 0)) > 0, "the Interceptor's cut is counted")
+	assert_eq(int(st.get("dealt", 0)) + int(st.get("blocked_interceptor", 0)) + int(st.get("blocked_mountain", 0)) + int(st.get("blocked_forest", 0)), dmg,
+		"what landed plus what was stopped adds up to the shot")
+	assert_eq(int(st.get("kills", 0)), 1, "the kill is counted")
+	assert_eq(int(st.get("kill_hp", 0)), Infantry.new().BioCost, "with the HP it cost B")
+	assert_false(w.round_stats.has(B + "|" + A), "nothing the other way")
+	w.reset_round_stats()
+	assert_true(w.round_stats.is_empty(), "reset clears the round")

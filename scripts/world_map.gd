@@ -39,6 +39,10 @@ var _inf_label: Label = null
 var _inf_box: Control = null
 var _shop_btn: Button = null
 var _shop_panel: PanelContainer = null
+var _report_panel: PanelContainer = null
+var _report: Dictionary = {}     # the last round's MapWar.round_stats
+var _report_turn: int = 0
+var _report_all: bool = false    # tab: all nations instead of your own fights
 var _stat_tiles: Label = null
 var _mods_box: HFlowContainer = null # your modifiers as animated badges (hover for the effect)
 var _mods_sig: String = "" # rebuild the badges only when the list changes
@@ -371,7 +375,19 @@ func _build_ui() -> void:
 	_legend.name = "Legend"
 	_legend.add_theme_constant_override("separation", 2)
 	side.add_child(_legend)
-	side.add_child(_section_label("BATTLE LOG"))
+	var log_head := HBoxContainer.new()
+	side.add_child(log_head)
+	var log_title := _section_label("BATTLE LOG")
+	log_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_head.add_child(log_title)
+	var rep_btn := Button.new()
+	rep_btn.name = "ReportButton"
+	rep_btn.text = "Round report"
+	rep_btn.custom_minimum_size = Vector2(0, 30)
+	rep_btn.add_theme_font_size_override("font_size", 14)
+	rep_btn.focus_mode = Control.FOCUS_NONE
+	rep_btn.pressed.connect(_open_report)
+	log_head.add_child(rep_btn)
 	_log = RichTextLabel.new()
 	_log.name = "Log"
 	_log.bbcode_enabled = true
@@ -807,7 +823,10 @@ func _clear_selection() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var kc := (event as InputEventKey).keycode
-		if kc == KEY_ESCAPE and _shop_panel != null:
+		if kc == KEY_ESCAPE and _report_panel != null:
+			_close_report()
+			get_viewport().set_input_as_handled()
+		elif kc == KEY_ESCAPE and _shop_panel != null:
 			_close_shop()
 			get_viewport().set_input_as_handled()
 		elif kc == KEY_ESCAPE and _selected != null:
@@ -933,7 +952,12 @@ func _on_tile_selected(x: int, y: int) -> void:
 	_refresh_player_card()
 
 # ------------------------------------------------------------------- turns
-func _start_player_turn() -> void:
+func _start_player_turn(round_over: bool = false) -> void:
+	if round_over:
+		# the round that just ended (your attack + every AI turn): keep it for the report
+		_report = _war.round_stats.duplicate(true)
+		_report_turn = _war.turn - 1
+	_war.reset_round_stats()
 	_war.begin_turn(_me())
 	_busy = false
 	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
@@ -948,6 +972,7 @@ func _on_end_turn() -> void:
 	_end_btn.disabled = true
 	_shop_btn.disabled = true
 	_close_shop()
+	_close_report()
 	_clear_selection()
 	_sfx("end_turn", -2.0)
 	_status.text = "Your units open fire..."
@@ -977,8 +1002,10 @@ func _on_end_turn() -> void:
 			return
 	_war.turn += 1
 	_log_line("[color=#ffd966]Turn %d.[/color]" % _war.turn)
-	_start_player_turn()
+	_start_player_turn(true)
 	_refresh()
+	if not _report.is_empty() and not _campaign().has_won() and not _campaign().has_lost():
+		_open_report()
 
 func _nation_attacks(n: String) -> void:
 	var shots := 0
@@ -1009,64 +1036,89 @@ func _nation_attacks(n: String) -> void:
 				for lk in ev.get("lost", []):
 					dead.append(str(lk)) # stands until the collapse plays out on screen
 	_view.begin_replay(snapshot, dead, flag_hp, flag_sites)
-	# 2. Every attacker marches, all together, hex by hex towards its real target (the
-	#    most central one when it fires at several; visual only: the cards stay on
-	#    their hexes). Ground units cross
-	#    sea in boats; ranged units keep RANGED_GAP hexes from the target.
+	# 2. Split the attack into waves at every collapse: when a shot brings a nation
+	#    down, its flag re-forms elsewhere, so the units firing after that must only
+	#    set off once the flag has visibly moved. Each wave's units march together,
+	#    hex by hex, towards their real target (the most central one when they fire
+	#    at several; visual only: the cards stay on their hexes), fire, and wait for
+	#    their last shot to land before the next wave picks its spots. Ground units
+	#    cross sea in boats; ranged units keep RANGED_GAP hexes from the target.
+	var waves: Array = [[]]
+	for item in plan:
+		(waves[waves.size() - 1] as Array).append(item)
+		for e in (item[1] as Array):
+			if not (e.get("collapses", []) as Array).is_empty():
+				waves.append([])
+				break
 	var walkers: Array = []
 	var taken := {}
 	for dk in dead:
 		taken[MapWar.key_to_hex(dk)] = true # a doomed card still stands there on screen
-	var march := 0.0 # seconds at 1x for the slowest march
+	for nm in flag_sites.keys():
+		taken[flag_sites[nm]] = true # a flag as shown now (it may move later this attack)
+	var march := 0.0 # seconds at 1x for the slowest march (for the walk home)
 	var shooter: Player = _war.players[n]
-	for item in plan:
-		var k: String = item[0]
-		var entries: Array = item[1]
-		if entries.is_empty() or not _war.units.has(k):
+	for wave in waves:
+		if (wave as Array).is_empty():
 			continue
-		var ranged: bool = shooter.has_range_for(_war.units[k]["card"])
-		var goal := _march_goal(entries)
-		var path := _walk_path(k, goal, taken, RANGED_GAP if ranged else 1)
-		if path.size() < 2:
-			continue
-		taken[path[path.size() - 1]] = true
-		var step: float = minf(WALK_STEP, WALK_MAX / float(path.size() - 1))
-		_view.walk_out(k, path, step / _speed())
-		walkers.append(k)
-		march = maxf(march, step * float(path.size() - 1))
-	if march > 0.0:
-		await _wait(march + 0.05)
-	# 3. Replay the shots in firing order; HP bars and wrecks update as each lands.
-	for item in plan:
-		for e in (item[1] as Array):
-			shots += 1
-			var kind: String = SHOT_SFX.get(str(e["card"]), "shot_rifle")
-			var travel: float = TRAVEL / _speed()
-			var destroyed: Array = e["destroyed"]
-			_view.add_shot(e["from"], e["to"], kind, travel)
-			_sfx(kind, -6.0)
-			if bool(e.get("buffed", false)):
-				_view.add_buff(e["from"]) # Barracks +2: golden burst at the shooter
-			if bool(e.get("intercepted", false)):
-				_view.add_intercept(e.get("intercept_from", Vector2i(-1, -1)), e["to"], travel)
-				_log_line("[color=#7fd8ff]%s's Interceptor halves a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
-			for dinfo in destroyed:
-				_view.replay_remove(str(dinfo["key"])) # the wreck effect takes over until impact
-				_view.add_wreck(dinfo["hex"], str(dinfo["name"]), str(dinfo["owner"]), travel)
-				_view.add_boom(dinfo["hex"], true, travel)
-			for sp in e["splash"]:
-				_view.add_boom(sp as Vector2i, false, travel)
-			_view.add_boom(e["to"], false, travel)
-			_view.add_number(e["to"], "-%d" % int(e["damage"]), Color(1, 0.8, 0.3) if e["direct"] else Color(1, 0.45, 0.4), travel)
-			var impact: String = "hq_hit" if e["direct"] else ("explosion" if not destroyed.is_empty() else ("intercept" if e["intercepted"] else "hit"))
-			get_tree().create_timer(travel).timeout.connect(_land_hit.bind(e, snapshot, impact))
-			if e["direct"]:
-				_log_line("[color=#%s]%s[/color] %s hits [color=#%s]%s[/color]'s flag for %d" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], int(e["damage"])])
-			elif not destroyed.is_empty():
-				_log_line("[color=#%s]%s[/color] %s destroys [color=#%s]%s[/color]'s %s" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], e["target_name"]])
-			await _wait(SHOT_GAP)
-	if shots > 0:
-		await _wait(TRAVEL + 0.15)
+		var wave_march := 0.0
+		for item in wave:
+			var k: String = item[0]
+			var entries: Array = item[1]
+			if entries.is_empty() or not _war.units.has(k):
+				continue
+			var ranged: bool = shooter.has_range_for(_war.units[k]["card"])
+			var goal := _march_goal(entries)
+			var path := _walk_path(k, goal, taken, RANGED_GAP if ranged else 1)
+			if path.size() < 2:
+				continue
+			taken[path[path.size() - 1]] = true
+			var step: float = minf(WALK_STEP, WALK_MAX / float(path.size() - 1))
+			_view.walk_out(k, path, step / _speed())
+			walkers.append(k)
+			wave_march = maxf(wave_march, step * float(path.size() - 1))
+		march = maxf(march, wave_march)
+		if wave_march > 0.0:
+			await _wait(wave_march + 0.05)
+		# 3. Replay this wave's shots in firing order; HP bars, wrecks and fallen
+		#    flags update as each one lands.
+		var wave_shots := 0
+		for item in wave:
+			for e in (item[1] as Array):
+				shots += 1
+				wave_shots += 1
+				var kind: String = SHOT_SFX.get(str(e["card"]), "shot_rifle")
+				var travel: float = TRAVEL / _speed()
+				var destroyed: Array = e["destroyed"]
+				_view.add_shot(e["from"], e["to"], kind, travel)
+				_sfx(kind, -6.0)
+				if bool(e.get("buffed", false)):
+					_view.add_buff(e["from"]) # Barracks +2: golden burst at the shooter
+				if bool(e.get("intercepted", false)):
+					_view.add_intercept(e.get("intercept_from", Vector2i(-1, -1)), e["to"], travel)
+					_log_line("[color=#7fd8ff]%s's Interceptor halves a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
+				for dinfo in destroyed:
+					_view.replay_remove(str(dinfo["key"])) # the wreck effect takes over until impact
+					_view.add_wreck(dinfo["hex"], str(dinfo["name"]), str(dinfo["owner"]), travel)
+					_view.add_boom(dinfo["hex"], true, travel)
+				for sp in e["splash"]:
+					_view.add_boom(sp as Vector2i, false, travel)
+				_view.add_boom(e["to"], false, travel)
+				_view.add_number(e["to"], "-%d" % int(e["damage"]), Color(1, 0.8, 0.3) if e["direct"] else Color(1, 0.45, 0.4), travel)
+				var impact: String = "hq_hit" if e["direct"] else ("explosion" if not destroyed.is_empty() else ("intercept" if e["intercepted"] else "hit"))
+				get_tree().create_timer(travel).timeout.connect(_land_hit.bind(e, snapshot, impact))
+				if e["direct"]:
+					_log_line("[color=#%s]%s[/color] %s hits [color=#%s]%s[/color]'s flag for %d" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], int(e["damage"])])
+				elif not destroyed.is_empty():
+					_log_line("[color=#%s]%s[/color] %s destroys [color=#%s]%s[/color]'s %s" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], e["target_name"]])
+				await _wait(SHOT_GAP)
+		if wave_shots > 0:
+			await _wait(TRAVEL + 0.15) # the last shot lands (and any collapse plays out)
+		for nm in flag_sites.keys():
+			if _view.flag_site_shown.get(nm, flag_sites[nm]) != flag_sites[nm]:
+				taken.erase(flag_sites[nm])          # a flag that moved frees its old hex...
+				flag_sites[nm] = _view.flag_site_shown[nm]
+				taken[flag_sites[nm]] = true          # ...and holds its new one
 	if march > 0.0:
 		for k in walkers:
 			_view.walk_back(k)
@@ -1251,6 +1303,198 @@ func _check_end() -> bool:
 # remove_card_from_deck), paid with Influence earned by taking hexes. Stock
 # refreshes at the start of each of your turns; bought cards join your draw pile.
 const REMOVE_COST := MapWar.REMOVE_COST
+
+# ------------------------------------------------------------ round report
+# Who did what to whom last round: damage dealt and where it came from (Barracks,
+# modifiers, unit bonuses, splash), and damage stopped (Interceptors, mountains,
+# forests, flying units dodging melee). Opens at the start of each of your turns
+# after the first; the Report button reopens it.
+const REPORT_COLS := [
+	["dealt", "Dealt", "All damage that landed, flags included.", "val"],
+	["flag", "Flag", "Of that, damage straight to the nation's flag (its HP).", "val"],
+	["kills", "Kills", "Cards destroyed, and the HP their owner lost for them (their BioCost).", "val"],
+	["barracks", "+Barracks", "Added by adjacent Barracks (+2 per shot).", "add"],
+	["modifiers", "+Modifiers", "Added (or taken away) by the attacker's modifiers: Guerilla Warfare, Aerial Supremacy, Defensive Doctrine.", "add"],
+	["unit_bonus", "+Unit bonus", "Special Ops x2 against ground units, Anti Aircraft x3 against flying ones.", "add"],
+	["splash", "+Splash", "Fighter Jet splash on the target's neighbours.", "add"],
+	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they halve ranged and flying hits).", "block"],
+	["blocked_mountain", "-Mountains", "Stopped by mountain cover (1 per hit on ground units).", "block"],
+	["blocked_forest", "-Forests", "Stopped by forest cover (1 per hit from flying attackers).", "block"],
+	["blocked_flying", "-Flying", "Flying units take half damage from attackers without Range.", "block"],
+]
+
+func _open_report() -> void:
+	_close_report()
+	if _war == null:
+		return
+	_report_panel = PanelContainer.new()
+	_report_panel.name = "ReportPanel"
+	_report_panel.theme_type_variation = &"GoldPanel"
+	_report_panel.z_index = 60
+	add_child(_report_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	_report_panel.add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
+	var title := Label.new()
+	title.text = "ROUND REPORT"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	head.add_child(title)
+	var sub := Label.new()
+	sub.text = ("Turn %d" % _report_turn) if _report_turn > 0 else ""
+	sub.add_theme_font_size_override("font_size", 16)
+	sub.add_theme_color_override("font_color", Color(0.8, 0.82, 0.9))
+	head.add_child(sub)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	for tab in [[false, "Your fights"], [true, "All nations"]]:
+		var tb := Button.new()
+		tb.text = tab[1]
+		tb.focus_mode = Control.FOCUS_NONE
+		tb.theme_type_variation = &"SelectedButton" if _report_all == tab[0] else &""
+		var all_tab: bool = tab[0]
+		tb.pressed.connect(func():
+			_report_all = all_tab
+			_open_report())
+		head.add_child(tb)
+	var rows := _report_rows()
+	if rows.is_empty():
+		var none := Label.new()
+		none.text = "No fighting recorded yet. The report fills in over a round: your attack and every other nation's turn." if _report.is_empty() else "You neither dealt nor took damage last round. Try the All nations tab."
+		none.add_theme_font_size_override("font_size", 16)
+		v.add_child(none)
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(1180, mini(460, 40 + rows.size() * 30))
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(scroll)
+		var grid := GridContainer.new()
+		grid.columns = 2 + REPORT_COLS.size()
+		grid.add_theme_constant_override("h_separation", 14)
+		grid.add_theme_constant_override("v_separation", 6)
+		scroll.add_child(grid)
+		for htxt in ["From", "To"]:
+			grid.add_child(_report_cell(htxt, Color(1.0, 0.86, 0.35)))
+		for col in REPORT_COLS:
+			var hc := _report_cell(str(col[1]), _report_kind_color(str(col[3])))
+			var tip: String = "[%s]: %s" % [str(col[1]).trim_prefix("+").trim_prefix("-"), str(col[2])]
+			_tip(hc, func(): return tip)
+			grid.add_child(hc)
+		for r in rows:
+			var att := str(r[0])
+			var vic := str(r[1])
+			var st: Dictionary = r[2]
+			grid.add_child(_report_nation(att))
+			grid.add_child(_report_nation(vic))
+			for col in REPORT_COLS:
+				var cat := str(col[0])
+				var n: int = int(st.get(cat, 0))
+				var txt := "·"
+				if cat == "kills":
+					txt = ("%d (-%d HP)" % [n, int(st.get("kill_hp", 0))]) if n > 0 else "·"
+				elif n != 0:
+					match str(col[3]):
+						"add": txt = ("+%d" % n) if n > 0 else str(n)
+						"block": txt = "-%d" % n
+						_: txt = str(n)
+				grid.add_child(_report_cell(txt, _report_kind_color(str(col[3])) if n != 0 else Color(0.45, 0.46, 0.55)))
+		v.add_child(_report_summary())
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	v.add_child(foot)
+	var close := Button.new()
+	close.text = "Close"
+	close.theme_type_variation = &"PrimaryButton"
+	close.custom_minimum_size = Vector2(120, 40)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(_close_report)
+	foot.add_child(close)
+	# centre once the table has a size
+	await get_tree().process_frame
+	if _report_panel != null and is_instance_valid(_report_panel):
+		_report_panel.reset_size()
+		_report_panel.position = ((size - _report_panel.size) * 0.5).floor()
+
+func _close_report() -> void:
+	if _hover != null:
+		_hover.hide_all()
+	if _report_panel != null and is_instance_valid(_report_panel):
+		_report_panel.queue_free()
+	_report_panel = null
+
+# [[attacker, victim, stats], ...]: yours first (your attacks, then attacks on you),
+# each group by damage dealt.
+func _report_rows() -> Array:
+	var me := _me()
+	var mine: Array = []
+	var on_me: Array = []
+	var others: Array = []
+	for k in _report.keys():
+		var parts := str(k).split("|")
+		var row: Array = [parts[0], parts[1], _report[k]]
+		if parts[0] == me:
+			mine.append(row)
+		elif parts[1] == me:
+			on_me.append(row)
+		elif _report_all:
+			others.append(row)
+	var by_dealt := func(a, b): return int(a[2].get("dealt", 0)) > int(b[2].get("dealt", 0))
+	mine.sort_custom(by_dealt)
+	on_me.sort_custom(by_dealt)
+	others.sort_custom(by_dealt)
+	return mine + on_me + others
+
+func _report_summary() -> Label:
+	var me := _me()
+	var dealt := 0
+	var taken := 0
+	var saved := 0
+	var boosted := 0
+	for k in _report.keys():
+		var parts := str(k).split("|")
+		var st: Dictionary = _report[k]
+		if parts[0] == me:
+			dealt += int(st.get("dealt", 0))
+			boosted += int(st.get("barracks", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
+		elif parts[1] == me:
+			taken += int(st.get("dealt", 0))
+			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]:
+				saved += int(st.get(cat, 0))
+	var l := Label.new()
+	l.text = "You dealt %d damage (%s%d from bonuses) and took %d; your defences stopped %d." % [dealt, "+" if boosted >= 0 else "", boosted, taken, saved]
+	l.add_theme_font_size_override("font_size", 16)
+	l.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	return l
+
+func _report_cell(text: String, col: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", col)
+	return l
+
+func _report_nation(nm: String) -> Control:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 4)
+	h.add_child(_icon("res://Assets/Players/%s/flag.png" % nm, 20))
+	var l := Label.new()
+	l.text = "You" if nm == _me() else nm
+	l.add_theme_font_size_override("font_size", 15)
+	l.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35) if nm == _me() else Color.html("#" + _nation_hex_color(nm)))
+	h.add_child(l)
+	return h
+
+func _report_kind_color(kind: String) -> Color:
+	match kind:
+		"add": return Color(0.55, 0.95, 0.5)
+		"block": return Color(0.5, 0.85, 1.0)
+		_: return Color(0.95, 0.95, 1.0)
 
 func _open_shop() -> void:
 	if _busy or _war == null:

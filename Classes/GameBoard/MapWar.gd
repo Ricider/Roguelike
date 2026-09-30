@@ -565,7 +565,10 @@ func _reap(attacker: String) -> Array:
 	var out: Array = []
 	for k in dead:
 		var info: Dictionary = units[k]
-		out.append({"key": k, "hex": key_to_hex(k), "name": (info["card"] as Card).card_name, "owner": info["owner"]})
+		out.append({"key": k, "hex": key_to_hex(k), "name": (info["card"] as Card).card_name, "owner": info["owner"],
+			"bio": (info["card"] as Card).BioCost})
+		_stat(attacker, str(info["owner"]), "kills", 1)
+		_stat(attacker, str(info["owner"]), "kill_hp", (info["card"] as Card).BioCost)
 		_hurt_nation(str(info["owner"]), attacker, (info["card"] as Card).BioCost)
 		_remove(k)
 	return out
@@ -607,18 +610,26 @@ func fire(k: String) -> Array:
 		if tgt.is_empty():
 			break
 		var dmg := effective_damage(nation, unit, from)
-		var buffed := _barracks_bonus(nation, from) > 0
+		var buff := _barracks_bonus(nation, from)
+		var buffed := buff > 0
+		var mod_delta: int = (players[nation] as Player).effective_damage_for(unit, null) - unit.Damage
 		if tgt.has("flag"):
 			# Flag hit: the damage goes to the nation's HP (Fighter Jets still splash around it).
 			var victim := str(tgt["flag"])
 			var site: Vector2i = tgt["hex"]
 			_hurt_nation(victim, nation, dmg)
+			_stat(nation, victim, "dealt", dmg)
+			_stat(nation, victim, "flag", dmg)
+			_stat(nation, victim, "barracks", buff)
+			_stat(nation, victim, "modifiers", mod_delta)
 			var fsplash: Array = []
 			if unit is FighterJet:
 				for nb in MapCampaign.wrapped_neighbors(site):
 					var ninfo := unit_at(nb as Vector2i)
 					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
-						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, dmg, unit))
+						var sd := terrain_adjusted(ninfo["card"], nb as Vector2i, dmg, unit)
+						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), sd)
+						_stat(nation, victim, "splash", sd)
 						fsplash.append(nb)
 			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
 				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash,
@@ -635,6 +646,8 @@ func fire(k: String) -> Array:
 			actual *= 2
 		elif unit is AntiAircraft and target is Unit and (target as Unit).Flying:
 			actual *= 3
+		var unit_bonus := actual - dmg
+		var pre_fly := actual
 		if target is Unit and (target as Unit).Flying and not ranged and not (unit is AntiAircraft):
 			actual = maxi(1, actual / 2)
 		var before := actual
@@ -643,12 +656,23 @@ func fire(k: String) -> Array:
 		var pre_terrain := actual
 		actual = terrain_adjusted(target, to, actual, unit)
 		_damage_card(tk, actual)
+		# round report (see round_stats)
+		_stat(nation, victim2, "dealt", actual)
+		_stat(nation, victim2, "barracks", buff)
+		_stat(nation, victim2, "modifiers", mod_delta)
+		_stat(nation, victim2, "unit_bonus", unit_bonus)
+		_stat(nation, victim2, "blocked_flying", pre_fly - before)
+		_stat(nation, victim2, "blocked_interceptor", before - pre_terrain)
+		var cover := "blocked_mountain" if WorldMap.terrain_at(to.x, to.y) == WorldMap.MOUNTAIN else "blocked_forest"
+		_stat(nation, victim2, cover, pre_terrain - actual)
 		var splash: Array = []
 		if unit is FighterJet:
 			for nb in MapCampaign.wrapped_neighbors(to):
 				var ninfo := unit_at(nb as Vector2i)
 				if not ninfo.is_empty() and str(ninfo["owner"]) == victim2:
-					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain, unit))
+					var sd2 := terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain, unit)
+					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), sd2)
+					_stat(nation, victim2, "splash", sd2)
 					splash.append(nb)
 		var destroyed := _reap(nation)
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,
@@ -662,6 +686,29 @@ func fire(k: String) -> Array:
 # down. The event rides on the shot that caused it (log entry "collapses") and
 # is also queued for resolve_collapses().
 var pending_collapses: Array = []
+
+# Round report: what each nation did to each other nation since the player's last
+# turn began. "attacker|victim" -> {category: amount}. Categories:
+#   dealt (all damage that landed, flags included), flag, kills, kill_hp (HP the
+#   victim lost for destroyed cards), barracks, modifiers (can be negative),
+#   unit_bonus (Special Ops x2 / Anti Aircraft x3), splash (Fighter Jets),
+#   blocked_interceptor, blocked_mountain, blocked_forest, blocked_flying.
+# The world map shows it at the start of the player's turn, then resets it.
+var round_stats: Dictionary = {}
+const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "modifiers", "unit_bonus", "splash",
+	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]
+
+func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
+	if amount == 0 or attacker == victim:
+		return
+	var k := attacker + "|" + victim
+	if not round_stats.has(k):
+		round_stats[k] = {}
+	var row: Dictionary = round_stats[k]
+	row[cat] = int(row.get(cat, 0)) + amount
+
+func reset_round_stats() -> void:
+	round_stats.clear()
 
 func _collapse_now(log: Array) -> void:
 	var ev := _collapse_all()
