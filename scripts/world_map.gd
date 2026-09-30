@@ -982,17 +982,45 @@ func _on_end_turn() -> void:
 
 func _nation_attacks(n: String) -> void:
 	var shots := 0
-	# every unit marches, all together, hex by hex, to the spot nearest its target (visual
-	# only: the cards stay on their hexes), fires from there, then marches home. Ground
-	# units cross sea in boats; ranged units keep RANGED_GAP hexes from the target.
+	# 1. Resolve the whole attack in the war logic first, so every unit's real
+	#    targets are known, random picks and retargets after earlier kills included.
+	#    The view then replays it from the pre-attack state (begin_replay).
+	var snapshot := {}
+	for k in _war.units.keys():
+		var card: Card = _war.units[k]["card"]
+		var hp: int = _war.card_hp(card)
+		snapshot[k] = {"name": card.card_name, "owner": str(_war.units[k]["owner"]), "hp": hp,
+			"max": int(card.get_meta("map_max_hp", maxi(hp, 1))), "bio": card.BioCost}
+	var flag_hp := {}
+	for nm in _war.players.keys():
+		flag_hp[nm] = (_war.players[nm] as Player).HitPoints
+	var plan: Array = [] # [[attacker key, entries], ...] in firing order
+	var dead: Array = []
+	for k in _war.attackers_of(n):
+		var entries: Array = _war.fire(k)
+		plan.append([k, entries])
+		for e in entries:
+			for d in e["destroyed"]:
+				dead.append(str(d["key"]))
+	_view.begin_replay(snapshot, dead, flag_hp)
+	# 2. Every attacker marches, all together, hex by hex towards its real target (the
+	#    most central one when it fires at several; visual only: the cards stay on
+	#    their hexes). Ground units cross
+	#    sea in boats; ranged units keep RANGED_GAP hexes from the target.
 	var walkers: Array = []
 	var taken := {}
+	for dk in dead:
+		taken[MapWar.key_to_hex(dk)] = true # a doomed card still stands there on screen
 	var march := 0.0 # seconds at 1x for the slowest march
-	for k in _war.attackers_of(n):
-		var aim := _war.predict_target(k)
-		if aim.is_empty():
+	var shooter: Player = _war.players[n]
+	for item in plan:
+		var k: String = item[0]
+		var entries: Array = item[1]
+		if entries.is_empty() or not _war.units.has(k):
 			continue
-		var path := _walk_path(k, aim["hex"], taken, RANGED_GAP if bool(aim["ranged"]) else 1)
+		var ranged: bool = shooter.has_range_for(_war.units[k]["card"])
+		var goal := _march_goal(entries)
+		var path := _walk_path(k, goal, taken, RANGED_GAP if ranged else 1)
 		if path.size() < 2:
 			continue
 		taken[path[path.size() - 1]] = true
@@ -1002,9 +1030,9 @@ func _nation_attacks(n: String) -> void:
 		march = maxf(march, step * float(path.size() - 1))
 	if march > 0.0:
 		await _wait(march + 0.05)
-	for k in _war.attackers_of(n):
-		var entries: Array = _war.fire(k)
-		for e in entries:
+	# 3. Replay the shots in firing order; HP bars and wrecks update as each lands.
+	for item in plan:
+		for e in (item[1] as Array):
 			shots += 1
 			var kind: String = SHOT_SFX.get(str(e["card"]), "shot_rifle")
 			var travel: float = TRAVEL / _speed()
@@ -1017,6 +1045,7 @@ func _nation_attacks(n: String) -> void:
 				_view.add_intercept(e.get("intercept_from", Vector2i(-1, -1)), e["to"], travel)
 				_log_line("[color=#7fd8ff]%s's Interceptor halves a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
 			for dinfo in destroyed:
+				_view.replay_remove(str(dinfo["key"])) # the wreck effect takes over until impact
 				_view.add_wreck(dinfo["hex"], str(dinfo["name"]), str(dinfo["owner"]), travel)
 				_view.add_boom(dinfo["hex"], true, travel)
 			for sp in e["splash"]:
@@ -1024,13 +1053,12 @@ func _nation_attacks(n: String) -> void:
 			_view.add_boom(e["to"], false, travel)
 			_view.add_number(e["to"], "-%d" % int(e["damage"]), Color(1, 0.8, 0.3) if e["direct"] else Color(1, 0.45, 0.4), travel)
 			var impact: String = "hq_hit" if e["direct"] else ("explosion" if not destroyed.is_empty() else ("intercept" if e["intercepted"] else "hit"))
-			get_tree().create_timer(travel).timeout.connect(func(): _sfx(impact, -5.0))
+			get_tree().create_timer(travel).timeout.connect(_land_hit.bind(e, snapshot, impact))
 			if e["direct"]:
 				_log_line("[color=#%s]%s[/color] %s hits [color=#%s]%s[/color]'s flag for %d" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], int(e["damage"])])
 			elif not destroyed.is_empty():
 				_log_line("[color=#%s]%s[/color] %s destroys [color=#%s]%s[/color]'s %s" % [_nation_hex_color(n), n, e["card"], _nation_hex_color(str(e["victim"])), e["victim"], e["target_name"]])
 			await _wait(SHOT_GAP)
-		_refresh_player_card()
 	if shots > 0:
 		await _wait(TRAVEL + 0.15)
 	if march > 0.0:
@@ -1038,9 +1066,40 @@ func _nation_attacks(n: String) -> void:
 			_view.walk_back(k)
 		await _wait(march + 0.05)
 		_view.clear_walks()
+	_view.end_replay() # back to the real state (splash and interceptor wear included)
 	_refresh_legend()
 	_refresh_player_card()
 	_resolve_collapses()
+
+# Where a unit marches for its shots: its target, or for a multi-shot unit (Rocket
+# Launcher, Howitzer) the target hex closest in total to all the others it hits.
+func _march_goal(entries: Array) -> Vector2i:
+	var best: Vector2i = entries[0]["to"]
+	var best_sum := 1 << 30
+	for a in entries:
+		var sum := 0
+		for b in entries:
+			sum += MapCampaign.hex_distance(a["to"], b["to"])
+		if sum < best_sum:
+			best_sum = sum
+			best = a["to"]
+	return best
+
+# A replayed shot reaches its target: lower the shown HP (a flag hit, or a card;
+# a destroyed card also costs its owner its BioCost on the flag bar).
+func _land_hit(e: Dictionary, snapshot: Dictionary, impact: String) -> void:
+	_sfx(impact, -5.0)
+	if not is_instance_valid(_view):
+		return
+	var to: Vector2i = e["to"]
+	if bool(e["direct"]):
+		_view.replay_hit(to, int(e["damage"]), str(e["victim"]))
+	else:
+		_view.replay_hit(to, int(e["damage"]))
+	for d in e["destroyed"]:
+		var dk := str(d["key"])
+		if snapshot.has(dk):
+			_view.replay_hit(to, int(snapshot[dk]["bio"]), str(d["owner"]))
 
 # Visual march route for the card at `k` towards `target` (home first). Ground units walk
 # over their own land, sail over open sea (the view draws a boat) and cross the border

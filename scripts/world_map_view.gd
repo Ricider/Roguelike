@@ -91,6 +91,11 @@ var war: MapWar = null
 var placeable: Dictionary = {} # "x,y" -> true while a hand card is selected
 var ghost_card: String = "" # card name previewed under the cursor
 var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
+# While an attack plays out, the war logic has already resolved every shot. These
+# keep the screen at the pre-attack state until each shot lands:
+var ghosts: Dictionary = {}       # "x,y" -> {name, owner, hp, max}: already destroyed, not yet hit on screen
+var hp_shown: Dictionary = {}     # "x,y" -> HP to show instead of the card's real (already lowered) HP
+var flag_hp_shown: Dictionary = {} # nation -> HP to show on its flag bar
 var walks: Dictionary = {} # "x,y" -> {"path": [hexes, home first], "t0", "step", "back"}: visual-only march
 var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
 var _text_layer: Control = null # damage numbers: smooth filtering (the overlay is NEAREST for pixel sprites)
@@ -947,7 +952,7 @@ func _draw_units(m: Array) -> void:
 		var owner := str(info["owner"])
 		var nc: Color = _nation_colors.get(owner, Color.WHITE)
 		var card: Card = info["card"]
-		var hp: int = war.card_hp(card)
+		var hp: int = int(hp_shown.get(k, war.card_hp(card)))
 		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
 		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
 		var buffed: bool = war.is_buffed(str(k))
@@ -978,6 +983,57 @@ func _draw_units(m: Array) -> void:
 			var r := Rect2(c + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, maxf(2.0, s * 0.16)))
 			_overlay.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
 			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
+	# cards the logic already destroyed, standing until the shot that kills them
+	for gk in ghosts.keys():
+		var gd: Dictionary = ghosts[gk]
+		var gt := MapWar.key_to_hex(str(gk))
+		var gnc: Color = _nation_colors.get(str(gd["owner"]), Color.WHITE)
+		var gfrac: float = clampf(float(gd["hp"]) / float(maxi(int(gd["max"]), 1)), 0.0, 1.0)
+		for cp in _visible_copies(gt, m, margin):
+			var gc := cp as Vector2
+			_overlay.draw_set_transform(gc + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
+			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
+			_overlay.draw_circle(Vector2.ZERO, s * 0.6, gnc)
+			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_draw_card(str(gd["name"]), gc, s, Color.WHITE, gt.x + gt.y, str(gd["owner"]))
+			var gw: float = s * 1.3
+			var gr := Rect2(gc + Vector2(-gw * 0.5, s * 0.72), Vector2(gw, maxf(2.0, s * 0.16)))
+			_overlay.draw_rect(gr.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
+			_overlay.draw_rect(Rect2(gr.position, Vector2(gr.size.x * gfrac, gr.size.y)), Color(1.0 - gfrac, 0.35 + 0.6 * gfrac, 0.25), true)
+
+# Show the board as it was before an attack that the logic has already resolved.
+func begin_replay(snapshot: Dictionary, dead_keys: Array, flag_hp: Dictionary) -> void:
+	hp_shown.clear()
+	ghosts.clear()
+	for k in snapshot.keys():
+		hp_shown[k] = int(snapshot[k]["hp"])
+	for k in dead_keys:
+		if snapshot.has(k):
+			ghosts[k] = (snapshot[k] as Dictionary).duplicate()
+	flag_hp_shown = flag_hp.duplicate()
+	_overlay.queue_redraw()
+
+# A replayed shot landed on hex `to` (a card or a flag) for `dmg`.
+func replay_hit(to: Vector2i, dmg: int, flag_owner: String = "") -> void:
+	var k := MapCampaign.key_of(to.x, to.y)
+	if flag_owner != "":
+		if flag_hp_shown.has(flag_owner):
+			flag_hp_shown[flag_owner] = maxi(0, int(flag_hp_shown[flag_owner]) - dmg)
+	elif hp_shown.has(k):
+		hp_shown[k] = maxi(0, int(hp_shown[k]) - dmg)
+		if ghosts.has(k):
+			ghosts[k]["hp"] = hp_shown[k]
+	_overlay.queue_redraw()
+
+# The replay's killing shot launched: from here the wreck effect shows the card.
+func replay_remove(k: String) -> void:
+	ghosts.erase(k)
+
+func end_replay() -> void:
+	ghosts.clear()
+	hp_shown.clear()
+	flag_hp_shown.clear()
+	_overlay.queue_redraw()
 
 # Capital flags are targets: show each living nation's HP under its flag.
 func _draw_flag_hp(m: Array) -> void:
@@ -986,7 +1042,8 @@ func _draw_flag_hp(m: Array) -> void:
 		if _dead.has(nm) or _campaign == null or not _campaign.is_alive(str(nm)):
 			continue
 		var p: Player = war.players[nm]
-		var frac: float = clampf(float(p.HitPoints) / float(maxi(p.MaxHitPoints, 1)), 0.0, 1.0)
+		var fhp: int = int(flag_hp_shown.get(nm, p.HitPoints))
+		var frac: float = clampf(float(fhp) / float(maxi(p.MaxHitPoints, 1)), 0.0, 1.0)
 		var nc: Color = _nation_colors.get(nm, Color.WHITE)
 		for cp in _visible_copies(_campaign.capital_site(str(nm)), m, s * 3.0):
 			var bw: float = s * 2.0
