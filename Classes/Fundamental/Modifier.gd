@@ -13,7 +13,16 @@ func _init(name: String = "", effect: String = "", cost: int = 0):
 	InfluenceCost = cost
 	card_name = name
 
+# Shop prices are the listed base Influence costs times this.
+const PRICE_MULT: int = 4
+
 static func all_modifiers() -> Array:
+	var mods: Array = _base_modifiers()
+	for m in mods:
+		(m as Modifier).InfluenceCost *= PRICE_MULT
+	return mods
+
+static func _base_modifiers() -> Array:
 	return [
 		Modifier.new("Conscription", "Gain 15 additional BioSupply every turn, but earn 50% less MoneySupply", 35),
 		Modifier.new("Guerilla Warfare", "Your cards that have a BioCost higher than MoneyCost deal 40% more damage, but the ones that have BioCost lower than MoneyCost have 50% less HP", 25),

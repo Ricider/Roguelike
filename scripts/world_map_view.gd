@@ -96,6 +96,7 @@ var effects: Array = [] # transient {kind, from, to, t0, dur, ...}
 var ghosts: Dictionary = {}       # "x,y" -> {name, owner, hp, max}: already destroyed, not yet hit on screen
 var hp_shown: Dictionary = {}     # "x,y" -> HP to show instead of the card's real (already lowered) HP
 var flag_hp_shown: Dictionary = {} # nation -> HP to show on its flag bar
+var flag_site_shown: Dictionary = {} # nation -> hex its flag is shown on (it may already have moved)
 var walks: Dictionary = {} # "x,y" -> {"path": [hexes, home first], "t0", "step", "back"}: visual-only march
 var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
 var _text_layer: Control = null # damage numbers: smooth filtering (the overlay is NEAREST for pixel sprites)
@@ -538,7 +539,7 @@ func _draw() -> void:
 		var nm := str(d["name"])
 		var site := Vector2i(int(d["x"]), int(d["y"]))
 		if _campaign != null:
-			site = _campaign.capital_site(nm)
+			site = flag_site_shown.get(nm, _campaign.capital_site(nm))
 		var fs: float = maxf(s * 2.6, 16.0)
 		for cc in _visible_copies(site, m, fs):
 			var base := (cc as Vector2) + Vector2(0, s * 0.55)
@@ -1002,7 +1003,8 @@ func _draw_units(m: Array) -> void:
 			_overlay.draw_rect(Rect2(gr.position, Vector2(gr.size.x * gfrac, gr.size.y)), Color(1.0 - gfrac, 0.35 + 0.6 * gfrac, 0.25), true)
 
 # Show the board as it was before an attack that the logic has already resolved.
-func begin_replay(snapshot: Dictionary, dead_keys: Array, flag_hp: Dictionary) -> void:
+func begin_replay(snapshot: Dictionary, dead_keys: Array, flag_hp: Dictionary, flag_sites: Dictionary = {}) -> void:
+	flag_site_shown = flag_sites.duplicate()
 	hp_shown.clear()
 	ghosts.clear()
 	for k in snapshot.keys():
@@ -1029,11 +1031,28 @@ func replay_hit(to: Vector2i, dmg: int, flag_owner: String = "") -> void:
 func replay_remove(k: String) -> void:
 	ghosts.erase(k)
 
+# A nation collapsed on this replayed shot: its flag re-forms at full HP on its new
+# hex and the cards it lost with its land go.
+func replay_collapse(ev: Dictionary) -> void:
+	var loser := str(ev["loser"])
+	if bool(ev.get("eliminated", false)):
+		flag_site_shown.erase(loser)
+	elif (ev["flag"] as Vector2i).x >= 0:
+		flag_site_shown[loser] = ev["flag"]
+		add_place(ev["flag"])
+	flag_hp_shown[loser] = int(ev.get("max_hp", flag_hp_shown.get(loser, 0)))
+	for k in ev.get("lost", []):
+		if ghosts.has(k):
+			add_boom(MapWar.key_to_hex(str(k)), false, 0.0)
+			ghosts.erase(k)
+	_redraw_all()
+
 func end_replay() -> void:
 	ghosts.clear()
 	hp_shown.clear()
 	flag_hp_shown.clear()
-	_overlay.queue_redraw()
+	flag_site_shown.clear()
+	_redraw_all()
 
 # Capital flags are targets: show each living nation's HP under its flag.
 func _draw_flag_hp(m: Array) -> void:
@@ -1045,7 +1064,7 @@ func _draw_flag_hp(m: Array) -> void:
 		var fhp: int = int(flag_hp_shown.get(nm, p.HitPoints))
 		var frac: float = clampf(float(fhp) / float(maxi(p.MaxHitPoints, 1)), 0.0, 1.0)
 		var nc: Color = _nation_colors.get(nm, Color.WHITE)
-		for cp in _visible_copies(_campaign.capital_site(str(nm)), m, s * 3.0):
+		for cp in _visible_copies(flag_site_shown.get(nm, _campaign.capital_site(str(nm))), m, s * 3.0):
 			var bw: float = s * 2.0
 			var r := Rect2((cp as Vector2) + Vector2(-bw * 0.5, s * 1.0), Vector2(bw, maxf(3.0, s * 0.2)))
 			_overlay.draw_rect(r.grow(1.5), Color8(20, 16, 30), true)

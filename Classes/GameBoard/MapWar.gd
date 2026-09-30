@@ -599,10 +599,10 @@ func fire(k: String) -> Array:
 	var from := key_to_hex(k)
 	var shots: int = 4 if (unit is RocketLauncher or unit is Howitzer) else 1
 	var ranged: bool = (players[nation] as Player).has_range_for(unit)
-	var flags := flag_sites()
 	for s in range(shots):
 		if not units.has(k) or unit.HitPoints <= 0:
 			break
+		var flags := flag_sites() # a flag moves the moment its nation collapses
 		var tgt := pick_target(nation, from, ranged, flags)
 		if tgt.is_empty():
 			break
@@ -623,6 +623,7 @@ func fire(k: String) -> Array:
 			log.append({"from": from, "to": site, "attacker": nation, "card": unit.card_name, "target_name": victim + " flag",
 				"victim": victim, "damage": dmg, "direct": true, "intercepted": false, "destroyed": _reap(nation), "splash": fsplash,
 				"buffed": buffed, "intercept_from": Vector2i(-1, -1)})
+			_collapse_now(log)
 			continue
 		var tk := str(tgt["key"])
 		var tinfo: Dictionary = units[tk]
@@ -653,11 +654,32 @@ func fire(k: String) -> Array:
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,
 			"victim": victim2, "damage": actual, "direct": false, "intercepted": pre_terrain < before, "mountain": actual < pre_terrain,
 			"destroyed": destroyed, "splash": splash, "buffed": buffed, "intercept_from": intercept_from})
+		_collapse_now(log)
 	return log
 
+# A nation that just hit 0 HP collapses right away (cedes land, its flag moves,
+# it rebuilds to full HP), so later shots never pound a flag that is already
+# down. The event rides on the shot that caused it (log entry "collapses") and
+# is also queued for resolve_collapses().
+var pending_collapses: Array = []
+
+func _collapse_now(log: Array) -> void:
+	var ev := _collapse_all()
+	if ev.is_empty():
+		return
+	pending_collapses.append_array(ev)
+	(log[log.size() - 1] as Dictionary)["collapses"] = ev
+
 # Nations at 0 HP cede border hexes to their top damager (x2 when weak, x4 with no units) and rebuild.
-# Returns [{loser, winner, tiles}] (winner "" when nobody could take land).
+# Returns [{loser, winner, tiles}] (winner "" when nobody could take land), including
+# the collapses that already happened mid-attack (see _collapse_now).
 func resolve_collapses() -> Array:
+	var events: Array = pending_collapses.duplicate()
+	pending_collapses.clear()
+	events.append_array(_collapse_all())
+	return events
+
+func _collapse_all() -> Array:
 	var events: Array = []
 	for n in WorldMap.nations():
 		var loser := str((n as Dictionary)["name"])
@@ -679,9 +701,11 @@ func resolve_collapses() -> Array:
 				winner = w
 				break
 		# Loser's cards on hexes it no longer owns are lost with the land.
+		var lost: Array = []
 		for k in cards_of(loser):
 			var t := key_to_hex(k)
 			if campaign.owner_of(t.x, t.y) != loser:
+				lost.append(k)
 				_remove(k)
 		# Flag fell: move it to the free hex nearest the centre of what's left.
 		var flag_moved := false
@@ -696,6 +720,7 @@ func resolve_collapses() -> Array:
 				(players[loser] as Player).DiscardPile.append(units[fk]["card"])
 				(players[loser] as Player).MapCards.erase(units[fk]["card"])
 				units.erase(fk)
+				lost.append(fk)
 			flag_moved = true
 		var gained: int = 0
 		if winner != "":
@@ -705,7 +730,8 @@ func resolve_collapses() -> Array:
 		lp.HitPoints = lp.MaxHitPoints
 		ledger[loser] = {}
 		events.append({"loser": loser, "winner": winner, "tiles": moved, "eliminated": not alive(loser), "influence": gained,
-			"multiplier": mult, "doubled": mult > 1, "flag_moved": flag_moved, "flag": campaign.capital_site(loser) if alive(loser) else Vector2i(-1, -1)})
+			"multiplier": mult, "doubled": mult > 1, "flag_moved": flag_moved, "flag": campaign.capital_site(loser) if alive(loser) else Vector2i(-1, -1),
+			"lost": lost, "max_hp": lp.MaxHitPoints})
 	return events
 
 # --------------------------------------------------------------- save/load

@@ -504,3 +504,42 @@ func test_shop_odds_stay_on_the_starting_deck():
 	var w2 := MapWar.from_data(data, c, func(nm): return gs.make_player_by_name(nm), human)
 	assert_eq(w2.deck_weights["State Troops"], start, "old saves get starting-deck odds")
 	gs.free()
+
+func test_flag_reforms_the_moment_its_nation_falls():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(15, 10) # B's flag right on the border
+	for x in [22, 24, 25]:
+		_drop(w, B, Infantry.new(), x)
+	(w.players[B] as Player).HitPoints = 1
+	(w.players[A] as Player).HitPoints = 35
+	var first := _drop(w, A, Tank.new(), 14)
+	var second := _drop(w, A, Tank.new(), 13)
+	var log := w.fire(first)
+	assert_true(log[0]["direct"], "the first tank hits B's flag")
+	assert_true(log[0].has("collapses"), "B collapses on that very shot")
+	var ev: Dictionary = log[0]["collapses"][0]
+	assert_eq(ev["loser"], B, "B fell")
+	assert_eq(ev["winner"], A, "to A")
+	assert_eq((w.players[B] as Player).HitPoints, (w.players[B] as Player).MaxHitPoints, "B's flag re-forms at full HP")
+	var site: Vector2i = w.campaign.capital_site(B)
+	assert_ne(site, Vector2i(15, 10), "on a new hex")
+	assert_eq(ev["flag"], site, "the event says where")
+	# the next attacker shoots at the new state, not a dead flag
+	var log2 := w.fire(second)
+	assert_false(log2.is_empty(), "the second tank still has a target")
+	if log2[0]["direct"]:
+		assert_eq(log2[0]["to"], site, "a flag shot goes to the re-formed flag")
+	assert_false(log2[0].has("collapses"), "B is back at full HP: no second collapse")
+	# the collapse is still reported once afterwards (log lines, Influence)
+	var events := w.resolve_collapses()
+	assert_eq(events.size(), 1, "reported once")
+	assert_eq(w.resolve_collapses().size(), 0, "and not again")
+
+func test_modifiers_cost_four_times_their_base_price():
+	for m in Modifier.all_modifiers():
+		var base: int = -1
+		for b in Modifier._base_modifiers():
+			if (b as Modifier).modifier_name == (m as Modifier).modifier_name:
+				base = (b as Modifier).InfluenceCost
+		assert_eq((m as Modifier).InfluenceCost, base * 4, "%s costs 4x" % (m as Modifier).modifier_name)
+	assert_eq(Modifier.all_modifiers()[0].InfluenceCost, 140, "Conscription 35 -> 140")

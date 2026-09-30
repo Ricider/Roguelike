@@ -992,8 +992,11 @@ func _nation_attacks(n: String) -> void:
 		snapshot[k] = {"name": card.card_name, "owner": str(_war.units[k]["owner"]), "hp": hp,
 			"max": int(card.get_meta("map_max_hp", maxi(hp, 1))), "bio": card.BioCost}
 	var flag_hp := {}
+	var flag_sites := {}
 	for nm in _war.players.keys():
 		flag_hp[nm] = (_war.players[nm] as Player).HitPoints
+		if _campaign().is_alive(str(nm)):
+			flag_sites[nm] = _campaign().capital_site(str(nm))
 	var plan: Array = [] # [[attacker key, entries], ...] in firing order
 	var dead: Array = []
 	for k in _war.attackers_of(n):
@@ -1002,7 +1005,10 @@ func _nation_attacks(n: String) -> void:
 		for e in entries:
 			for d in e["destroyed"]:
 				dead.append(str(d["key"]))
-	_view.begin_replay(snapshot, dead, flag_hp)
+			for ev in e.get("collapses", []):
+				for lk in ev.get("lost", []):
+					dead.append(str(lk)) # stands until the collapse plays out on screen
+	_view.begin_replay(snapshot, dead, flag_hp, flag_sites)
 	# 2. Every attacker marches, all together, hex by hex towards its real target (the
 	#    most central one when it fires at several; visual only: the cards stay on
 	#    their hexes). Ground units cross
@@ -1100,6 +1106,15 @@ func _land_hit(e: Dictionary, snapshot: Dictionary, impact: String) -> void:
 		var dk := str(d["key"])
 		if snapshot.has(dk):
 			_view.replay_hit(to, int(snapshot[dk]["bio"]), str(d["owner"]))
+	# a nation fell on this shot: its flag re-forms elsewhere at full HP and its
+	# border moves now (the log lines and Influence follow after the attack)
+	var collapses: Array = e.get("collapses", [])
+	if not collapses.is_empty():
+		for ev in collapses:
+			_view.replay_collapse(ev)
+		_view.set_campaign(_campaign())
+		_minimap.refresh()
+		_refresh_legend()
 
 # Visual march route for the card at `k` towards `target` (home first). Ground units walk
 # over their own land, sail over open sea (the view draws a boat) and cross the border
