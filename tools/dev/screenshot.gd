@@ -219,6 +219,30 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		print("round_frames=", waited, " turn=", gc._war.turn, " units=", gc._war.units.size())
 		for line in gc._log_lines:
 			print("LOG ", line)
+		if OS.get_environment("REPORT_SORT") != "":
+			# reopen the round report sorted by a column (REPORT_DESC=0 for ascending, REPORT_ALL=1 for all nations)
+			gc._report_all = OS.get_environment("REPORT_ALL") == "1"
+			gc._report_sort = OS.get_environment("REPORT_SORT")
+			gc._report_sort_desc = OS.get_environment("REPORT_DESC") != "0"
+			gc._open_report()
+			for i in range(10):
+				await process_frame
+			for r in gc._report_rows():
+				print("ROW ", r[0], " -> ", r[1], " ", gc._report_sort_value(r, gc._report_sort))
+			# REPORT_CLICK=Dealt presses that header 3 times through the UI and reports the order each time
+			var click := OS.get_environment("REPORT_CLICK")
+			for n in range(3 if click != "" else 0):
+				var hb: Button = null
+				for b in gc._report_panel.find_children("*", "Button", true, false):
+					if (b as Button).text == click:
+						hb = b
+				hb.pressed.emit()
+				for i in range(4):
+					await process_frame
+				var vals := []
+				for r in gc._report_rows():
+					vals.append(gc._report_sort_value(r, gc._report_sort))
+				print("CLICK ", n + 1, " sort=", gc._report_sort, " desc=", gc._report_sort_desc, " values=", vals)
 	if setup == "battle_endturn" and gc != null and gc.has_method("_on_end_turn"):
 		# place a couple of units, then run a full combat turn (exercises combat sfx/log)
 		for slot in range(2):

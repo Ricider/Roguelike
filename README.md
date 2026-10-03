@@ -34,7 +34,7 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
     - damage **added** by Barracks, modifiers (negative for Defensive Doctrine), unit bonuses (Special Ops x2 against ground, Anti Aircraft x3 against flying) and Fighter Jet splash
     - damage **blocked** by Interceptors, mountains, forests and flying units dodging melee
 
-  It opens on **Your fights** (your attacks, then attacks on you) with an **All nations** tab, and a summary line of damage dealt, taken and stopped. The **Round report** button next to the battle log reopens it; Esc or Close shuts it. The numbers come from `MapWar.round_stats`, and hovering a column header explains it.
+  It opens on **Your fights** (your attacks, then attacks on you) with an **All nations** tab, and a summary line of damage dealt, taken and stopped. The **Round report** button next to the battle log reopens it; Esc or Close shuts it. The numbers come from `MapWar.round_stats`, and hovering a column header explains it. Click a column header to sort the whole table by it, and click again to flip the order. Number columns start biggest-first, From/To start A-Z, and a gold arrow marks the sorted column. The sort is kept while you play.
 - **Minimap:** the map's bottom-left corner shows the whole map with every nation's territory, flags, card positions, and a gold frame around what the main view shows. Click or drag on it to move the camera (`scripts/minimap.gd`).
 - **Nation art:** every nation fields its own version of every card, drawn from the shared pixel art with its own colours, headgear, camo and emblem:
     - State Troops: olive drab, gold star, steel helmets

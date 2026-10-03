@@ -43,6 +43,9 @@ var _report_panel: PanelContainer = null
 var _report: Dictionary = {}     # the last round's MapWar.round_stats
 var _report_turn: int = 0
 var _report_all: bool = false    # tab: all nations instead of your own fights
+var _report_sort: String = ""     # column the table is sorted by ("" = yours first, by damage)
+var _report_sort_desc: bool = true
+var _sort_arrows: Array = []      # [up, down] pixel triangle icons for the sorted header
 var _stat_tiles: Label = null
 var _mods_box: HFlowContainer = null # your modifiers as animated badges (hover for the effect)
 var _mods_sig: String = "" # rebuild the badges only when the list changes
@@ -1378,13 +1381,12 @@ func _open_report() -> void:
 		grid.add_theme_constant_override("h_separation", 14)
 		grid.add_theme_constant_override("v_separation", 6)
 		scroll.add_child(grid)
-		for htxt in ["From", "To"]:
-			grid.add_child(_report_cell(htxt, Color(1.0, 0.86, 0.35)))
+		# headers: click to sort by that column, click again to flip the order
+		for hspec in [["from", "From"], ["to", "To"]]:
+			grid.add_child(_report_header(hspec[0], hspec[1], Color(1.0, 0.86, 0.35), "[%s]: click to sort by nation name, click again to reverse." % hspec[1]))
 		for col in REPORT_COLS:
-			var hc := _report_cell(str(col[1]), _report_kind_color(str(col[3])))
-			var tip: String = "[%s]: %s" % [str(col[1]).trim_prefix("+").trim_prefix("-"), str(col[2])]
-			_tip(hc, func(): return tip)
-			grid.add_child(hc)
+			var tip: String = "[%s]: %s Click to sort, click again to reverse." % [str(col[1]).trim_prefix("+").trim_prefix("-"), str(col[2])]
+			grid.add_child(_report_header(str(col[0]), str(col[1]), _report_kind_color(str(col[3])), tip))
 		for r in rows:
 			var att := str(r[0])
 			var vic := str(r[1])
@@ -1447,7 +1449,71 @@ func _report_rows() -> Array:
 	mine.sort_custom(by_dealt)
 	on_me.sort_custom(by_dealt)
 	others.sort_custom(by_dealt)
-	return mine + on_me + others
+	var rows: Array = mine + on_me + others
+	if _report_sort == "":
+		return rows
+	# a chosen column sorts the whole table; ties keep the default order above
+	var order := {}
+	for i in range(rows.size()):
+		order[rows[i]] = i
+	var col := _report_sort
+	var desc := _report_sort_desc
+	rows.sort_custom(func(a, b):
+		var va = _report_sort_value(a, col)
+		var vb = _report_sort_value(b, col)
+		if va != vb:
+			return (va > vb) if desc else (va < vb)
+		return int(order[a]) < int(order[b]))
+	return rows
+
+func _report_sort_value(row: Array, col: String) -> Variant:
+	match col:
+		"from":
+			return ("You" if str(row[0]) == _me() else str(row[0])).to_lower()
+		"to":
+			return ("You" if str(row[1]) == _me() else str(row[1])).to_lower()
+		_:
+			return int((row[2] as Dictionary).get(col, 0))
+
+# A clickable column header; the sorted one shows a pixel arrow for its direction.
+func _report_header(col: String, text: String, colour: Color, tip: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	b.add_theme_font_size_override("font_size", 15)
+	for st in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+		b.add_theme_stylebox_override(st, StyleBoxEmpty.new()) # sits like a label; only the colour reacts
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(state, colour.lightened(0.35) if state.begins_with("font_hover") else colour)
+	if col == _report_sort:
+		b.icon = _sort_arrow(not _report_sort_desc)
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		b.add_theme_constant_override("h_separation", 4)
+	b.pressed.connect(func():
+		if _report_sort == col:
+			_report_sort_desc = not _report_sort_desc
+		else:
+			_report_sort = col
+			_report_sort_desc = col != "from" and col != "to" # numbers: biggest first; names: A-Z
+		_open_report())
+	_tip(b, func(): return tip)
+	return b
+
+# Gold pixel triangle, pointing up (ascending) or down (descending).
+func _sort_arrow(up: bool) -> Texture2D:
+	if _sort_arrows.is_empty():
+		for dir_up in [true, false]:
+			var img := Image.create(9, 6, false, Image.FORMAT_RGBA8)
+			img.fill(Color(0, 0, 0, 0))
+			for row in range(5):
+				var half: int = row if dir_up else 4 - row
+				for x in range(4 - half, 5 + half):
+					img.set_pixel(x, row + 1 if dir_up else row, Color(1.0, 0.86, 0.35))
+			_sort_arrows.append(ImageTexture.create_from_image(img))
+	return _sort_arrows[0 if up else 1]
 
 func _report_summary() -> Label:
 	var me := _me()
