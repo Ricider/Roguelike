@@ -58,6 +58,8 @@ var _speed_btn: Button = null
 var _follow_cam: bool = true # the camera follows other nations' turns and fights
 var _log: RichTextLabel = null
 var _selected: Card = null
+var _moving: String = "" # key of the unit picked to move ("" = none)
+const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
 var _busy: bool = false
 var _speed_idx: int = 1 # 2x: a full round of 8 nations stays snappy
 var _log_lines: Array = []
@@ -707,6 +709,11 @@ func _unit_info(k: String) -> Dictionary:
 			notes.append("[color=#8fe08f]+2 damage from an adjacent Barracks.[/color]")
 		if not u.Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
 			notes.append("[color=#c8b89a]Mountain cover: takes 1 less damage.[/color]")
+		var full_moves := _war.move_allowance(owner, u)
+		if owner == _me():
+			notes.append("[color=#9fd3ff]Moves: %d of %d left this turn. Click it to move.[/color]" % [_war.moves_left(k), full_moves])
+		else:
+			notes.append("[color=#9fd3ff]Moves up to %d hex%s a turn.[/color]" % [full_moves, "" if full_moves == 1 else "es"])
 		if WorldMap.terrain_at(t.x, t.y) == WorldMap.JUNGLE:
 			notes.append("[color=#8fcf7a]Forest cover: takes 1 less damage from flying attackers.[/color]")
 		var aim := _war.predict_target(k)
@@ -828,6 +835,7 @@ func _select_card(stack: Array) -> void:
 		return
 	_sfx("card_select", -3.0)
 	_selected = card
+	_moving = ""
 	var keys: Dictionary = {}
 	var flag := _campaign().capital_site(_me())
 	for t in _campaign().tiles_of(_me()):
@@ -841,9 +849,64 @@ func _select_card(stack: Array) -> void:
 
 func _clear_selection() -> void:
 	_selected = null
+	_moving = ""
 	_view.placeable = {}
 	_view.ghost_card = ""
 	_refresh_hand()
+
+# ---------------------------------------------------------------- moving units
+# Click one of your units to see where it can go this turn (glowing hexes), then a
+# glowing hex to walk it there. Moves left carry over within the turn.
+func _pick_mover(k: String) -> void:
+	_selected = null
+	_view.ghost_card = ""
+	var card: Card = _war.units[k]["card"]
+	var left := _war.moves_left(k)
+	var full := _war.move_allowance(_me(), card)
+	if left <= 0:
+		_moving = ""
+		_view.placeable = {}
+		_sfx("deny", -6.0)
+		if _deployed_this_turn(card):
+			_hover_bar.text = "%s was deployed this turn: it can move from next turn." % card.card_name
+		else:
+			_hover_bar.text = "%s has no moves left this turn (%d per turn)." % [card.card_name, full]
+		_refresh_hand()
+		return
+	var reach := _war.reachable(k)
+	var keys := {}
+	for t in reach.keys():
+		keys[MapCampaign.key_of((t as Vector2i).x, (t as Vector2i).y)] = true
+	_moving = k
+	_view.placeable = keys
+	_sfx("card_select", -3.0)
+	if keys.is_empty():
+		_hover_bar.text = "%s has nowhere to go: every hex within %d is taken or not yours." % [card.card_name, left]
+	else:
+		_hover_bar.text = "Move %s: click a glowing hex (%d of %d move%s left this turn; Esc to cancel)." % [card.card_name, left, full, "" if full == 1 else "s"]
+	_refresh_hand()
+
+func _deployed_this_turn(card: Card) -> bool:
+	return card.has_meta("deployed_turn") and int(card.get_meta("deployed_turn")) == _war.turn
+
+func _move_unit_to(t: Vector2i) -> void:
+	var k := _moving
+	var card: Card = _war.units[k]["card"]
+	var path := _war.move(_me(), k, t)
+	if path.is_empty():
+		_sfx("deny", -4.0)
+		return
+	_view.animate_move(path, MOVE_STEP)
+	_sfx("card_place", -6.0)
+	_log_line("You move %s %d hex%s." % [card.card_name, path.size() - 1, "" if path.size() == 2 else "es"])
+	var nk := MapCampaign.key_of(t.x, t.y)
+	_moving = ""
+	_view.placeable = {}
+	if _war.moves_left(nk) > 0:
+		_pick_mover(nk) # still has moves: keep it picked
+	else:
+		_hover_bar.text = "Moved %s. Pick another unit or card, or End Turn." % card.card_name
+		_refresh_hand()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -854,7 +917,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif kc == KEY_ESCAPE and _shop_panel != null:
 			_close_shop()
 			get_viewport().set_input_as_handled()
-		elif kc == KEY_ESCAPE and _selected != null:
+		elif kc == KEY_ESCAPE and (_selected != null or _moving != ""):
 			_clear_selection()
 			get_viewport().set_input_as_handled()
 		elif (kc == KEY_SPACE or kc == KEY_ENTER) and not _busy and not _end_btn.disabled:
@@ -946,6 +1009,16 @@ func _on_tile_selected(x: int, y: int) -> void:
 	if _war == null or _busy:
 		return
 	if _selected == null:
+		var t0 := Vector2i(x, y)
+		var k0 := MapCampaign.key_of(x, y)
+		if _moving != "" and _view.placeable.has(k0):
+			_move_unit_to(t0)
+			return
+		var info := _war.unit_at(t0)
+		if not info.is_empty() and str(info["owner"]) == _me() and info["card"] is Unit and k0 != _moving:
+			_pick_mover(k0)
+			return
+		_clear_selection()
 		_sfx("map_select")
 		_hover_bar.text = _describe(x, y)
 		return
@@ -1026,6 +1099,15 @@ func _on_end_turn() -> void:
 			_sfx("card_place", -6.0)
 			_log_line("[color=#%s]%s[/color] deploys %d card%s." % [_nation_hex_color(n), n, placed.size(), "" if placed.size() == 1 else "s"])
 			await _wait(0.35)
+		# then repositions: behind walls, beside Barracks/Interceptors, onto weakened enemies
+		var moved: Array = _war.ai_move(n)
+		if not moved.is_empty():
+			var longest := 0
+			for mv in moved:
+				_view.animate_move(mv[2], MOVE_STEP / _speed())
+				longest = maxi(longest, (mv[2] as Array).size() - 1)
+			_log_line("[color=#%s]%s[/color] moves %d unit%s." % [_nation_hex_color(n), n, moved.size(), "" if moved.size() == 1 else "s"])
+			await _wait(MOVE_STEP * longest + 0.1)
 		await _nation_attacks(n)
 		_war.end_turn(n)
 		if _check_end():

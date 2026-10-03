@@ -880,6 +880,17 @@ func add_intercept(interceptor: Vector2i, target: Vector2i, impact_delay: float)
 func walk_out(k: String, path: Array, step: float) -> void:
 	walks[k] = {"path": path, "t0": _clock, "step": maxf(step, 0.001), "back": false}
 
+# A real move (MapWar.move): the card already stands on the path's last hex; show it
+# walking there from the first one, `step` seconds per hex.
+func animate_move(path: Array, step: float) -> void:
+	if path.size() < 2:
+		return
+	var dest: Vector2i = path[path.size() - 1]
+	var rev: Array = path.duplicate()
+	rev.reverse()
+	walks[MapCampaign.key_of(dest.x, dest.y)] = {"path": rev, "t0": _clock, "step": maxf(step, 0.001), "back": true}
+	_overlay.queue_redraw()
+
 func walk_back(k: String) -> void:
 	if walks.has(k):
 		walks[k]["back"] = true

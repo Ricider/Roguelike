@@ -46,6 +46,9 @@ LIBYA = [(19.5, 33.5, 9.6, 24.9)]
 RUSSIA_EUROPE = [(60.5, 71.0, 31.0, 60.0), (56.0, 60.5, 28.3, 60.0), (52.3, 56.0, 32.5, 60.0),
                  (50.0, 52.3, 36.8, 60.0), (46.5, 50.0, 40.0, 60.0), (43.3, 46.5, 36.6, 49.0)]
 CAUCASUS_RU = [(43.3, 46.5, 36.6, 49.0)]
+# Georgia, Armenia and Azerbaijan up to the Caucasus ridge: from chapter 3 on the State
+# Troops hold it, so their land meets the Horde's North Caucasus on the ground.
+TRANSCAUCASUS = [(39.0, 43.3, 40.0, 50.0)]
 EU = [(36.0, 43.8, -9.6, 3.4), (42.3, 51.2, -5.0, 6.0), (47.8, 49.0, 6.0, 8.3), (49.0, 55.1, 2.5, 15.0),
       (47.3, 49.0, 6.0, 15.0), (46.4, 49.0, 9.5, 17.2), (36.5, 46.4, 6.6, 18.6), (49.0, 55.0, 12.0, 24.1),
       (45.8, 49.0, 15.0, 22.0), (54.0, 59.7, 21.0, 28.2), (55.3, 69.1, 11.0, 31.6), (54.5, 57.8, 8.0, 12.7),
@@ -122,9 +125,9 @@ CHAPTERS = {
         "blurb": "The Horde strikes from Russia, its Mercenaries from Libya.",
         "cities": {ST: ("Constantinople", 41.01, 28.98), "Horde": ("Moscow", 55.76, 37.62),
                    "Mercenaries": ("Tripoli", 32.89, 13.19)},
-        "active": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + RUSSIA_EUROPE + LIBYA,
+        "active": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + TRANSCAUCASUS + RUSSIA_EUROPE + LIBYA,
         "claims": [
-            {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT},
+            {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + TRANSCAUCASUS},
             {"nation": "Horde", "boxes": RUSSIA_EUROPE},
             {"nation": "Mercenaries", "boxes": LIBYA},
         ],
@@ -142,10 +145,10 @@ CHAPTERS = {
         "base": "story_med", "name": "Ch. 4: Appetite",
         "blurb": "Flush with victory, the State Troops turn on the Coalition.",
         "cities": {ST: ("Constantinople", 41.01, 28.98), "Coalition Army": ("Brussels", 50.85, 4.35)},
-        "active": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + CAUCASUS_RU + EU,
+        "active": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + TRANSCAUCASUS + CAUCASUS_RU + EU,
         "minus_active": UK + SWITZERLAND,
         "claims": [
-            {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + CAUCASUS_RU},
+            {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + TRANSCAUCASUS + CAUCASUS_RU},
             {"nation": "Coalition Army", "boxes": EU, "minus": UK + SWITZERLAND},
         ],
         # Britain is outside the EU war, so the "London" Corporation stands on the
@@ -175,7 +178,7 @@ CHAPTERS = {
         "minus_active": ANTARCTICA,           # ...bar the ice
         "claims": [
             {"nation": "Insurgents", "boxes": NW_CORNER},
-            {"nation": ST, "boxes": BALKANS + ANATOLIA + ARABIA_FULL + EGYPT_FULL + LIBYA + CAUCASUS_RU + EU,
+            {"nation": ST, "boxes": BALKANS + ANATOLIA + ARABIA_FULL + EGYPT_FULL + LIBYA + TRANSCAUCASUS + CAUCASUS_RU + EU,
              "minus": UK + SWITZERLAND},
             {"nation": "Horde", "boxes": _WORLD_CLAIMS["Horde"]},
             {"nation": "Corporate Troops", "boxes": _WORLD_CLAIMS["Corporate Troops"]},

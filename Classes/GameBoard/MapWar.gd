@@ -261,6 +261,8 @@ func place(nation: String, card: Card, t: Vector2i) -> bool:
 	p.Hand.erase(card)
 	p.apply_hitpoints_modifier(card)
 	_put(nation, card, t)
+	card.set_meta("moves_left", 0) # freshly deployed: it can move from next turn
+	card.set_meta("deployed_turn", turn)
 	return true
 
 func _put(nation: String, card: Card, t: Vector2i) -> void:
@@ -283,6 +285,161 @@ func _remove(k: String) -> void:
 func begin_turn(nation: String) -> void:
 	(players[nation] as Player).economy_phase() # income from map buildings + draw to 10
 	restock_shop(nation)
+	refill_moves(nation)
+
+# ------------------------------------------------------------------- movement
+# Units can walk each turn, within their own nation's land; buildings (walls
+# included) and flags never move. Hexes per turn, first rule that applies:
+#   Flying 4  >  ranged (HasRange, modifiers included) 1  >  BioCost < MoneyCost 2  >  else 3
+# Ground units walk over their own land (passing their own cards, not stopping on
+# them); flying units cross anything, sea and enemy land included, but land on
+# their own. A card deployed this turn starts moving next turn. Moves left are
+# kept on the card (meta "moves_left"); missing means a full turn's worth.
+const MOVE_FLYING := 4
+const MOVE_RANGED := 1
+const MOVE_CHEAP := 2   # BioCost < MoneyCost (machines more than men: tanks, AA...)
+const MOVE_DEFAULT := 3
+
+func move_allowance(nation: String, card: Card) -> int:
+	if not (card is Unit):
+		return 0
+	var u := card as Unit
+	if u.Flying:
+		return MOVE_FLYING
+	if (players[nation] as Player).has_range_for(u):
+		return MOVE_RANGED
+	if card.BioCost < card.MoneyCost:
+		return MOVE_CHEAP
+	return MOVE_DEFAULT
+
+func moves_left(k: String) -> int:
+	if not units.has(k):
+		return 0
+	var card: Card = units[k]["card"]
+	return int(card.get_meta("moves_left", move_allowance(str(units[k]["owner"]), card)))
+
+func refill_moves(nation: String) -> void:
+	for k in cards_of(nation):
+		var card: Card = units[k]["card"]
+		card.set_meta("moves_left", move_allowance(nation, card))
+
+# Hexes the card at `k` can move to this turn: {hex: [path from k's hex to it]}.
+func reachable(k: String) -> Dictionary:
+	var out := {}
+	if not units.has(k):
+		return out
+	var budget := moves_left(k)
+	var card: Card = units[k]["card"]
+	if budget <= 0 or not (card is Unit):
+		return out
+	var nation := str(units[k]["owner"])
+	var flying := (card as Unit).Flying
+	var start := key_to_hex(k)
+	var flag := campaign.capital_site(nation)
+	var parent := {start: start}
+	var depth := {start: 0}
+	var queue: Array = [start]
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		if int(depth[cur]) >= budget:
+			continue
+		for nb in MapCampaign.wrapped_neighbors(cur):
+			var t := nb as Vector2i
+			if parent.has(t) or WorldMap.is_void(t.x, t.y):
+				continue
+			if not flying and campaign.owner_of(t.x, t.y) != nation:
+				continue # ground units keep to their own land
+			parent[t] = cur
+			depth[t] = int(depth[cur]) + 1
+			queue.append(t)
+			if campaign.owner_of(t.x, t.y) == nation and t != flag and not units.has(MapCampaign.key_of(t.x, t.y)):
+				var path: Array = [t]
+				while path[0] != start:
+					path.push_front(parent[path[0]])
+				out[t] = path
+	return out
+
+# Move the card at `k` to hex `to`. Returns the path walked ([] = not allowed).
+func move(nation: String, k: String, to: Vector2i) -> Array:
+	if not units.has(k) or str(units[k]["owner"]) != nation:
+		return []
+	var reach := reachable(k)
+	if not reach.has(to):
+		return []
+	var path: Array = reach[to]
+	var info: Dictionary = units[k]
+	var card: Card = info["card"]
+	card.set_meta("moves_left", moves_left(k) - (path.size() - 1))
+	units.erase(k)
+	units[MapCampaign.key_of(to.x, to.y)] = info
+	return path
+
+# The AI repositions its units before it fires. Each unit weighs every hex it can
+# reach (staying put included) and takes the best one:
+#   + tucked behind one of its own Walls (the wall sits between it and the nearest enemy)
+#   + beside its own Barracks (+2 damage) or Interceptor (halves ranged/flying hits)
+#   + closing in on weakened enemy cards (to finish them off)
+# Returns [[from key, to hex, path], ...] in the order moved.
+func ai_move(nation: String) -> Array:
+	var moves: Array = []
+	var enemies: Array = []
+	for k in units.keys():
+		if str(units[k]["owner"]) != nation:
+			enemies.append(k)
+	if enemies.is_empty():
+		return moves
+	for k in cards_of(nation):
+		if not units.has(k) or not (units[k]["card"] is Unit) or moves_left(k) <= 0:
+			continue
+		var here := key_to_hex(k)
+		var reach := reachable(k)
+		if reach.is_empty():
+			continue
+		var best := here
+		var best_score := _position_score(nation, k, here, enemies) + 0.25 # a small bias to stay put
+		for t in reach.keys():
+			var sc := _position_score(nation, k, t, enemies)
+			if sc > best_score:
+				best_score = sc
+				best = t
+		if best != here:
+			var path := move(nation, k, best)
+			if not path.is_empty():
+				moves.append([k, best, path])
+	return moves
+
+func _position_score(nation: String, k: String, t: Vector2i, enemies: Array) -> float:
+	var score := 0.0
+	# nearest enemy card, and the weakest ones nearby
+	var nearest := Vector2i(-1, -1)
+	var nearest_d := 1 << 30
+	var weak_pull := 0.0
+	for ek in enemies:
+		var et := key_to_hex(ek)
+		var d := MapCampaign.hex_distance(t, et)
+		if d < nearest_d:
+			nearest_d = d
+			nearest = et
+		var card: Card = units[ek]["card"]
+		var mx: int = int(card.get_meta("map_max_hp", maxi(card_hp(card), 1)))
+		var hurt: float = 1.0 - clampf(float(card_hp(card)) / float(maxi(mx, 1)), 0.0, 1.0)
+		if hurt > 0.0:
+			weak_pull += hurt * 6.0 / float(1 + d) # closer to a badly hurt enemy is better
+	score += weak_pull
+	for nb in MapCampaign.wrapped_neighbors(t):
+		var info := unit_at(nb as Vector2i)
+		if info.is_empty() or str(info["owner"]) != nation or MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y) == k:
+			continue
+		var c: Card = info["card"]
+		if c is Wall and nearest.x >= 0 and MapCampaign.hex_distance(nb as Vector2i, nearest) < nearest_d:
+			score += 4.0 # the wall stands between this hex and the nearest enemy
+		elif c is Barracks:
+			score += 2.5
+		elif c is Interceptor:
+			score += 2.0
+	return score
 
 # ------------------------------------------------------------------- shop
 # Copies of each card in a player's whole deck (piles, hand and board), used as

@@ -61,6 +61,9 @@ func test_territory_carries_over():
 	for ll in [[30.04, 31.24], [33.51, 36.29], [39.93, 32.85], [44.8, 20.46]]: # Cairo, Damascus, Ankara, Belgrade
 		var t := WorldMap.hex_for_latlon(ll[0], ll[1])
 		assert_eq(c.owner_of(t.x, t.y), "State Troops", "chapter 3: %s held" % str(ll))
+	assert_true(c.is_neighbor("State Troops", "Horde"), "chapter 3: the State Troops and the Horde meet on land (the Caucasus)")
+	var tbilisi := WorldMap.hex_for_latlon(41.72, 44.79)
+	assert_eq(c.owner_of(tbilisi.x, tbilisi.y), "State Troops", "the Transcaucasus is theirs")
 	var sabha := WorldMap.hex_for_latlon(27.04, 14.43) # inland Libya (coastal cities can fall on sea hexes)
 	assert_eq(c.owner_of(sabha.x, sabha.y), "Mercenaries", "Libya is the Mercenaries'")
 	WorldMap.use_map("story_4")

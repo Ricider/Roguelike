@@ -567,3 +567,77 @@ func test_round_stats_split_damage_by_source():
 	assert_false(w.round_stats.has(B + "|" + A), "nothing the other way")
 	w.reset_round_stats()
 	assert_true(w.round_stats.is_empty(), "reset clears the round")
+
+# --- moving units -----------------------------------------------------------------
+func test_move_allowances():
+	var w := _war()
+	assert_eq(w.move_allowance(A, Drone.new()), MapWar.MOVE_FLYING, "flying: 4")
+	assert_eq(w.move_allowance(A, Artilery.new()), MapWar.MOVE_RANGED, "ranged: 1")
+	var tank := Tank.new()
+	assert_true(tank.BioCost < tank.MoneyCost, "a Tank costs more money than bio")
+	assert_eq(w.move_allowance(A, tank), MapWar.MOVE_CHEAP, "BioCost < MoneyCost: 2")
+	var inf := Infantry.new()
+	assert_true(inf.BioCost >= inf.MoneyCost, "Infantry costs more bio than money")
+	assert_eq(w.move_allowance(A, inf), MapWar.MOVE_DEFAULT, "everything else: 3")
+	assert_eq(w.move_allowance(A, Wall.new()), 0, "buildings never move")
+	assert_eq(w.move_allowance(A, Barracks.new()), 0, "buildings never move")
+
+func test_ground_units_walk_their_own_land_within_their_moves():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	var k := _drop(w, A, Infantry.new(), 12)
+	var reach := w.reachable(k)
+	for x in [11, 13, 14]:
+		assert_true(reach.has(Vector2i(x, 10)), "can reach %d" % x)
+	assert_false(reach.has(Vector2i(10, 10)), "not onto its own flag")
+	assert_false(reach.has(Vector2i(15, 10)), "not into enemy land")
+	var path := w.move(A, k, Vector2i(14, 10))
+	assert_eq(path.size(), 3, "walked two hexes")
+	var nk := MapCampaign.key_of(14, 10)
+	assert_true(w.units.has(nk) and not w.units.has(k), "the card is on its new hex")
+	assert_eq(w.moves_left(nk), 1, "one move left this turn")
+	assert_eq(w.reachable(nk).keys(), [Vector2i(13, 10)], "only one hex more")
+	assert_true(w.move(A, nk, Vector2i(11, 10)).is_empty(), "can't go further than its moves")
+	w.begin_turn(A)
+	assert_eq(w.moves_left(nk), MapWar.MOVE_DEFAULT, "a new turn refills its moves")
+
+func test_buildings_and_new_cards_stay_put():
+	var w := _war()
+	var wk := _drop(w, A, Wall.new(), 12)
+	assert_true(w.reachable(wk).is_empty(), "a Wall can't move")
+	assert_true(w.move(A, wk, Vector2i(13, 10)).is_empty(), "nor be moved")
+	var p: Player = w.players[A]
+	var inf := Infantry.new()
+	p.Hand = [inf]
+	assert_true(w.place(A, inf, Vector2i(11, 10)), "deployed")
+	assert_eq(w.moves_left(MapCampaign.key_of(11, 10)), 0, "it moves from next turn")
+
+func test_flying_units_cross_anything_but_land_at_home():
+	var w := _war()
+	var dk := _drop(w, A, Drone.new(), 14)
+	var reach := w.reachable(dk)
+	for t in reach.keys():
+		assert_eq(w.campaign.owner_of((t as Vector2i).x, (t as Vector2i).y), A, "lands only on its own land")
+	assert_true(reach.has(Vector2i(10, 10)) or w.campaign.capital_site(A) == Vector2i(10, 10), "4 hexes reach the far end")
+
+func test_ai_hides_behind_its_wall():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	var k := _drop(w, A, Infantry.new(), 11)
+	_drop(w, A, Wall.new(), 13)
+	_drop(w, B, Infantry.new(), 16)
+	var moves := w.ai_move(A)
+	assert_eq(moves.size(), 1, "the infantry moves")
+	assert_eq(moves[0][1], Vector2i(12, 10), "to the hex behind the wall")
+
+func test_ai_closes_on_a_wounded_enemy():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	var k := _drop(w, A, Infantry.new(), 11)
+	var hurt := Infantry.new()
+	hurt.set_meta("map_max_hp", hurt.HitPoints)
+	hurt.HitPoints = 2
+	_drop(w, B, hurt, 16)
+	var moves := w.ai_move(A)
+	assert_eq(moves.size(), 1, "it moves")
+	assert_eq(moves[0][1], Vector2i(14, 10), "as close to the wounded enemy as it can get")
