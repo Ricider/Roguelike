@@ -51,6 +51,9 @@ func refresh() -> void:
 		colors[str(n["name"])] = Color.html(str(n["color"]))
 	for y in range(H):
 		for x in range(W):
+			if WorldMap.is_void(x, y):
+				img.fill_rect(Rect2i(x * 2 + (y & 1), y * 2, 2, 2), Color(0.17, 0.17, 0.2) if WorldMap.is_land(x, y) else Color(0.08, 0.09, 0.12))
+				continue
 			if not WorldMap.is_land(x, y):
 				continue
 			var terrain: Color = WorldMapView.TERRAIN_COLORS.get(WorldMap.terrain_at(x, y), Color.GRAY)

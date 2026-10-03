@@ -72,6 +72,9 @@ func _ready() -> void:
 	if _war != null:
 		_view.set_war(_war)
 		_log_line("[color=#ffd966]Turn %d.[/color] Place cards on your hexes, then End Turn." % _war.turn)
+		if WorldMap.STORY_CHAPTER > 0:
+			var sch: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER)
+			_log_line("[color=#ffd966]Chapter %d: %s.[/color] %s" % [WorldMap.STORY_CHAPTER, sch["title"], sch["objective"]])
 		_start_player_turn()
 	_refresh()
 	# camera needs the laid-out view size before it can centre
@@ -257,7 +260,7 @@ func _build_ui() -> void:
 	side.add_theme_constant_override("separation", 8)
 	panel.add_child(side)
 	var title := Label.new()
-	title.text = ("WORLD WAR" if WorldMap.MAP_ID == "world" else WorldMap.MAP_NAME.to_upper())
+	title.text = ("CHAPTER %d" % WorldMap.STORY_CHAPTER) if WorldMap.STORY_CHAPTER > 0 else ("WORLD WAR" if WorldMap.MAP_ID == "world" else WorldMap.MAP_NAME.to_upper())
 	title.theme_type_variation = &"TitleLabel"
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.96, 0.94, 0.86))
@@ -441,8 +444,12 @@ func _refresh() -> void:
 	_refresh_legend()
 	_refresh_player_card()
 	_refresh_hand()
-	if c.has_won():
+	if c.has_won() and WorldMap.STORY_CHAPTER > 0:
+		_show_banner("CHAPTER %d WON! The story continues..." % WorldMap.STORY_CHAPTER, Color(1.0, 0.86, 0.35))
+	elif c.has_won():
 		_show_banner("WORLD CONQUERED! %s rules all %d hexes." % [c.player_nation, c.tile_count(c.player_nation)], Color(1.0, 0.86, 0.35))
+	elif c.has_lost() and WorldMap.STORY_CHAPTER > 0:
+		_show_banner("THE STATE TROOPS HAVE FALLEN.", Color(1, 0.45, 0.4))
 	elif c.has_lost():
 		_show_banner("ELIMINATED! %s holds no territory. Start a New campaign." % c.player_nation, Color(1, 0.45, 0.4))
 
@@ -870,7 +877,7 @@ func _describe(x: int, y: int) -> String:
 	var c := _campaign()
 	var o := c.owner_of(x, y)
 	var text := "(%d, %d) %s" % [x, y, WorldMap.terrain_at(x, y).capitalize()]
-	text += " · " + (o if o != "" else ("wilderness" if WorldMap.is_land(x, y) else "open sea"))
+	text += " · " + (o if o != "" else ("out of this war" if WorldMap.is_void(x, y) else ("wilderness" if WorldMap.is_land(x, y) else "open sea")))
 	if _war != null:
 		var holder := c.capital_holder_at(x, y)
 		if holder != "":
@@ -1319,7 +1326,7 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary, min_gap: int = 1
 			best_score = score
 			best = t
 		for nb in MapCampaign.wrapped_neighbors(t):
-			if parent.has(nb) or MapCampaign.hex_distance(nb, target) > reach:
+			if parent.has(nb) or MapCampaign.hex_distance(nb, target) > reach or WorldMap.is_void(nb.x, nb.y):
 				continue
 			if WorldMap.is_land(nb.x, nb.y) and c.owner_of(nb.x, nb.y) != nation and (enemy == "" or c.owner_of(nb.x, nb.y) != enemy):
 				continue
@@ -1362,12 +1369,30 @@ func _check_end() -> bool:
 	if c.has_won():
 		_sfx("victory")
 		_refresh()
+		if WorldMap.STORY_CHAPTER > 0:
+			_story_end(true)
 		return true
 	if c.has_lost():
 		_sfx("defeat")
 		_refresh()
+		if WorldMap.STORY_CHAPTER > 0:
+			_story_end(false)
 		return true
 	return false
+
+# A story chapter is decided: record it and hand over to the story screen
+# (the outro and the next chapter, or the defeat screen with a retry).
+func _story_end(won: bool) -> void:
+	var ch := WorldMap.STORY_CHAPTER
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		if won:
+			gs.story_complete(ch)
+		gs.delete_save() # nothing left to resume in a finished chapter
+		gs.story_screen = {"phase": "outro" if won else "defeat", "chapter": ch}
+	_status.text = "Chapter %d won!" % ch if won else "Chapter %d lost..." % ch
+	await get_tree().create_timer(1.6).timeout
+	get_tree().change_scene_to_file("res://scenes/Story.tscn")
 
 # -------------------------------------------------------------------- shop
 # Same shop as between card battles (GameState.buy_card / buy_modifier /

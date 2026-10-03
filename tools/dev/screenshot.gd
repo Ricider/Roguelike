@@ -25,6 +25,9 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 			# "map_turn3@europe" plays on a specific map
 			gs.start_map_campaign("State Troops", setup.get_slice("@", 1) if setup.contains("@") else "")
 			setup = setup.get_slice("@", 0)
+		elif setup.begins_with("story:"):
+			# story:<phase>:<chapter> opens scenes/Story.tscn on that screen (text shown in full)
+			gs.story_screen = {"phase": setup.get_slice(":", 1), "chapter": int(setup.get_slice(":", 2))}
 	change_scene_to_file(scene)
 	for i in range(frames):
 		await process_frame
@@ -264,6 +267,10 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		var sm = root.get_node_or_null("SoundManager")
 		if sm != null:
 			print("music=", sm._music_name, " sfx_voices_used=", sm._last_played.keys())
+	if setup.begins_with("story:") and gc != null and gc.has_method("_finish_typing"):
+		gc._finish_typing()
+		for i in range(30):
+			await process_frame
 	# force a synchronous draw: waiting for frame_post_draw hangs if the OS
 	# stops drawing an occluded window, and a stale frame shows old UI
 	RenderingServer.force_draw(false)

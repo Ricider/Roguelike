@@ -19,6 +19,7 @@ func _ready():
 		play_btn.grab_focus()
 	_wire_buttons()
 	_build_player_chooser()
+	_add_campaign_button()
 	_add_resume_button()
 	_enforce_menu_order()
 	_style_menu_buttons()
@@ -370,7 +371,7 @@ func _enforce_menu_order():
 	if vbox == null:
 		return
 	# Desired order top→bottom: New Game (Play), Resume, Tutorial, World Map, Quit (Exit) at bottom - all 340x72
-	var order = ["PlayButton", "ResumeButton", "QuitButton"]
+	var order = ["PlayButton", "CampaignButton", "ResumeButton", "QuitButton"]
 	var to_place: Array = []
 	for name in order:
 		var btn = vbox.get_node_or_null(name)
@@ -404,6 +405,27 @@ func _enforce_menu_order():
 		vbox.add_child(btn)
 		vbox.move_child(btn, insert_idx)
 		insert_idx += 1
+
+# The State Troops story campaign: chapter select, intros, transitions (scenes/Story.tscn).
+func _add_campaign_button():
+	var vbox = get_node_or_null("CenterContainer/VBox")
+	if vbox == null or vbox.has_node("CampaignButton"):
+		return
+	var cbtn := Button.new()
+	cbtn.name = "CampaignButton"
+	cbtn.text = "Campaign"
+	cbtn.custom_minimum_size = Vector2(340, 72)
+	cbtn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cbtn.add_theme_font_size_override("font_size", 26)
+	cbtn.pressed.connect(func():
+		var gs = get_node_or_null("/root/GameState")
+		if gs != null:
+			gs.story_screen = {"phase": "menu", "chapter": 1}
+		get_tree().change_scene_to_file("res://scenes/Story.tscn"))
+	vbox.add_child(cbtn)
+	_style_pill_button(cbtn, Color(0.16,0.16,0.26,1), Color(0.22,0.22,0.34,1), Color(0.82,0.78,0.70,0.85))
+	cbtn.tooltip_text = "The State Troops story: five chapters, from a local insurgency to a war against the whole world."
 
 func _add_resume_button():
 	var vbox = get_node_or_null("CenterContainer/VBox")

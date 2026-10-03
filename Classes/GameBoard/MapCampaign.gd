@@ -64,6 +64,14 @@ func new_campaign(nation: String) -> void:
 	player_nation = nation
 	owner.clear()
 	flag_sites.clear()
+	# Story chapters come with their starting territories drawn in.
+	if not WorldMap.START_OWNER.is_empty():
+		for y in range(WorldMap.GRID_H):
+			for x in range(WorldMap.GRID_W):
+				var o := WorldMap.start_owner_at(x, y)
+				if o != "" and WorldMap.is_land(x, y):
+					owner[key_of(x, y)] = o
+		return
 	# 1. Every nation's capital and extra seed cities.
 	var seeds_of: Dictionary = {}
 	for n in WorldMap.nations():

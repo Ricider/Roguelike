@@ -46,6 +46,11 @@ static var ROWS: Array = []
 static var NATIONS: Array = []
 # Optional starting-territory claims, first match wins: [{"nation", "boxes": [[lat0, lat1, lon0, lon1], ...]}]
 static var CLAIMS: Array = []
+# Story chapter maps (tools/make_story.py) fix who owns what at the start and grey
+# out everything outside the chapter's war. Empty on the normal maps.
+static var START_OWNER: Array = [] # rows: "0".."9" = index into NATIONS, "." = nobody
+static var VOID_ROWS: Array = []   # rows: "x" = out of play (greyed, never owned or entered)
+static var STORY_CHAPTER: int = 0  # 1..5 on story maps, 0 otherwise
 
 static func _static_init() -> void:
 	use_map("world")
@@ -92,7 +97,31 @@ static func use_map(map_id: String) -> bool:
 	CLAIMS = []
 	for c in d.get("claims", []):
 		CLAIMS.append({"nation": str(c["nation"]), "boxes": c["boxes"]})
+	START_OWNER = []
+	for r in d.get("start_owner", []):
+		START_OWNER.append(str(r))
+	VOID_ROWS = []
+	for r in d.get("void", []):
+		VOID_ROWS.append(str(r))
+	STORY_CHAPTER = int(d.get("story_chapter", 0))
 	return true
+
+# Out of play on a story map: drawn greyed out, never owned, walked or fought over.
+static func is_void(x: int, y: int) -> bool:
+	if VOID_ROWS.is_empty() or y < 0 or y >= VOID_ROWS.size():
+		return false
+	var row: String = VOID_ROWS[y]
+	return x >= 0 and x < row.length() and row[x] == "x"
+
+# Who owns hex (x, y) when a story chapter starts ("" = nobody).
+static func start_owner_at(x: int, y: int) -> String:
+	if START_OWNER.is_empty() or y < 0 or y >= START_OWNER.size():
+		return ""
+	var ch: String = (START_OWNER[y] as String).substr(x, 1)
+	if ch == "." or ch == "":
+		return ""
+	var i := int(ch)
+	return str(NATIONS[i]["name"]) if i < NATIONS.size() else ""
 
 # A nation's starting cities: its capital plus any extra seeds (e.g. Peace Keepers' Sydney).
 static func nation_seeds(nation_name: String) -> Array:

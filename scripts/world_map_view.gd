@@ -78,6 +78,8 @@ void fragment() {
 """
 const HEX_OVERDRAW := 1.015 # a hair over hex size 1 so neighbours never show seams
 const DEEP_SEA_TINT := Color(0.05, 0.08, 0.18, 0.5)
+const VOID_LAND_TINT := Color(0.16, 0.16, 0.2, 0.74) # story maps: land outside the chapter's war
+const VOID_SEA_TINT := Color(0.08, 0.09, 0.13, 0.62)
 var _front: Array = [] # enemy hexes touching the player's border (card-battle mode only)
 var _sea_phase: int = 0
 var _sea_clock: float = 0.0
@@ -761,7 +763,8 @@ func _build_sea() -> void:
 				if inside and WorldMap.terrain_at(x, y) != "ocean":
 					continue
 				if inside:
-					_add_hex(arr, _unit_center(x, y), ocean_i, (_variant_for(x, y) + phase) % TileArt.VARIANTS, clear)
+					_add_hex(arr, _unit_center(x, y), ocean_i, (_variant_for(x, y) + phase) % TileArt.VARIANTS,
+						VOID_SEA_TINT if WorldMap.is_void(x, y) else clear)
 				else:
 					_add_hex(arr, _unit_center(x, y), ocean_i, posmod(x + y + phase, TileArt.VARIANTS), DEEP_SEA_TINT)
 		_sea_meshes.append(_mesh_from(arr))
@@ -790,7 +793,9 @@ func _build_land(sel_owner: String) -> void:
 			var ti: int = TileArt.TERRAINS.find(terrain)
 			var tint := Color(0, 0, 0, 0)
 			var o: String = str(_owners.get(MapCampaign.key_of(x, y), ""))
-			if o != "" and _nation_colors.has(o):
+			if WorldMap.is_void(x, y):
+				tint = VOID_LAND_TINT
+			elif o != "" and _nation_colors.has(o):
 				var nc := _nation_colors[o] as Color
 				tint = Color(nc.r, nc.g, nc.b, 0.46 if o == sel_owner else 0.30)
 			_add_hex(arr, _unit_center(x, y), maxi(ti, 0), _variant_for(x, y), tint)

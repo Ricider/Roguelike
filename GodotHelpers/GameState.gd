@@ -325,6 +325,39 @@ func remove_card_from_deck(card: Card) -> bool:
 	return true
 const SAVE_PATH := "user://savegame.json"
 
+# ------------------------------------------------------------ story campaign
+# The State Troops campaign (scripts/story.gd, scripts/story_text.gd): five chapters
+# played on their own maps (Assets/Maps/story_<n>.json). Progress lives in its own
+# file so it survives New/Save of ordinary campaigns.
+const STORY_PATH := "user://story.json"
+var story_screen: Dictionary = {} # what scenes/Story.tscn shows: {"phase": "menu"|"intro"|"outro"|"defeat", "chapter": n}
+
+func story_progress() -> Dictionary:
+	var out := {"unlocked": 1, "completed": []}
+	if FileAccess.file_exists(STORY_PATH):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(STORY_PATH))
+		if d is Dictionary:
+			out["unlocked"] = clampi(int(d.get("unlocked", 1)), 1, StoryText.count())
+			out["completed"] = d.get("completed", [])
+	return out
+
+func story_complete(n: int) -> void:
+	var p := story_progress()
+	var done: Array = p["completed"]
+	if not done.has(n):
+		done.append(n)
+	p["completed"] = done
+	p["unlocked"] = clampi(maxi(int(p["unlocked"]), n + 1), 1, StoryText.count())
+	var f := FileAccess.open(STORY_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(p))
+		f.close()
+
+# Start chapter n as the State Troops on its story map.
+func start_story_chapter(n: int) -> void:
+	set_player("State Troops")
+	start_map_campaign("State Troops", "story_%d" % n)
+
 # Sharp text at any window size: render the UI fonts as MSDF (signed distance
 # fields) with mipmaps. Done here rather than in the .import files because those
 # are gitignored, so the setting would not survive a fresh checkout.
