@@ -23,11 +23,16 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 			gs.start_tutorial()
 		elif setup.begins_with("map"):
 			# "map_turn3@europe" plays on a specific map
-			gs.start_map_campaign("State Troops", setup.get_slice("@", 1) if setup.contains("@") else "")
+			var mid: String = setup.get_slice("@", 1) if setup.contains("@") else ""
+			var faction := "State Troops"
+			if mid != "" and WorldMap.use_map(mid) and WorldMap.STORY_CHAPTER > 0:
+				faction = str(StoryText.campaign(WorldMap.STORY_CAMPAIGN)["faction"]) # story maps: play their own faction
+			gs.start_map_campaign(faction, mid)
 			setup = setup.get_slice("@", 0)
 		elif setup.begins_with("story:"):
-			# story:<phase>:<chapter> opens scenes/Story.tscn on that screen (text shown in full)
-			gs.story_screen = {"phase": setup.get_slice(":", 1), "chapter": int(setup.get_slice(":", 2))}
+			# story:<phase>:<chapter>[:<campaign>] opens scenes/Story.tscn on that screen (text shown in full)
+			var cid := setup.get_slice(":", 3) if setup.get_slice_count(":") > 3 else "state"
+			gs.story_screen = {"phase": setup.get_slice(":", 1), "chapter": int(setup.get_slice(":", 2)), "campaign": cid}
 	change_scene_to_file(scene)
 	for i in range(frames):
 		await process_frame

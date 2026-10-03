@@ -77,7 +77,7 @@ func _ready() -> void:
 		_view.set_war(_war)
 		_log_line("[color=#ffd966]Turn %d.[/color] Place cards on your hexes, then End Turn." % _war.turn)
 		if WorldMap.STORY_CHAPTER > 0:
-			var sch: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER)
+			var sch: Dictionary = StoryText.chapter(WorldMap.STORY_CAMPAIGN, WorldMap.STORY_CHAPTER)
 			_log_line("[color=#ffd966]Chapter %d: %s.[/color] %s" % [WorldMap.STORY_CHAPTER, sch["title"], sch["objective"]])
 		_start_player_turn()
 	_refresh()
@@ -1470,12 +1470,13 @@ func _check_end() -> bool:
 # (the outro and the next chapter, or the defeat screen with a retry).
 func _story_end(won: bool) -> void:
 	var ch := WorldMap.STORY_CHAPTER
+	var cid := WorldMap.STORY_CAMPAIGN
 	var gs = get_node_or_null("/root/GameState")
 	if gs != null:
 		if won:
-			gs.story_complete(ch)
+			gs.story_complete(cid, ch)
 		gs.delete_save() # nothing left to resume in a finished chapter
-		gs.story_screen = {"phase": "outro" if won else "defeat", "chapter": ch}
+		gs.story_screen = {"phase": "outro" if won else "defeat", "campaign": cid, "chapter": ch}
 	_status.text = "Chapter %d won!" % ch if won else "Chapter %d lost..." % ch
 	await get_tree().create_timer(1.6).timeout
 	get_tree().change_scene_to_file("res://scenes/Story.tscn")
@@ -1492,7 +1493,7 @@ const REMOVE_COST := MapWar.REMOVE_COST
 func _story_start_briefing() -> void:
 	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_start"):
 		return
-	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER).get("briefing", {})
+	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CAMPAIGN, WorldMap.STORY_CHAPTER).get("briefing", {})
 	if b.is_empty():
 		return
 	_war.set_meta("briefed_start", true)
@@ -1525,7 +1526,7 @@ func _story_start_briefing() -> void:
 func _story_combat_briefing() -> void:
 	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_combat"):
 		return
-	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER).get("combat_briefing", {})
+	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CAMPAIGN, WorldMap.STORY_CHAPTER).get("combat_briefing", {})
 	if b.is_empty():
 		return
 	_war.set_meta("briefed_combat", true)

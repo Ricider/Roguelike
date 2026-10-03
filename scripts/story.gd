@@ -1,10 +1,13 @@
-# Story screen for the State Troops campaign. One scene, four moods, picked by
-# GameState.story_screen:
-#   menu   - the five chapters (locked until the one before is won)
-#   intro  - a chapter's illustration, story and objective, then into the war
-#   outro  - after a win: what happened next, over the NEXT chapter's
-#            illustration (the epilogue's after the last chapter)
-#   defeat - the fallen flag, with a retry
+# Story screen for the campaigns. One scene, several moods, picked by
+# GameState.story_screen = {"phase", "campaign", "chapter"}:
+#   campaigns - the eight factions' campaigns (each tells a different part of the story)
+#   chronicle - every chapter of every campaign, in the order the history happened
+#   menu      - one campaign's chapters (locked until the one before is won)
+#   intro     - a chapter's illustration, story and objective, then into the war
+#   outro     - after a win: what happened next, over the NEXT chapter's
+#               illustration (the campaign's finale after its last chapter)
+#   epilogue  - the campaign's finale
+#   defeat    - the fallen flag, with a retry
 # Text types itself out; a click, Space or Enter shows it all at once. The art
 # drifts slowly (a pixel-art Ken Burns) and every change fades through black.
 extends Control
@@ -13,7 +16,8 @@ const TYPE_SPEED := 0.016 # seconds per character
 const FADE := 0.45
 
 var _gs = null
-var _phase := "menu"
+var _phase := "campaigns"
+var _campaign := "state"
 var _chapter := 1
 var _bg: TextureRect = null
 var _text: RichTextLabel = null
@@ -24,8 +28,11 @@ var _buttons: HBoxContainer = null
 func _ready() -> void:
 	_gs = get_node_or_null("/root/GameState")
 	var st: Dictionary = _gs.story_screen if _gs != null else {}
-	_phase = str(st.get("phase", "menu"))
-	_chapter = clampi(int(st.get("chapter", 1)), 1, StoryText.count())
+	_phase = str(st.get("phase", "campaigns"))
+	_campaign = str(st.get("campaign", "state"))
+	if StoryText.campaign(_campaign).is_empty():
+		_campaign = "state"
+	_chapter = clampi(int(st.get("chapter", 1)), 1, StoryText.count(_campaign))
 	var sm = get_node_or_null("/root/SoundManager")
 	if sm != null:
 		sm.play_music("menu")
@@ -66,10 +73,15 @@ func _build() -> void:
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
-	if _phase == "menu":
-		_build_menu()
-	else:
-		_build_story()
+	match _phase:
+		"campaigns":
+			_build_campaigns()
+		"chronicle":
+			_build_chronicle()
+		"menu":
+			_build_menu()
+		_:
+			_build_story()
 	_fader = ColorRect.new()
 	_fader.color = Color(0, 0, 0, 1)
 	_fader.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -78,16 +90,22 @@ func _build() -> void:
 
 func _image_name() -> String:
 	match _phase:
+		"campaigns":
+			return "ch5"
+		"chronicle":
+			return "ch3"
 		"menu":
-			return "ch1"
+			return str(StoryText.chapter(_campaign, 1)["image"])
 		"defeat":
-			return "defeat"
+			return str(StoryText.defeat(_campaign)["image"])
 		"epilogue":
-			return "epilogue"
+			return str(StoryText.epilogue(_campaign)["image"])
 		"outro":
-			return "epilogue" if _chapter >= StoryText.count() else str(StoryText.chapter(_chapter + 1)["image"])
+			if _chapter >= StoryText.count(_campaign):
+				return str(StoryText.epilogue(_campaign)["image"])
+			return str(StoryText.chapter(_campaign, _chapter + 1)["image"])
 		_:
-			return str(StoryText.chapter(_chapter)["image"])
+			return str(StoryText.chapter(_campaign, _chapter)["image"])
 
 # Slow drift and zoom over the illustration.
 func _drift() -> void:
@@ -99,6 +117,9 @@ func _drift() -> void:
 	var tw := _bg.create_tween().set_loops()
 	tw.tween_property(_bg, "scale", Vector2(1.07, 1.07), 18.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(_bg, "scale", Vector2.ONE, 18.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _faction() -> String:
+	return str(StoryText.campaign(_campaign).get("faction", ""))
 
 func _build_story() -> void:
 	var box := MarginContainer.new()
@@ -125,29 +146,32 @@ func _build_story() -> void:
 	v.alignment = BoxContainer.ALIGNMENT_END
 	v.add_theme_constant_override("separation", 12)
 	slab.add_child(v)
-	var ch: Dictionary = StoryText.chapter(_chapter)
+	var ch: Dictionary = StoryText.chapter(_campaign, _chapter)
+	var who := _faction().to_upper()
 	var kicker := Label.new()
 	var title := Label.new()
 	var paragraphs: Array = []
 	var objective := ""
 	match _phase:
 		"intro":
-			kicker.text = "CHAPTER %d" % _chapter
+			kicker.text = "%s  ·  CHAPTER %d" % [who, _chapter]
 			title.text = str(ch["title"])
 			paragraphs = ch["intro"]
 			objective = str(ch["objective"])
 		"outro":
-			kicker.text = "CHAPTER %d  COMPLETE" % _chapter
+			kicker.text = "%s  ·  CHAPTER %d  COMPLETE" % [who, _chapter]
 			title.text = str(ch["title"])
 			paragraphs = ch["outro"]
 		"epilogue":
-			kicker.text = "EPILOGUE"
-			title.text = StoryText.EPILOGUE_TITLE
-			paragraphs = StoryText.EPILOGUE
+			var ep: Dictionary = StoryText.epilogue(_campaign)
+			kicker.text = "%s  ·  FINALE" % who
+			title.text = str(ep.get("title", ""))
+			paragraphs = ep.get("lines", [])
 		"defeat":
-			kicker.text = "CHAPTER %d  LOST" % _chapter
-			title.text = StoryText.DEFEAT_TITLE
-			paragraphs = StoryText.DEFEAT
+			var df: Dictionary = StoryText.defeat(_campaign)
+			kicker.text = "%s  ·  CHAPTER %d  LOST" % [who, _chapter]
+			title.text = str(df["title"])
+			paragraphs = df["lines"]
 	kicker.add_theme_font_size_override("font_size", 18)
 	kicker.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
 	v.add_child(kicker)
@@ -178,19 +202,20 @@ func _build_story() -> void:
 	_buttons = HBoxContainer.new()
 	_buttons.add_theme_constant_override("separation", 14)
 	v.add_child(_buttons)
+	var last := _chapter >= StoryText.count(_campaign)
 	match _phase:
 		"intro":
 			_add_button("Begin Chapter %d" % _chapter, _begin_chapter, true)
 			_add_button("Chapters", func(): _go("menu", _chapter))
 		"outro":
-			if _chapter >= StoryText.count():
+			if last:
 				_add_button("Continue", func(): _go("epilogue", _chapter), true)
 			else:
 				_add_button("Continue to Chapter %d" % (_chapter + 1), func(): _go("intro", _chapter + 1), true)
 			_add_button("Chapters", func(): _go("menu", _chapter))
 		"epilogue":
-			_add_button("Chapters", func(): _go("menu", _chapter), true)
-			_add_button("Main Menu", _to_main_menu)
+			_add_button("Campaigns", func(): _go("campaigns", 1), true)
+			_add_button("Chronicle", func(): _go("chronicle", 1))
 		"defeat":
 			_add_button("Retry Chapter %d" % _chapter, _begin_chapter, true)
 			_add_button("Chapters", func(): _go("menu", _chapter))
@@ -232,49 +257,210 @@ func _unhandled_input(event: InputEvent) -> void:
 		if kc in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
 			_finish_typing()
 		elif kc == KEY_ESCAPE:
-			if _phase == "menu":
-				_to_main_menu()
-			else:
-				_go("menu", _chapter)
+			match _phase:
+				"campaigns":
+					_to_main_menu()
+				"chronicle", "menu":
+					_go("campaigns", 1)
+				_:
+					_go("menu", _chapter)
 
-# ----------------------------------------------------------------- chapter menu
-func _build_menu() -> void:
-	var center := VBoxContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_theme_constant_override("separation", 18)
-	add_child(center)
+# ----------------------------------------------------------------- screens
+func _title_block(parent: Control, title_text: String, sub_text: String) -> void:
 	var title := Label.new()
-	title.text = StoryText.SAGA_TITLE
+	title.text = title_text
 	title.theme_type_variation = &"TitleLabel"
-	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_font_size_override("font_size", 44)
 	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	title.add_theme_constant_override("shadow_offset_x", 4)
 	title.add_theme_constant_override("shadow_offset_y", 4)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(title)
+	parent.add_child(title)
 	var sub := Label.new()
-	sub.text = StoryText.SAGA_SUBTITLE
+	sub.text = sub_text
 	sub.add_theme_font_size_override("font_size", 20)
 	sub.add_theme_color_override("font_color", Color(0.92, 0.9, 0.95))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(sub)
+	parent.add_child(sub)
+
+func _footer(parent: Control) -> void:
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_CENTER
+	foot.add_theme_constant_override("separation", 14)
+	parent.add_child(foot)
+	_buttons = foot
+
+func _progress(cid: String) -> Dictionary:
+	return _gs.story_progress(cid) if _gs != null else {"unlocked": 1, "completed": []}
+
+# The eight campaigns, each tagged with the part of history it covers.
+func _build_campaigns() -> void:
+	var center := VBoxContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_theme_constant_override("separation", 16)
+	add_child(center)
+	_title_block(center, StoryText.CHRONICLE_TITLE, StoryText.CHRONICLE_SUBTITLE)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 14)
+	var wrap := CenterContainer.new()
+	wrap.add_child(grid)
+	center.add_child(wrap)
+	for cid in StoryText.ORDER:
+		grid.add_child(_campaign_card(cid))
+	_footer(center)
+	_add_button("Chronicle", func(): _go("chronicle", 1))
+	_add_button("Main Menu", _to_main_menu)
+
+func _campaign_card(cid: String) -> Button:
+	var c: Dictionary = StoryText.campaign(cid)
+	var prog := _progress(cid)
+	var b := Button.new()
+	b.name = "Campaign_" + cid
+	b.custom_minimum_size = Vector2(300, 196)
+	b.focus_mode = Control.FOCUS_NONE
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.offset_left = 12
+	v.offset_right = -12
+	v.offset_top = 10
+	v.offset_bottom = -10
+	v.add_theme_constant_override("separation", 4)
+	b.add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(head)
+	var flag := TextureRect.new()
+	var fpath := "res://Assets/Players/%s/flag.png" % str(c["faction"])
+	if ResourceLoader.exists(fpath):
+		flag.texture = load(fpath)
+	flag.custom_minimum_size = Vector2(56, 56)
+	flag.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	flag.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	flag.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	flag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(flag)
+	var names := VBoxContainer.new()
+	names.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(names)
+	var k := Label.new()
+	k.text = str(c["faction"]).to_upper()
+	k.add_theme_font_size_override("font_size", 14)
+	k.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
+	names.add_child(k)
+	var era := Label.new()
+	era.text = str(c.get("era", ""))
+	era.add_theme_font_size_override("font_size", 13)
+	era.add_theme_color_override("font_color", Color(0.7, 0.72, 0.85))
+	names.add_child(era)
+	var t := Label.new()
+	t.text = str(c["title"])
+	t.add_theme_font_size_override("font_size", 21)
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(t)
+	var sub := Label.new()
+	sub.text = str(c.get("subtitle", ""))
+	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92))
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(sub)
+	var won := (prog["completed"] as Array).size()
+	var n := StoryText.count(cid)
+	var s := Label.new()
+	s.text = ("All %d chapters won" % n) if won >= n else ("%d of %d chapters won" % [won, n])
+	s.add_theme_font_size_override("font_size", 13)
+	s.add_theme_color_override("font_color", Color(0.55, 0.95, 0.5) if won >= n else Color(0.8, 0.82, 0.9))
+	v.add_child(s)
+	b.pressed.connect(func():
+		_campaign = cid
+		_go("menu", 1))
+	return b
+
+# Every chapter of every campaign, in the order it happened.
+func _build_chronicle() -> void:
+	var center := VBoxContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_theme_constant_override("separation", 14)
+	add_child(center)
+	_title_block(center, "THE CHRONICLE", "The whole history, in order. Each campaign tells its own part of it.")
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"GoldPanel"
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	center.add_child(panel)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(900, 560)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 4)
+	scroll.add_child(list)
+	for act in StoryText.acts():
+		var h := Label.new()
+		h.text = str(act["title"]).to_upper()
+		h.theme_type_variation = &"TitleLabel"
+		h.add_theme_font_size_override("font_size", 18)
+		h.add_theme_color_override("font_color", Color(1.0, 0.84, 0.35))
+		list.add_child(h)
+		for pair in act["chapters"]:
+			list.add_child(_chronicle_row(str(pair[0]), int(pair[1])))
+	_footer(center)
+	_add_button("Campaigns", func(): _go("campaigns", 1), true)
+
+func _chronicle_row(cid: String, n: int) -> Button:
+	var c: Dictionary = StoryText.campaign(cid)
+	var prog := _progress(cid)
+	var unlocked: bool = n <= int(prog["unlocked"])
+	var done: bool = (prog["completed"] as Array).has(n)
+	var b := Button.new()
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(0, 32)
+	b.disabled = not unlocked
+	b.add_theme_font_size_override("font_size", 16)
+	var title := str(StoryText.chapter(cid, n)["title"]) if unlocked else "???"
+	b.text = "   %s  ·  %s, chapter %d:  %s%s" % [str(c["faction"]), str(c["title"]), n, title, "   (won)" if done else ""]
+	var fpath := "res://Assets/Players/%s/flag.png" % str(c["faction"])
+	if ResourceLoader.exists(fpath):
+		b.icon = load(fpath)
+		b.expand_icon = true
+		b.add_theme_constant_override("icon_max_width", 26)
+	b.pressed.connect(func():
+		_campaign = cid
+		_go("intro", n))
+	return b
+
+# One campaign's chapters.
+func _build_menu() -> void:
+	var c: Dictionary = StoryText.campaign(_campaign)
+	var center := VBoxContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_theme_constant_override("separation", 18)
+	add_child(center)
+	_title_block(center, str(c["title"]).to_upper(), "%s  ·  %s  ·  %s" % [str(c["faction"]), str(c.get("era", "")), str(c.get("subtitle", ""))])
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
 	center.add_child(row)
-	var prog: Dictionary = _gs.story_progress() if _gs != null else {"unlocked": 1, "completed": []}
-	for n in range(1, StoryText.count() + 1):
-		row.add_child(_chapter_card(n, n <= int(prog["unlocked"]), (prog["completed"] as Array).has(n) or (prog["completed"] as Array).has(float(n))))
-	var foot := HBoxContainer.new()
-	foot.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(foot)
-	_buttons = foot
+	var prog := _progress(_campaign)
+	for n in range(1, StoryText.count(_campaign) + 1):
+		row.add_child(_chapter_card(n, n <= int(prog["unlocked"]), (prog["completed"] as Array).has(n)))
+	_footer(center)
+	if (prog["completed"] as Array).size() >= StoryText.count(_campaign):
+		_add_button("Finale", func(): _go("epilogue", StoryText.count(_campaign)))
+	_add_button("Campaigns", func(): _go("campaigns", 1))
 	_add_button("Main Menu", _to_main_menu)
 
 func _chapter_card(n: int, unlocked: bool, done: bool) -> Button:
-	var ch: Dictionary = StoryText.chapter(n)
+	var ch: Dictionary = StoryText.chapter(_campaign, n)
 	var b := Button.new()
 	b.name = "Chapter%d" % n
 	b.custom_minimum_size = Vector2(250, 268)
@@ -335,16 +521,16 @@ func _fade_out() -> void:
 func _go(phase: String, chapter: int) -> void:
 	await _fade_out()
 	_phase = phase
-	_chapter = clampi(chapter, 1, StoryText.count())
+	_chapter = clampi(chapter, 1, StoryText.count(_campaign))
 	if _gs != null:
-		_gs.story_screen = {"phase": _phase, "chapter": _chapter}
+		_gs.story_screen = {"phase": _phase, "campaign": _campaign, "chapter": _chapter}
 	_build()
 	_fade_in()
 
 func _begin_chapter() -> void:
 	await _fade_out()
 	if _gs != null:
-		_gs.start_story_chapter(_chapter)
+		_gs.start_story_chapter(_campaign, _chapter)
 	get_tree().change_scene_to_file("res://scenes/WorldMap.tscn")
 
 func _to_main_menu() -> void:

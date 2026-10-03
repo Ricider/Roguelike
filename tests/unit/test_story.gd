@@ -74,9 +74,9 @@ func test_territory_carries_over():
 	assert_eq(c4.owner_of(paris.x, paris.y), "Coalition Army", "the Coalition holds the EU")
 
 func test_story_text_covers_every_chapter():
-	assert_eq(StoryText.count(), 5, "five chapters")
+	assert_eq(StoryText.count("state"), 5, "five chapters")
 	for n in range(1, 6):
-		var ch: Dictionary = StoryText.chapter(n)
+		var ch: Dictionary = StoryText.chapter("state", n)
 		assert_false((ch["intro"] as Array).is_empty(), "chapter %d has an intro" % n)
 		assert_ne(str(ch["objective"]), "", "chapter %d has an objective" % n)
 		assert_not_null(StoryText.image(str(ch["image"])), "chapter %d has its picture" % n)
@@ -150,8 +150,8 @@ func test_chapter_one_set_pieces():
 	for k in inf:
 		var t := MapWar.key_to_hex(k)
 		assert_eq(WorldMap.terrain_at(t.x, t.y), WorldMap.MOUNTAIN, "every one dug in on a mountain")
-	assert_false(StoryText.chapter(1).get("briefing", {}).is_empty(), "chapter 1 briefs the player at the start")
-	assert_false(StoryText.chapter(1).get("combat_briefing", {}).is_empty(), "and after the first End Turn")
+	assert_false(StoryText.chapter("state", 1).get("briefing", {}).is_empty(), "chapter 1 briefs the player at the start")
+	assert_false(StoryText.chapter("state", 1).get("combat_briefing", {}).is_empty(), "and after the first End Turn")
 	var istanbul := WorldMap.hex_for_latlon(41.01, 28.98)
 	var near: Array = _cards(w, "State Troops", "Housing").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), istanbul) <= 3)
 	assert_true(near.size() >= 2, "two housings at Istanbul")
@@ -181,3 +181,85 @@ func test_chapter_four_set_pieces():
 		assert_eq(icp.size(), 1, "an Interceptor beside each Corporation")
 		var jets: Array = _cards(w, "Coalition Army", "Fighter Jet").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), MapWar.key_to_hex(icp[0])) == 1)
 		assert_true(jets.size() >= 1, "and a Fighter Jet beside that Interceptor")
+
+# --- all eight campaigns ------------------------------------------------------
+func test_every_campaign_chapter_is_playable():
+	for cid in StoryText.ORDER:
+		var faction := str(StoryText.campaign(cid)["faction"])
+		assert_true(StoryText.count(cid) >= 3, "%s has chapters" % cid)
+		for n in range(1, StoryText.count(cid) + 1):
+			var map_id := StoryText.map_id(cid, n)
+			assert_true(WorldMap.use_map(map_id), "%s loads" % map_id)
+			assert_eq(WorldMap.STORY_CAMPAIGN, cid, "%s knows its campaign" % map_id)
+			assert_eq(WorldMap.STORY_CHAPTER, n, "%s knows its chapter" % map_id)
+			var c := MapCampaign.new(faction)
+			assert_true(c.is_alive(faction), "%s: the player's %s start with land" % [map_id, faction])
+			assert_true(c.alive_nations().size() >= 2, "%s: there is somebody to fight" % map_id)
+			for nm in c.alive_nations():
+				var cap := c.capital_site(str(nm))
+				assert_eq(c.owner_of(cap.x, cap.y), str(nm), "%s: %s's flag on its own land" % [map_id, nm])
+			for k in c.owner.keys():
+				var t := MapWar.key_to_hex(str(k))
+				assert_false(WorldMap.is_void(t.x, t.y), "%s: nothing owned out of play" % map_id)
+			assert_false(c.has_won(), "%s is not won at the start" % map_id)
+
+func test_every_campaign_has_its_words_and_pictures():
+	for cid in StoryText.ORDER:
+		var camp: Dictionary = StoryText.campaign(cid)
+		for key in ["faction", "title", "subtitle", "era"]:
+			assert_ne(str(camp.get(key, "")), "", "%s has a %s" % [cid, key])
+		for n in range(1, StoryText.count(cid) + 1):
+			var ch: Dictionary = StoryText.chapter(cid, n)
+			assert_false((ch["intro"] as Array).is_empty(), "%s %d has an intro" % [cid, n])
+			assert_ne(str(ch["objective"]), "", "%s %d has an objective" % [cid, n])
+			assert_not_null(StoryText.image(str(ch["image"])), "%s %d has its picture" % [cid, n])
+		var ep: Dictionary = StoryText.epilogue(cid)
+		assert_false((ep.get("lines", []) as Array).is_empty(), "%s has a finale" % cid)
+		assert_not_null(StoryText.image(str(ep["image"])), "%s finale picture" % cid)
+		assert_not_null(StoryText.image(str(StoryText.defeat(cid)["image"])), "%s defeat picture" % cid)
+
+func test_the_chronicle_holds_every_chapter_once():
+	var seen := {}
+	for act in StoryText.acts():
+		for pair in act["chapters"]:
+			var key := "%s_%d" % [pair[0], pair[1]]
+			assert_false(seen.has(key), "%s appears once" % key)
+			seen[key] = true
+	var total := 0
+	for cid in StoryText.ORDER:
+		total += StoryText.count(cid)
+		for n in range(1, StoryText.count(cid) + 1):
+			assert_true(seen.has("%s_%d" % [cid, n]), "%s %d is in the chronicle" % [cid, n])
+	assert_eq(seen.size(), total, "and nothing else")
+	# each campaign's chapters come in its own order
+	var pos := {}
+	var i := 0
+	for act in StoryText.acts():
+		for pair in act["chapters"]:
+			pos["%s_%d" % [pair[0], pair[1]]] = i
+			i += 1
+	for cid in StoryText.ORDER:
+		for n in range(2, StoryText.count(cid) + 1):
+			assert_lt(int(pos["%s_%d" % [cid, n - 1]]), int(pos["%s_%d" % [cid, n]]), "%s chapter %d comes after %d" % [cid, n, n - 1])
+
+func test_campaign_handoffs_line_up():
+	# the Insurgents' first chapter ends where the State Troops' first begins
+	WorldMap.use_map("story_1")
+	var st := MapCampaign.new("State Troops")
+	var diyarbakir := WorldMap.hex_for_latlon(37.91, 40.23)
+	assert_eq(st.owner_of(diyarbakir.x, diyarbakir.y), "Insurgents", "State chapter 1: Diyarbakir is the Insurgents'")
+	var held: Array = st.tiles_of("Insurgents")
+	WorldMap.use_map("story_insurgents_1")
+	var ins := MapCampaign.new("Insurgents")
+	assert_eq(WorldMap.nation_by_name("State Troops")["capital"], "Diyarbakir", "the State Troops defend Diyarbakir")
+	var flag := ins.capital_site("State Troops")
+	assert_eq(ins.owner_of(flag.x, flag.y), "State Troops", "...which they hold at the start of the Insurgents' chapter 1")
+	var fought: Array = ins.tiles_of("Insurgents") + ins.tiles_of("State Troops")
+	fought.sort()
+	held.sort()
+	assert_eq(fought, held, "the Insurgents' first war is fought over exactly the land they hold when the State Troops' story begins")
+	# and the Insurgents' last chapter is fought over the corner they hold in State chapter 5
+	WorldMap.use_map("story_insurgents_3")
+	var ins3 := MapCampaign.new("Insurgents")
+	var paris := WorldMap.hex_for_latlon(48.86, 2.35)
+	assert_eq(ins3.owner_of(paris.x, paris.y), "State Troops", "Insurgents chapter 3: northern France is the State Troops' to lose")

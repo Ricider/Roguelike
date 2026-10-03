@@ -7,9 +7,8 @@ for drums and explosions. Writes 16-bit mono WAVs (22.05 kHz) to
 Assets/Audio/. Music files carry a RIFF 'smpl' loop chunk so Godot's WAV
 importer loops them seamlessly.
 
-    python3 tools/chiptune.py            # everything
-    python3 tools/chiptune.py sfx        # only sound effects
-    python3 tools/chiptune.py music      # only music
+    python3 tools/chiptune.py            # sound effects (the default)
+    python3 tools/chiptune.py chipmusic  # the old 8-bit music (the game now uses tools/soundtrack.py)
 """
 import math
 import os
@@ -398,8 +397,12 @@ def gen_music():
 
 
 if __name__ == "__main__":
-    what = sys.argv[1:] or ["sfx", "music"]
+    # The game's music is now tools/soundtrack.py; "chipmusic" still renders the old
+    # 8-bit tunes (over the same files) if you ever want them back.
+    what = sys.argv[1:] or ["sfx"]
     if "sfx" in what:
         gen_sfx()
-    if "music" in what:
+    if "chipmusic" in what:
         gen_music()
+    if "music" in what:
+        print("The music is made by tools/soundtrack.py now (use 'chipmusic' for the old 8-bit tunes).")

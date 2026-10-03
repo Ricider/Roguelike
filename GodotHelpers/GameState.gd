@@ -330,33 +330,46 @@ const SAVE_PATH := "user://savegame.json"
 # played on their own maps (Assets/Maps/story_<n>.json). Progress lives in its own
 # file so it survives New/Save of ordinary campaigns.
 const STORY_PATH := "user://story.json"
-var story_screen: Dictionary = {} # what scenes/Story.tscn shows: {"phase": "menu"|"intro"|"outro"|"defeat", "chapter": n}
+var story_screen: Dictionary = {} # what scenes/Story.tscn shows: {"phase": "campaigns"|"chronicle"|"menu"|"intro"|"outro"|"epilogue"|"defeat", "campaign": id, "chapter": n}
 
-func story_progress() -> Dictionary:
-	var out := {"unlocked": 1, "completed": []}
+# Progress per campaign: {campaign id: {"unlocked": n, "completed": [chapters]}}.
+func story_progress_all() -> Dictionary:
+	var out := {}
 	if FileAccess.file_exists(STORY_PATH):
 		var d = JSON.parse_string(FileAccess.get_file_as_string(STORY_PATH))
 		if d is Dictionary:
-			out["unlocked"] = clampi(int(d.get("unlocked", 1)), 1, StoryText.count())
-			out["completed"] = d.get("completed", [])
+			if d.has("campaigns") and d["campaigns"] is Dictionary:
+				out = (d["campaigns"] as Dictionary).duplicate(true)
+			elif d.has("unlocked"): # the first version only had the State Troops' campaign
+				out["state"] = {"unlocked": d.get("unlocked", 1), "completed": d.get("completed", [])}
 	return out
 
-func story_complete(n: int) -> void:
-	var p := story_progress()
+func story_progress(cid: String = "state") -> Dictionary:
+	var p: Dictionary = story_progress_all().get(cid, {})
+	var done: Array = []
+	for c in p.get("completed", []):
+		done.append(int(c))
+	return {"unlocked": clampi(int(p.get("unlocked", 1)), 1, maxi(StoryText.count(cid), 1)), "completed": done}
+
+func story_complete(cid: String, n: int) -> void:
+	var all := story_progress_all()
+	var p := story_progress(cid)
 	var done: Array = p["completed"]
 	if not done.has(n):
 		done.append(n)
 	p["completed"] = done
-	p["unlocked"] = clampi(maxi(int(p["unlocked"]), n + 1), 1, StoryText.count())
+	p["unlocked"] = clampi(maxi(int(p["unlocked"]), n + 1), 1, StoryText.count(cid))
+	all[cid] = p
 	var f := FileAccess.open(STORY_PATH, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify(p))
+		f.store_string(JSON.stringify({"campaigns": all}))
 		f.close()
 
-# Start chapter n as the State Troops on its story map.
-func start_story_chapter(n: int) -> void:
-	set_player("State Troops")
-	start_map_campaign("State Troops", "story_%d" % n)
+# Start chapter n of a campaign as its faction, on the chapter's story map.
+func start_story_chapter(cid: String, n: int) -> void:
+	var faction := str(StoryText.campaign(cid).get("faction", "State Troops"))
+	set_player(faction)
+	start_map_campaign(faction, StoryText.map_id(cid, n))
 
 # Sharp text at any window size: render the UI fonts as MSDF (signed distance
 # fields) with mipmaps. Done here rather than in the .import files because those

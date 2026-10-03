@@ -1,12 +1,20 @@
-# StoryText: the words of the State Troops campaign (see scripts/story.gd).
+# StoryText: the words of the story campaigns (see scripts/story.gd), and the way
+# to look them up. Eight campaigns share one history: the State Troops' own
+# (below) and seven more in story_campaigns.gd, put in order by its ACTS.
 # Each chapter: its title, the illustration shown with its intro (Assets/Story/),
 # the intro paragraphs, the objective, and the outro shown after you win it,
-# which plays over the next chapter's illustration (the epilogue's after the last).
+# which plays over the next chapter's illustration (the campaign's finale after
+# the last). Optional "briefing" / "combat_briefing" are shown on the map.
 extends RefCounted
 class_name StoryText
 
 const SAGA_TITLE := "A STATE OF EMERGENCY"
 const SAGA_SUBTITLE := "The reluctant war of the State Troops, in five chapters."
+const CHRONICLE_TITLE := "CAMPAIGNS"
+const CHRONICLE_SUBTITLE := "Eight factions, one history. Each campaign tells a different part of it."
+
+# Campaign menu order: the State Troops' saga first, then the rest in order of their first act.
+const ORDER := ["state", "corporate", "horde", "coalition", "fundamentalists", "mercenaries", "insurgents", "peacekeepers"]
 
 const CHAPTERS := [
 	{
@@ -124,11 +132,63 @@ const DEFEAT := [
 	"But history is written by whoever is still standing. Pick it up and try again.",
 ]
 
-static func chapter(n: int) -> Dictionary:
-	return CHAPTERS[clampi(n, 1, CHAPTERS.size()) - 1]
+const STATE := {
+	"faction": "State Troops",
+	"title": "A State of Emergency",
+	"subtitle": "The reluctant war of the State Troops.",
+	"era": "Acts III and IV",
+}
 
-static func count() -> int:
-	return CHAPTERS.size()
+# A campaign's record: faction, title, subtitle, era, chapters, epilogue.
+static func campaign(cid: String) -> Dictionary:
+	if cid == "state" or cid == "":
+		var d: Dictionary = STATE.duplicate(true)
+		d["chapters"] = CHAPTERS
+		d["epilogue"] = {"title": EPILOGUE_TITLE, "lines": EPILOGUE, "image": "epilogue"}
+		return d
+	return StoryCampaigns.CAMPAIGNS.get(cid, {})
+
+static func count(cid: String = "state") -> int:
+	return (campaign(cid).get("chapters", []) as Array).size()
+
+# Chapter n (1-based) of a campaign, with its "image" filled in.
+static func chapter(cid: String, n: int) -> Dictionary:
+	var chs: Array = campaign(cid).get("chapters", [])
+	if chs.is_empty():
+		return {}
+	var d: Dictionary = (chs[clampi(n, 1, chs.size()) - 1] as Dictionary).duplicate(true)
+	if not d.has("image"):
+		d["image"] = "%s_%d" % [cid, clampi(n, 1, chs.size())]
+	return d
+
+# The campaign's finale, shown after its last chapter: {title, lines, image}.
+static func epilogue(cid: String) -> Dictionary:
+	var d: Dictionary = (campaign(cid).get("epilogue", {}) as Dictionary).duplicate(true)
+	if not d.has("image"):
+		d["image"] = "%s_end" % cid
+	return d
+
+# What the story screen says when a chapter is lost: {title, lines, image}.
+static func defeat(cid: String) -> Dictionary:
+	if cid == "state" or cid == "":
+		return {"title": DEFEAT_TITLE, "lines": DEFEAT, "image": "defeat"}
+	var faction := str(campaign(cid).get("faction", "Their"))
+	return {
+		"title": DEFEAT_TITLE,
+		"lines": [
+			"The last %s flag lies in the mud." % faction,
+			"This is not how the story went, and history is not in the habit of changing its mind.",
+			"Pick the flag up and make it go the way it should.",
+		],
+		"image": "defeat_%s" % cid,
+	}
+
+# The map a chapter is played on (tools/make_story.py).
+static func map_id(cid: String, n: int) -> String:
+	return ("story_%d" % n) if (cid == "state" or cid == "") else ("story_%s_%d" % [cid, n])
+
+static func acts() -> Array:
+	return StoryCampaigns.ACTS
 
 static func image(name: String) -> Texture2D:
 	var path := "res://Assets/Story/%s.png" % name

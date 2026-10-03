@@ -44,7 +44,18 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
 
   The rules are in `MapWar.move_allowance` / `reachable` / `move` / `ai_move`.
 - **Marching to the front:** a nation's whole attack is resolved first, so each unit's real targets are known: random picks, and new targets chosen after an earlier shot killed the old one. The screen then replays it. All units march out together, hex by hex, toward their actual target; a unit firing several shots (Rocket Launcher) heads for the one most central to all of its targets. HP bars and flags stay at their pre-attack values until each shot lands, and cards that are about to die stay on the map until the shot that kills them. When a shot brings a nation down mid-attack, the replay splits into waves. Units firing after the collapse only set off once the flag has visibly re-formed, and they march to its new spot. Ground units walk over their own land, cross open sea in a small boat in their nation's colour, and cross the border into the land of the nation they attack, but never through a third nation's land. Flying units fly straight. Melee units stop on the free hex closest to their target, right beside it when they can reach. Ranged units stop no closer than 3 hexes (`RANGED_GAP`). A walk only ends on a hex no card or flag stands on and no other walker is heading to, so units never overlap; a unit with no better free hex stays put. Each unit fires from where it stopped, then they all walk back. A march takes at most about 1 second each way at 1x; longer routes step faster. It is visual only: the cards never leave their hexes (`walk_out`/`walk_back`/`at_sea` in `scripts/world_map_view.gd`, `_walk_path`, `WALK_STEP`, `WALK_MAX` and `RANGED_GAP` in `scripts/world_map.gd`).
-- **Campaign (story mode):** **Campaign** on the main menu opens *A State of Emergency*, five chapters starring the State Troops. Each chapter opens with an illustrated intro (typed-out text; a click, Space or Enter shows it all) and an objective. Winning plays an outro over the next chapter's illustration and unlocks the next chapter. Losing shows the fallen flag and offers a retry. Progress is kept in `user://story.json`, separate from the save slot.
+- **Campaigns (story mode):** **Campaign** on the main menu opens eight story campaigns, one per faction, that tell a single history between them. Each campaign covers a different part of it, and the **Chronicle** button lists every chapter of every campaign in order. Every chapter's war covers exactly the land its winner ends up with, so each victory is the version of events the other campaigns build on. For example, the Insurgents' first chapter is fought over exactly the land they hold when the State Troops' first chapter begins.
+
+  | Act | Chapters, in order |
+  |---|---|
+  | I. Before the Storm | Corporate 1 (Mexico, vs Peace Keepers) · Horde 1 (East China, vs Peace Keepers) · Corporate 2 (Alaska, vs Horde) · Coalition 1 (Poland, vs Horde) · Corporate 3 (the Gulf Coast, vs their own Mercenaries) |
+  | II. The Proxy Wars | Horde 2 (Central Asia, vs Insurgents) · Fundamentalists 1 (Iraq, vs Insurgents) · Fundamentalists 2 (the Levant, vs Peace Keepers) · Peace Keepers 1 (Indochina, vs Insurgents) · Fundamentalists 3 (Egypt, vs Mercenaries) · Mercenaries 1 (Libya, vs Peace Keepers) · Mercenaries 2 (the Maghreb, vs Coalition) · Coalition 2 (Italy, vs Mercenaries) · Coalition 3 (Britain, vs Corporate) · Insurgents 1 (Anatolia, vs State Troops) |
+  | III. A State of Emergency | State 1 · State 2 · Mercenaries 3 (the Fezzan, vs Fundamentalist remnants) · Peace Keepers 2 (Sudan, vs Fundamentalist remnants) · State 3 · Horde 3 (Chukotka, vs Corporate) · State 4 |
+  | IV. The World Against Us | Insurgents 2 (Britain, vs Coalition loyalists) · Insurgents 3 (northern France, vs State Troops) · Peace Keepers 3 (the Sahel, vs Mercenaries) · State 5 |
+
+  Each campaign has an illustrated intro and outro for every chapter, a finale, and a defeat screen in its own colours. Chapters unlock one by one within a campaign, and progress is kept per campaign in `user://story.json`. The seven newer campaigns are in `scripts/story_campaigns.gd` (with `ACTS`), and their maps are `story_<campaign>_<n>.json`. Their pictures come from data in `COMPOSED` in `tools/story_art.py`. Two extra map frames cover them: the Central Asian steppe and the Sahel/Sudan.
+
+  The State Troops campaign, *A State of Emergency*, has five chapters. Each chapter opens with an illustrated intro (typed-out text; a click, Space or Enter shows it all) and an objective. Winning plays an outro over the next chapter's illustration and unlocks the next chapter. Losing shows the fallen flag and offers a retry. Progress is kept in `user://story.json`, separate from the save slot.
 
   | Chapter | Map | The war |
   |---|---|---|
@@ -133,10 +144,18 @@ godot --path . -s tools/dev/screenshot.gd -- res://scenes/Game.tscn /tmp/shot.pn
 ```
 
 ## Sound & music
-All audio is 8-bit chiptune synthesized by `tools/chiptune.py` (stdlib-only Python emulating 2 pulse channels, a triangle and a noise channel). It writes about 24 sound effects to `Assets/Audio/sfx/` and three looping tracks (menu, world map, battle) to `Assets/Audio/music/`:
+The music is a modern synthesized score, made by `tools/soundtrack.py` (stdlib-only Python). It uses detuned analog-style pads through resonant filters, plucked arpeggios with ping-pong delay, sub bass, a felt piano, electronic drums with sidechain pumping, and a stereo reverb with a soft-clipping master. It writes three seamless looping stereo tracks (32 kHz) to `Assets/Audio/music/`:
+
+| File | Title | Style | Where it plays |
+|---|---|---|---|
+| `menu.wav` | Long Shadows | slow cinematic theme, D minor, 84 bpm | main menu, story screens |
+| `map.wav` | Command Table | strategy electronica that builds and thins out, A minor, 100 bpm | the war map |
+| `battle.wav` | Front Line | driving hybrid with a breakdown, E minor, 128 bpm | card battles |
+
+The sound effects are still 8-bit, from `tools/chiptune.py` (emulating 2 pulse channels, a triangle and a noise channel), in `Assets/Audio/sfx/`:
 ```
-python3 tools/chiptune.py          # everything
-python3 tools/chiptune.py sfx      # or: music
+python3 tools/soundtrack.py         # the music (or: menu / map / battle)
+python3 tools/chiptune.py           # the sound effects (chipmusic: the old 8-bit tunes)
 ```
 `GodotHelpers/SoundManager.gd` (autoload) plays them. It crossfades music between scenes, gives every text button a click and hover sound, and each weapon has its own firing sound. **M** or the **Sound: On/Off** button mutes, and the setting is saved in `user://audio.cfg`.
 

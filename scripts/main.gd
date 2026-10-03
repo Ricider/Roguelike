@@ -421,11 +421,11 @@ func _add_campaign_button():
 	cbtn.pressed.connect(func():
 		var gs = get_node_or_null("/root/GameState")
 		if gs != null:
-			gs.story_screen = {"phase": "menu", "chapter": 1}
+			gs.story_screen = {"phase": "campaigns"}
 		get_tree().change_scene_to_file("res://scenes/Story.tscn"))
 	vbox.add_child(cbtn)
 	_style_pill_button(cbtn, Color(0.16,0.16,0.26,1), Color(0.22,0.22,0.34,1), Color(0.82,0.78,0.70,0.85))
-	cbtn.tooltip_text = "The State Troops story: five chapters, from a local insurgency to a war against the whole world."
+	cbtn.tooltip_text = "Story campaigns for all eight factions: one history, told from eight sides."
 
 func _add_resume_button():
 	var vbox = get_node_or_null("CenterContainer/VBox")

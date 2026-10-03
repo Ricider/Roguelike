@@ -50,7 +50,8 @@ static var CLAIMS: Array = []
 # out everything outside the chapter's war. Empty on the normal maps.
 static var START_OWNER: Array = [] # rows: "0".."9" = index into NATIONS, "." = nobody
 static var VOID_ROWS: Array = []   # rows: "x" = out of play (greyed, never owned or entered)
-static var STORY_CHAPTER: int = 0  # 1..5 on story maps, 0 otherwise
+static var STORY_CHAPTER: int = 0  # chapter number on story maps, 0 otherwise
+static var STORY_CAMPAIGN: String = "" # which campaign a story map belongs to ("state", "horde", ...)
 static var EXTRAS: Array = []      # story maps: extra starting cards (MapWar.place_extras)
 
 static func _static_init() -> void:
@@ -105,6 +106,7 @@ static func use_map(map_id: String) -> bool:
 	for r in d.get("void", []):
 		VOID_ROWS.append(str(r))
 	STORY_CHAPTER = int(d.get("story_chapter", 0))
+	STORY_CAMPAIGN = str(d.get("story_campaign", "state" if STORY_CHAPTER > 0 else ""))
 	EXTRAS = (d.get("extras", []) as Array).duplicate(true)
 	return true
 
