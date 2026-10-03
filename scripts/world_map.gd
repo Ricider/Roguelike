@@ -53,6 +53,7 @@ var _hover_bar: Label = null
 var _hand_box: HBoxContainer = null
 var _end_btn: Button = null
 var _speed_btn: Button = null
+var _follow_cam: bool = true # the camera follows other nations' turns and fights
 var _log: RichTextLabel = null
 var _selected: Card = null
 var _busy: bool = false
@@ -209,12 +210,23 @@ func _build_ui() -> void:
 	zoom_bar.add_theme_constant_override("separation", 4)
 	zoom_bar.anchor_left = 1.0
 	zoom_bar.anchor_right = 1.0
-	zoom_bar.offset_left = -196
+	zoom_bar.offset_left = -300
 	zoom_bar.offset_right = -10
 	zoom_bar.offset_top = 10
 	zoom_bar.offset_bottom = 54
 	zoom_bar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR # the map view is NEAREST; keep button text smooth
 	_view.add_child(zoom_bar)
+	var follow := Button.new()
+	follow.name = "FollowButton"
+	follow.text = "Follow"
+	follow.toggle_mode = true
+	follow.button_pressed = _follow_cam
+	follow.custom_minimum_size = Vector2(98, 44)
+	follow.add_theme_font_size_override("font_size", 16)
+	follow.focus_mode = Control.FOCUS_NONE
+	follow.toggled.connect(func(on: bool): _follow_cam = on)
+	_tip(follow, func(): return "[Follow]: during other nations' turns the camera flies to each of them and frames every fight, one defender at a time. Off: the camera stays where you leave it.")
+	zoom_bar.add_child(follow)
 	for spec in [["-", func(): _view.zoom_by(1.0 / 1.3)], ["+", func(): _view.zoom_by(1.3)], ["Home", _go_home]]:
 		var zb := Button.new()
 		zb.text = spec[0]
@@ -979,6 +991,7 @@ func _on_end_turn() -> void:
 	_clear_selection()
 	_sfx("end_turn", -2.0)
 	_status.text = "Your units open fire..."
+	var my_cam: Array = _view.camera_goal() # handed back when your turn comes round
 	await _nation_attacks(_me())
 	_war.end_turn(_me())
 	if _check_end():
@@ -987,6 +1000,9 @@ func _on_end_turn() -> void:
 		if n == _me() or not _war.alive(n):
 			continue
 		_status.text = "%s is moving..." % n
+		if _follow_cam:
+			# fly over the nation whose turn it is, framing its whole territory
+			await _view.glide_to(_view.frame_for(_campaign().tiles_of(n), 0.5), CAM_GLIDE / _speed())
 		_war.begin_turn(n)
 		var bought: Array = _war.ai_shop(n)
 		if not bought.is_empty():
@@ -1005,13 +1021,14 @@ func _on_end_turn() -> void:
 			return
 	_war.turn += 1
 	_log_line("[color=#ffd966]Turn %d.[/color]" % _war.turn)
+	if _follow_cam:
+		_view.glide_to(my_cam, CAM_GLIDE / _speed())
 	_start_player_turn(true)
 	_refresh()
 	if not _report.is_empty() and not _campaign().has_won() and not _campaign().has_lost():
 		_open_report()
 
 func _nation_attacks(n: String) -> void:
-	var shots := 0
 	# 1. Resolve the whole attack in the war logic first, so every unit's real
 	#    targets are known, random picks and retargets after earlier kills included.
 	#    The view then replays it from the pre-attack state (begin_replay).
@@ -1039,6 +1056,61 @@ func _nation_attacks(n: String) -> void:
 				for lk in ev.get("lost", []):
 					dead.append(str(lk)) # stands until the collapse plays out on screen
 	_view.begin_replay(snapshot, dead, flag_hp, flag_sites)
+	# 2. Play it back one defender at a time, with the camera centred on each fight
+	#    (yours included; with Follow off the camera stays put).
+	var groups: Array = _split_by_victim(plan)
+	var follow := _follow_cam
+	for group in groups:
+		if follow:
+			await _frame_fight(group, flag_sites)
+		await _replay_group(n, group, snapshot, dead, flag_sites)
+	_view.end_replay() # back to the real state (splash and interceptor wear included)
+	_refresh_legend()
+	_refresh_player_card()
+	_resolve_collapses()
+
+# Where a unit marches for its shots: its target, or for a multi-shot unit (Rocket
+# Launcher, Howitzer) the target hex closest in total to all the others it hits.
+func _march_goal(entries: Array) -> Vector2i:
+	var best: Vector2i = entries[0]["to"]
+	var best_sum := 1 << 30
+	for a in entries:
+		var sum := 0
+		for b in entries:
+			sum += MapCampaign.hex_distance(a["to"], b["to"])
+		if sum < best_sum:
+			best_sum = sum
+			best = a["to"]
+	return best
+
+# A replayed shot reaches its target: lower the shown HP (a flag hit, or a card;
+# a destroyed card also costs its owner its BioCost on the flag bar).
+func _land_hit(e: Dictionary, snapshot: Dictionary, impact: String) -> void:
+	_sfx(impact, -5.0)
+	if not is_instance_valid(_view):
+		return
+	var to: Vector2i = e["to"]
+	if bool(e["direct"]):
+		_view.replay_hit(to, int(e["damage"]), str(e["victim"]))
+	else:
+		_view.replay_hit(to, int(e["damage"]))
+	for d in e["destroyed"]:
+		var dk := str(d["key"])
+		if snapshot.has(dk):
+			_view.replay_hit(to, int(snapshot[dk]["bio"]), str(d["owner"]))
+	# a nation fell on this shot: its flag re-forms elsewhere at full HP and its
+	# border moves now (the log lines and Influence follow after the attack)
+	var collapses: Array = e.get("collapses", [])
+	if not collapses.is_empty():
+		for ev in collapses:
+			_view.replay_collapse(ev)
+		_view.set_campaign(_campaign())
+		_minimap.refresh()
+		_refresh_legend()
+
+# One fight of an attack (all of it, or one defender's share): split into waves at
+# collapses, march, fire, wait for the shots, then walk everyone home.
+func _replay_group(n: String, plan: Array, snapshot: Dictionary, dead: Array, flag_sites: Dictionary) -> void:
 	# 2. Split the attack into waves at every collapse: when a shot brings a nation
 	#    down, its flag re-forms elsewhere, so the units firing after that must only
 	#    set off once the flag has visibly moved. Each wave's units march together,
@@ -1053,6 +1125,7 @@ func _nation_attacks(n: String) -> void:
 			if not (e.get("collapses", []) as Array).is_empty():
 				waves.append([])
 				break
+	var shots := 0
 	var walkers: Array = []
 	var taken := {}
 	for dk in dead:
@@ -1127,49 +1200,44 @@ func _nation_attacks(n: String) -> void:
 			_view.walk_back(k)
 		await _wait(march + 0.05)
 		_view.clear_walks()
-	_view.end_replay() # back to the real state (splash and interceptor wear included)
-	_refresh_legend()
-	_refresh_player_card()
-	_resolve_collapses()
 
-# Where a unit marches for its shots: its target, or for a multi-shot unit (Rocket
-# Launcher, Howitzer) the target hex closest in total to all the others it hits.
-func _march_goal(entries: Array) -> Vector2i:
-	var best: Vector2i = entries[0]["to"]
-	var best_sum := 1 << 30
-	for a in entries:
-		var sum := 0
-		for b in entries:
-			sum += MapCampaign.hex_distance(a["to"], b["to"])
-		if sum < best_sum:
-			best_sum = sum
-			best = a["to"]
-	return best
+# [[k, entries], ...] split into one plan per defender, in the order they are first
+# hit; a unit firing at two nations appears in both with its shots for each.
+func _split_by_victim(plan: Array) -> Array:
+	var order: Array = []
+	var by_victim := {}
+	for item in plan:
+		var per := {}
+		for e in (item[1] as Array):
+			var v := str(e["victim"])
+			if not per.has(v):
+				per[v] = []
+			(per[v] as Array).append(e)
+		for v in per.keys():
+			if not by_victim.has(v):
+				by_victim[v] = []
+				order.append(v)
+			(by_victim[v] as Array).append([item[0], per[v]])
+	var out: Array = []
+	for v in order:
+		out.append(by_victim[v])
+	return out
 
-# A replayed shot reaches its target: lower the shown HP (a flag hit, or a card;
-# a destroyed card also costs its owner its BioCost on the flag bar).
-func _land_hit(e: Dictionary, snapshot: Dictionary, impact: String) -> void:
-	_sfx(impact, -5.0)
-	if not is_instance_valid(_view):
+# Glide the camera to frame one fight: the attackers, everything they hit and the
+# defender's flag, as close as fits with a little margin.
+const CAM_GLIDE := 0.6 # seconds at 1x
+func _frame_fight(group: Array, flag_sites: Dictionary) -> void:
+	var attackers: Array = []
+	var action: Array = [] # where the shots land: the camera centres on these
+	for item in group:
+		attackers.append(MapWar.key_to_hex(str(item[0])))
+		for e in (item[1] as Array):
+			action.append(e["to"])
+			for sp in e["splash"]:
+				action.append(sp)
+	if action.is_empty():
 		return
-	var to: Vector2i = e["to"]
-	if bool(e["direct"]):
-		_view.replay_hit(to, int(e["damage"]), str(e["victim"]))
-	else:
-		_view.replay_hit(to, int(e["damage"]))
-	for d in e["destroyed"]:
-		var dk := str(d["key"])
-		if snapshot.has(dk):
-			_view.replay_hit(to, int(snapshot[dk]["bio"]), str(d["owner"]))
-	# a nation fell on this shot: its flag re-forms elsewhere at full HP and its
-	# border moves now (the log lines and Influence follow after the attack)
-	var collapses: Array = e.get("collapses", [])
-	if not collapses.is_empty():
-		for ev in collapses:
-			_view.replay_collapse(ev)
-		_view.set_campaign(_campaign())
-		_minimap.refresh()
-		_refresh_legend()
+	await _view.glide_to(_view.frame_for(attackers, 1.5, action), CAM_GLIDE / _speed())
 
 # Visual march route for the card at `k` towards `target` (home first). Ground units walk
 # over their own land, sail over open sea (the view draws a boat) and cross the border

@@ -2,7 +2,7 @@
 # godot --path . -s tools/dev/screenshot.gd -- <scene> <out.png> [frames] [setup]
 # setup: "battle" starts a run first, "battle_select" also selects the first hand card
 # and hovers a square, "battle_endturn" plays one full combat turn,
-# "press:<Button>" presses a named button, "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round, "map_boat" stages two units sailing out to sea.
+# "press:<Button>" presses a named button, "map_shop" opens the map shop with 120 Influence, "map" starts a map campaign first, "map_turn" also deploys a card and plays a full round, "map_boat" stages two units sailing out to sea. SNAP_EVERY=N saves a frame every N frames during map_turn rounds (out_NNNN.png).
 extends SceneTree
 
 func _initialize() -> void:
@@ -198,6 +198,7 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		gc._speed_idx = 2
 		var rounds: int = int(setup.substr(8)) if setup.length() > 8 else 1
 		var waited := 0
+		var cam0: Array = gc._view.camera_state() # the follow camera should hand this back each round
 		for rnd in range(rounds):
 			for card in gc._human().Hand.duplicate():
 				if gc._war.shortfall(gc._me(), card) == "" and gc._busy == false:
@@ -210,12 +211,18 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 			gc._clear_selection()
 			var t0 := Time.get_ticks_msec()
 			gc._on_end_turn()
+			var snap_every := int(OS.get_environment("SNAP_EVERY")) # >0: save a frame every N frames mid-round
 			while gc._busy and waited < 20000:
 				await process_frame
 				waited += 1
+				if snap_every > 0 and waited % snap_every == 0:
+					RenderingServer.force_draw(false)
+					root.get_viewport().get_texture().get_image().save_png(out.get_basename() + "_%04d.png" % waited)
+					print("SNAP ", waited, " status=", gc._status.text)
 			print("round ", rnd + 1, " took ", Time.get_ticks_msec() - t0, "ms")
 		for i in range(30):
 			await process_frame
+		print("camera back home: ", (gc._view.camera_state()[0] as Vector2).distance_to(cam0[0]) < 0.5 and absf(float(gc._view.camera_state()[1]) - float(cam0[1])) < 0.01)
 		print("round_frames=", waited, " turn=", gc._war.turn, " units=", gc._war.units.size())
 		for line in gc._log_lines:
 			print("LOG ", line)

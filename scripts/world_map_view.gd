@@ -280,12 +280,12 @@ func metrics() -> Array:
 	var map_w: float = _map_width(s)
 	var ox: float = floorf((size.x - map_w) * 0.5 + _pan.x)
 	if not WorldMap.WRAPS:
-		if map_w + FRAME_PX * 2.0 <= size.x:
-			ox = floorf((size.x - map_w) * 0.5)
-		else:
-			ox = floorf(clampf((size.x - map_w) * 0.5 + _pan.x, size.x - map_w - FRAME_PX, FRAME_PX))
+		ox = floorf((size.x - map_w) * 0.5 + _pan.x) if _edge_free else (floorf((size.x - map_w) * 0.5) if map_w + FRAME_PX * 2.0 <= size.x
+			else floorf(clampf((size.x - map_w) * 0.5 + _pan.x, size.x - map_w - FRAME_PX, FRAME_PX)))
 	var oy: float
-	if map_h + FRAME_PX * 2.0 <= size.y:
+	if _edge_free:
+		oy = floorf((size.y - map_h) * 0.5 + _pan.y) # _normalize_pan keeps it within reach
+	elif map_h + FRAME_PX * 2.0 <= size.y:
 		oy = floorf((size.y - map_h) * 0.5)
 	else:
 		oy = floorf(clampf((size.y - map_h) * 0.5 + _pan.y, size.y - map_h - FRAME_PX, FRAME_PX))
@@ -324,6 +324,7 @@ func _visible_copies(t: Vector2i, m: Array, margin: float) -> Array:
 	return out
 
 func zoom_by(factor: float, anchor: Vector2 = Vector2(-1, -1)) -> void:
+	_edge_free = false
 	if anchor.x < 0:
 		anchor = size * 0.5
 	var m := metrics()
@@ -345,6 +346,7 @@ func zoom_by(factor: float, anchor: Vector2 = Vector2(-1, -1)) -> void:
 	_redraw_all()
 
 func pan_by(delta: Vector2) -> void:
+	_edge_free = false
 	_pan += delta
 	_normalize_pan()
 	_redraw_all()
@@ -357,13 +359,18 @@ func _normalize_pan() -> void:
 			_pan.x = fposmod(_pan.x + period * 0.5, period) - period * 0.5
 	else:
 		var slack_x: float = maxf(0.0, (_map_width(s) - size.x) * 0.5 + FRAME_PX)
+		if _edge_free:
+			slack_x = absf(_map_width(s) - size.x) * 0.5 + size.x * 0.5
 		_pan.x = clampf(_pan.x, -slack_x, slack_x)
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
 	var slack: float = maxf(0.0, (map_h - size.y) * 0.5 + FRAME_PX)
+	if _edge_free:
+		slack = absf(map_h - size.y) * 0.5 + size.y * 0.5 # far enough to centre any hex
 	_pan.y = clampf(_pan.y, -slack, slack)
 
 # Put hex t in the middle of the view (optionally at a new zoom).
 func center_on(t: Vector2i, new_zoom: float = -1.0) -> void:
+	_edge_free = false
 	if new_zoom > 0.0:
 		zoom = clampf(new_zoom, ZOOM_MIN, ZOOM_MAX)
 	_pan = Vector2.ZERO
@@ -373,9 +380,98 @@ func center_on(t: Vector2i, new_zoom: float = -1.0) -> void:
 	_normalize_pan()
 	_redraw_all()
 
+# ------------------------------------------------------------ camera moves
+# The camera as [centre in map units (hex size 1, see _unit_center), zoom].
+func camera_state() -> Array:
+	var m := metrics()
+	var s: float = m[0]
+	return [(size * 0.5 - Vector2(float(m[1]), float(m[2]))) / maxf(s, 0.001), zoom]
+
+# The follow camera may look past the map's edges (into the deep-sea margin) so a
+# fight by a pole or a regional map's border still sits in the middle; any camera
+# move by the player (pan, zoom, Home, minimap) brings the normal limits back.
+var _edge_free: bool = false
+
+func set_camera(center: Vector2, new_zoom: float, free: bool = false) -> void:
+	_edge_free = free
+	zoom = clampf(new_zoom, ZOOM_MIN, ZOOM_MAX)
+	_pan = Vector2.ZERO
+	var m := metrics()
+	var s: float = m[0]
+	_pan = size * 0.5 - (Vector2(float(m[1]), float(m[2])) + center * s)
+	_normalize_pan()
+	_redraw_all()
+
+# The camera that shows every hex in `hexes` as large as possible, with `pad`
+# hexes of margin all round. On the wrapping world map each hex is taken in the
+# copy nearest the first one, so a fight across the date line stays together.
+# With `focus` (the hexes where the shooting lands), the camera is centred on the
+# focus and zoomed out just enough to keep every hex of `hexes` in view around it.
+func frame_for(hexes: Array, pad: float = 1.5, focus: Array = []) -> Array:
+	if hexes.is_empty() and focus.is_empty():
+		return camera_state()
+	var period: float = WorldMap.GRID_W * SQRT3
+	var first: Vector2i = focus[0] if not focus.is_empty() else hexes[0]
+	var ref := _unit_center(first.x, first.y)
+	var unwrap := func(h: Vector2i) -> Vector2:
+		var c := _unit_center(h.x, h.y)
+		if WorldMap.WRAPS:
+			c.x += roundf((ref.x - c.x) / period) * period
+		return c
+	# the centre: middle of the focus (or of everything)
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for h in (focus if not focus.is_empty() else hexes):
+		var c: Vector2 = unwrap.call(h)
+		lo = Vector2(minf(lo.x, c.x), minf(lo.y, c.y))
+		hi = Vector2(maxf(hi.x, c.x), maxf(hi.y, c.y))
+	var center := (lo + hi) * 0.5
+	# half-extents around that centre that cover every hex; a hex reaches sqrt3/2
+	# sideways and 1 up/down from its centre, then the margin
+	var half := Vector2.ZERO
+	for h in hexes + focus:
+		var c: Vector2 = unwrap.call(h)
+		half = Vector2(maxf(half.x, absf(c.x - center.x)), maxf(half.y, absf(c.y - center.y)))
+	half += Vector2(SQRT3 * 0.5 + pad * SQRT3, 1.0 + pad * 1.5)
+	var avail := size - Vector2(FRAME_PX, FRAME_PX) * 2.0
+	var s_fit: float = minf(avail.x / maxf(half.x * 2.0, 0.001), avail.y / maxf(half.y * 2.0, 0.001))
+	if WorldMap.WRAPS:
+		center.x = fposmod(center.x, period)
+	return [center, s_fit / maxf(_fit_size(), 0.001)]
+
+var _cam_tween: Tween = null
+var _cam_goal: Array = []
+
+# Where the camera is heading: the end of a glide still in progress, else where it is.
+func camera_goal() -> Array:
+	if _cam_tween != null and _cam_tween.is_valid() and _cam_tween.is_running() and not _cam_goal.is_empty():
+		return _cam_goal
+	return camera_state()
+
+# Glide (pan + zoom together) to a camera from frame_for/camera_state. Returns the
+# tween's finished signal so callers can await it (null tween => already there).
+func glide_to(cam: Array, duration: float) -> Signal:
+	if _cam_tween != null and _cam_tween.is_valid():
+		_cam_tween.kill()
+	_cam_goal = cam
+	var from: Array = camera_state()
+	var c0: Vector2 = from[0]
+	var c1: Vector2 = cam[0]
+	if WorldMap.WRAPS:  # take the short way round the globe
+		var period: float = WorldMap.GRID_W * SQRT3
+		c1.x += roundf((c0.x - c1.x) / period) * period
+	var z0: float = clampf(float(from[1]), ZOOM_MIN, ZOOM_MAX)
+	var z1: float = clampf(float(cam[1]), ZOOM_MIN, ZOOM_MAX)
+	_cam_tween = create_tween()
+	_cam_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_cam_tween.tween_method(func(t: float):
+		set_camera(c0.lerp(c1, t), z0 * pow(z1 / z0, t), true), 0.0, 1.0, maxf(duration, 0.01))
+	return _cam_tween.finished
+
 # Put a point of the map in the middle of the view: fx, fy are 0..1 across the
 # whole map (the minimap hands these over). Keeps the zoom.
 func center_on_fraction(fx: float, fy: float) -> void:
+	_edge_free = false
 	_pan = Vector2.ZERO
 	var m := metrics()
 	var s: float = m[0]
