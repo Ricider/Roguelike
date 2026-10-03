@@ -158,7 +158,7 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 	if card is Unit:
 		lines.append("[color=%s][lb]%s[rb] [lb]%s[rb][/color]" % [ORANGE, "HasRange" if ranged else "Melee", "Flying" if flying else "Grounded"])
 	if card.SpecialEffect != "":
-		lines.append(card.SpecialEffect)
+		lines.append(highlight(card.SpecialEffect))
 	for n in info.get("notes", []):
 		lines.append(str(n))
 	eff.text = "\n".join(lines) if not lines.is_empty() else " "

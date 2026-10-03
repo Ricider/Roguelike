@@ -9,7 +9,7 @@ func test_interceptor_stats():
 	assert_eq(inter.BioCost, 5, "Interceptor 5 Bio")
 	assert_eq(inter.InfluenceCost, 30, "Interceptor 30 Influence")
 	assert_eq(inter.card_name, "Interceptor", "name")
-	assert_true(inter.SpecialEffect.contains("50% less damage"), "effect mentions 50% less")
+	assert_true(inter.SpecialEffect.contains("halved"), "effect says hits are halved")
 	assert_true(inter.SpecialEffect.contains("6 MoneySupply"), "effect mentions 6 Money")
 
 func test_interceptor_all_types_and_decks():

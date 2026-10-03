@@ -3,4 +3,4 @@ class_name SpecialOps
 
 func _init():
 	super._init(10, 7, false, 15, 20, "Special Ops", false, 25)
-	SpecialEffect = "Deals +100% damage to cards with Flying set to false"
+	SpecialEffect = "Elite saboteurs: deal [double damage] to ground units (not to flying units or buildings). Shoots the [closest enemy target] every turn."

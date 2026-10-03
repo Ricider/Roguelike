@@ -3,7 +3,7 @@ class_name Corporation
 
 func _init():
 	super._init(25, 12, 70, 20, "Corporation", 25)
-	SpecialEffect = "Reduce MoneyCost of playing all cards by 20%"
+	SpecialEffect = "Every card you deploy costs [20% less Money] (each Corporation stacks: two make it 36% less). Also pays 12 Money each turn."
 
 static func money_cost_reduction(player: Player) -> float:
 	var n: int = 0
@@ -11,6 +11,9 @@ static func money_cost_reduction(player: Player) -> float:
 		for sq in row.Squares:
 			if sq.Inhabitant != null and sq.Inhabitant is Corporation:
 				n += 1
+	for c in player.MapCards: # Corporations standing on the world map count too
+		if c is Corporation:
+			n += 1
 	if n == 0:
 		return 1.0
 	# 20% per Corporation, stacking multiplicatively? Spec says reduce by 20% — treat as 0.8^n

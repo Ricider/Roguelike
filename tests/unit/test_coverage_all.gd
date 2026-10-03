@@ -26,7 +26,7 @@ func test_unit_flying_and_stats():
 	assert_eq(rl.HitPoints, 12, "Rocket 12")
 	assert_eq(rl.BioCost, 5, "Rocket bio 5")
 	assert_eq(rl.InfluenceCost, 20, "Rocket influence 20 per spec")
-	assert_eq(rl.SpecialEffect, "attacks 4 times every Combat Phase", "Rocket 4x")
+	assert_true(rl.SpecialEffect.contains("4 shots"), "Rocket 4x")
 	var drone := Drone.new()
 	assert_eq(drone.HitPoints, 6, "Drone 6")
 	assert_eq(drone.Damage, 3, "Drone 3")
@@ -37,7 +37,7 @@ func test_unit_flying_and_stats():
 	assert_eq(fj.Damage, 4, "FighterJet 4")
 	assert_true(fj.HasRange, "FighterJet ranged")
 	assert_true(fj.Flying, "FighterJet flying")
-	assert_eq(fj.SpecialEffect, "Also damages tiles adjacent to where it hit", "FighterJet splash")
+	assert_true(fj.SpecialEffect.contains("splashes"), "FighterJet splash")
 	assert_eq(fj.InfluenceCost, 25, "FighterJet influence 25 per spec")
 	var fac := Factory.new()
 	assert_eq(fac.InfluenceCost, 20, "Factory influence 20")
@@ -53,7 +53,7 @@ func test_unit_flying_and_stats():
 	assert_eq(corp.MoneyCost, 70, "Corporation money 70")
 	assert_eq(corp.BioCost, 20, "Corporation bio 20")
 	assert_eq(corp.InfluenceCost, 25, "Corporation influence 25 per spec")
-	assert_eq(corp.SpecialEffect, "Reduce MoneyCost of playing all cards by 20%", "Corp effect")
+	assert_true(corp.SpecialEffect.contains("20% less Money"), "Corp effect")
 
 func test_decks_johndoe_insurgents_euro():
 	# New spec: State Troops replaces JohnDoe, difficulties 1/2/4/5, all decks updated

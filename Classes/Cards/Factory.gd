@@ -3,4 +3,4 @@ class_name Factory
 
 func _init():
 	super._init(20, 15, 30, 20, "Factory", 20)
-	SpecialEffect = ""
+	SpecialEffect = "Pays [+15 MoneySupply] every turn while it stands."

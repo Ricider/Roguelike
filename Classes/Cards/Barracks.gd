@@ -3,7 +3,7 @@ class_name Barracks
 
 func _init():
 	super._init(30, 2, 20, 25, "Barracks", 30)
-	SpecialEffect = "Friendly units in adjacent squares have +2 damage"
+	SpecialEffect = "Your units on the hexes [next to it] deal [+2 damage] with every shot. Also pays 2 Money each turn."
 
 static func bonus_if_adjacent(player: Player, square: Square) -> int:
 	# Spec: Friendly units in adjacent squares (orthogonal+diagonal) have +2 damage

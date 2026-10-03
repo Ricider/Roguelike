@@ -3,7 +3,7 @@ class_name Housing
 
 func _init():
 	super._init(50, 2, 20, 30, "Housing", 15)
-	SpecialEffect = "In your economy phase gain +8 more BioSupply"
+	SpecialEffect = "Adds [+8 BioSupply] every turn (the people you recruit units with), plus 2 Money."
 
 static func count_housing(player: Player) -> int:
 	var n: int = 0

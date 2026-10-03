@@ -42,9 +42,9 @@ func test_magnification_vertical_height_consistent_for_all_card_types():
 		var txt: String = FileAccess.get_file_as_string("res://GodotHelpers/GameController.gd")
 		# all cards share same preview construction — verified via fixed sizes above
 		assert_not_null(card, "card exists " + card.card_name)
-	assert_eq(wall.SpecialEffect, "", "Wall no effect")
+	assert_true(wall.SpecialEffect.contains("no attack"), "Wall explains its role")
 	assert_ne(barracks.SpecialEffect, "", "Barracks has effect")
-	assert_eq(rl.SpecialEffect, "attacks 4 times every Combat Phase", "RL effect")
+	assert_true(rl.SpecialEffect.contains("4 shots"), "RL effect")
 
 func test_magnification_applies_to_field_and_hand():
 	var gc_txt := FileAccess.get_file_as_string("res://GodotHelpers/GameController.gd")

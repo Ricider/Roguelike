@@ -641,3 +641,18 @@ func test_ai_closes_on_a_wounded_enemy():
 	var moves := w.ai_move(A)
 	assert_eq(moves.size(), 1, "it moves")
 	assert_eq(moves[0][1], Vector2i(14, 10), "as close to the wounded enemy as it can get")
+
+func test_corporation_discount_works_on_the_map():
+	var w := _war()
+	var p: Player = w.players[A]
+	var tank := Tank.new()
+	var full := p.get_effective_money_cost(tank)
+	_drop(w, A, Corporation.new(), 12)
+	assert_eq(p.get_effective_money_cost(tank), int(round(full * 0.8)), "a Corporation on the map: 20% off")
+	_drop(w, A, Corporation.new(), 13)
+	assert_eq(p.get_effective_money_cost(tank), int(round(full * 0.64)), "two: 36% off")
+
+func test_every_card_explains_itself():
+	for c in [Infantry.new(), Tank.new(), SpecialOps.new(), AntiAircraft.new(), Drone.new(), Artilery.new(), Howitzer.new(),
+			RocketLauncher.new(), FighterJet.new(), Wall.new(), Barracks.new(), Factory.new(), Housing.new(), Corporation.new(), Interceptor.new()]:
+		assert_true((c as Card).SpecialEffect.length() > 30, "%s has a real description" % (c as Card).card_name)

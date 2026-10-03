@@ -3,7 +3,7 @@ class_name Interceptor
 
 func _init():
 	super._init(20, 0, 50, 5, "Interceptor", 30)
-	SpecialEffect = "Friendly units in adjacent squares take 50% less damage from enemies that have HasRange or Flying set to True, every time this damage reduction effect kicks in the interceptor loses 2 HP and its owner loses 6 MoneySupply"
+	SpecialEffect = "Shields your cards on the hexes [next to it]: hits from enemies with [Range] or [Flying] are [halved]. Each block costs the Interceptor 2 HP and you 6 MoneySupply, so it only works while you have 6 Money."
 
 # Find all interceptor squares adjacent (8-dir) to target_sq on defender's board
 static func find_adjacent_interceptors(defender: Player, target_sq: Square) -> Array:
