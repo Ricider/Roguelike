@@ -39,6 +39,20 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
   | 4. Appetite | Europe & Mediterranean | The State Troops add Libya and the Russian Caucasus and turn on the Coalition (the EU) |
   | 5. The World Against Us | World | Every conquest so far, against the Horde (Russia and East China), the Corporate Troops (North America), Insurgents in Britain and northern France, and Peace Keepers everywhere else |
 
+  Chapters 1–4 also start with set pieces on top of every nation's default starting cards. They are free, and random placements differ each play:
+    - **Chapter 1:** 8 Insurgent Infantry dug in on mountains across their land; 2 Housing at Istanbul; 2 Housing at only 10 HP on the Insurgent border.
+    - **Chapter 2:** 4 Fundamentalist Barracks scattered across their land; 2 State Troops Infantry on the border.
+    - **Chapter 3:** 2 Horde Tanks and 2 Special Ops in the Caucasus; a Mercenary Barracks in the middle of Libya's eastern border, with an Artilery on either side of it; 3 Housing at Istanbul and 2 Factories at Trabzon.
+    - **Chapter 4:** Coalition Corporations at London, Berlin and Paris, each with an Interceptor beside it and a Fighter Jet beside that. Britain is outside the EU war, so the "London" one stands on the Coalition coast nearest London, at Calais. The State Troops get 2 Tanks, 2 Artilery and 2 Housing at Istanbul.
+
+  These are the `extras` rules in `tools/make_story.py`, placed by `MapWar.place_extras`.
+
+  Chapter 1 doubles as the tutorial, with two briefings on the map that wait for a click:
+    - **At the start:** the camera glides to the dug-in Insurgent Infantry. The briefing explains mountain cover (1 less damage per hit) and how targeting works, and suggests putting a Wall between the armies (it adapts to whether you hold a Wall).
+    - **After the first End Turn:** a second briefing explains combat (marching and firing, HP and BioCost, flag hits, collapses and Influence) and wishes you luck.
+
+  The text is the `briefing`/`combat_briefing` entries in `scripts/story_text.gd`, so any chapter can have them.
+
   An epilogue follows the last chapter. Everything outside a chapter's war is greyed out: it is never owned, entered or fought over. The Europe & Mediterranean map is the Europe map's scale, extended south to 24N and east to 52E so Libya, Egypt and the Caucasus fit (the Europe map itself stops at 34N). The chapter maps are `Assets/Maps/story_<n>.json`, made by `python3 tools/make_story.py`, which defines territories as lat/lon regions so conquests line up between maps. The illustrations are `Assets/Story/*.png`, from `python3 tools/story_art.py` (preview: `build/previews/story.png`). The words are in `scripts/story_text.gd`, and the screens in `scripts/story.gd` / `scenes/Story.tscn`. Story maps don't appear in New Game's map chooser.
 - **Follow camera:** after you end your turn, the camera flies to each other nation in turn, framing its whole territory while it shops and deploys. Its attack then plays out one defender at a time, and so does yours. Before each fight, the camera glides to centre on the action, meaning where the shots land, and zooms in as close as it can while keeping the attackers in view, with about 1.5 hexes of margin. While following, it may look past the map's edges, so fights by a pole or a regional map's border still sit in the middle; your own pans and zooms keep the usual limits. On the world map it takes the short way round across the date line. When your turn comes back, the camera returns to where you left it. The **Follow** toggle in the map's top-right bar turns it off (`frame_for`/`glide_to` in `scripts/world_map_view.gd`, `CAM_GLIDE` in `scripts/world_map.gd`).
 - **Round report:** at the start of each of your turns after the first, a report shows what every nation did to every other last round (your attack plus every AI turn). It covers:

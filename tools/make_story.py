@@ -9,6 +9,9 @@ Each chapter gets its own map file, built on the terrain of a normal map
   "void":        rows of one char per hex: "x" = outside this chapter's war
                  (drawn greyed out, never owned or entered), "." = in play
 
+  "extras":      cards placed on top of every nation's default starting cards
+                 when the chapter starts (see EXTRAS_HELP below)
+
 Only the chapter's nations are listed, so nobody else exists on that map.
 Territories are lat/lon boxes, so what the State Troops won in one chapter
 lines up with what they hold in the next even when the map changes. A claim
@@ -61,6 +64,29 @@ STORY_MED = {
 }
 
 ST = "State Troops"
+ISTANBUL = (41.01, 28.98)
+TRABZON = (41.00, 39.72)
+
+# EXTRAS_HELP: {"nation", "card", "count", "hp" (optional: start damaged), "id"
+# (optional: name this placement so a later one can stand next to it), "at": ...}
+#   {"random": True}                 anywhere in the nation's land
+#   {"random_in": boxes}             anywhere in its land inside these lat/lon boxes
+#   {"near": (lat, lon)}             the free hexes of its land nearest that point
+#   {"border": nation}               random hexes of its land touching that nation
+#   {"border": nation, "middle": True}  the hex in the middle of that border
+#                                    (+ "room": n: nearest the middle with n free hexes beside it)
+#   {"next_to": id}                  free hexes beside an earlier placement
+#   ...any of them + "terrain": "mountain"  only on hexes of that terrain
+# Placement happens in the game (MapWar.place_extras), so "random" differs per play.
+def ex(nation, card, count, at, hp=None, id=None):
+    d = {"nation": nation, "card": card, "count": count, "at": at}
+    if hp is not None:
+        d["hp"] = hp
+    if id is not None:
+        d["id"] = id
+    return d
+
+
 CHAPTERS = {
     1: {
         "base": "byzantium", "name": "Ch. 1: Smoke Over Anatolia",
@@ -71,6 +97,11 @@ CHAPTERS = {
             {"nation": "Insurgents", "share": ANATOLIA, "dir": (1.0, 1.0), "fraction": 0.67},
             {"nation": ST, "boxes": BALKANS + ANATOLIA},
         ],
+        "extras": [
+            ex("Insurgents", "Infantry", 8, {"random": True, "terrain": "mountain"}),  # dug in: 1 less damage per hit
+            ex(ST, "Housing", 2, {"near": ISTANBUL}),
+            ex(ST, "Housing", 2, {"border": "Insurgents"}, hp=10),
+        ],
     },
     2: {
         "base": "byzantium", "name": "Ch. 2: Fire From the South",
@@ -80,6 +111,10 @@ CHAPTERS = {
         "claims": [
             {"nation": ST, "boxes": BALKANS + ANATOLIA},
             {"nation": "Fundamentalists", "boxes": LEVANT_ARABIA + EGYPT},
+        ],
+        "extras": [
+            ex("Fundamentalists", "Barracks", 4, {"random": True}),
+            ex(ST, "Infantry", 2, {"border": "Fundamentalists"}),
         ],
     },
     3: {
@@ -93,6 +128,15 @@ CHAPTERS = {
             {"nation": "Horde", "boxes": RUSSIA_EUROPE},
             {"nation": "Mercenaries", "boxes": LIBYA},
         ],
+        "extras": [
+            ex("Horde", "Tank", 2, {"random_in": CAUCASUS_RU}),
+            ex("Horde", "Special Ops", 2, {"random_in": CAUCASUS_RU}),
+            # a Barracks in the middle of Libya's eastern border, an Artilery either side of it
+            ex("Mercenaries", "Barracks", 1, {"border": ST, "middle": True, "room": 2}, id="merc_barracks"),
+            ex("Mercenaries", "Artilery", 2, {"next_to": "merc_barracks"}),
+            ex(ST, "Housing", 3, {"near": ISTANBUL}),
+            ex(ST, "Factory", 2, {"near": TRABZON}),
+        ],
     },
     4: {
         "base": "story_med", "name": "Ch. 4: Appetite",
@@ -103,6 +147,22 @@ CHAPTERS = {
         "claims": [
             {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + CAUCASUS_RU},
             {"nation": "Coalition Army", "boxes": EU, "minus": UK + SWITZERLAND},
+        ],
+        # Britain is outside the EU war, so the "London" Corporation stands on the
+        # Coalition hex nearest London, across the Channel.
+        "extras": [
+            ex("Coalition Army", "Corporation", 1, {"near": (51.51, -0.13)}, id="corp_london"),
+            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_london"}, id="icp_london"),
+            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_london"}),
+            ex("Coalition Army", "Corporation", 1, {"near": (52.52, 13.40)}, id="corp_berlin"),
+            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_berlin"}, id="icp_berlin"),
+            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_berlin"}),
+            ex("Coalition Army", "Corporation", 1, {"near": (48.86, 2.35)}, id="corp_paris"),
+            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_paris"}, id="icp_paris"),
+            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_paris"}),
+            ex(ST, "Tank", 2, {"near": ISTANBUL}),
+            ex(ST, "Artilery", 2, {"near": ISTANBUL}),
+            ex(ST, "Housing", 2, {"near": ISTANBUL}),
         ],
     },
     5: {
@@ -217,6 +277,7 @@ def build_chapter(n, polys):
     data["start_owner"] = ["".join(str(names.index(owner[(x, y)])) if (x, y) in owner else "." for x in range(W)) for y in range(H)]
     data["void"] = ["".join("." if ((x, y) in owner or (active((x, y)) and (x, y) not in land)) else "x" for x in range(W)) for y in range(H)]
     data["story_chapter"] = n
+    data["extras"] = ch.get("extras", [])
     with open(os.path.join(MW.OUT_DIR, map_id + ".json"), "w") as f:
         json.dump(data, f, indent=1)
     counts = {nm: sum(1 for o in owner.values() if o == nm) for nm in names}

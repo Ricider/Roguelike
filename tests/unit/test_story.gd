@@ -79,3 +79,102 @@ func test_story_text_covers_every_chapter():
 		assert_not_null(StoryText.image(str(ch["image"])), "chapter %d has its picture" % n)
 	assert_not_null(StoryText.image("epilogue"), "epilogue picture")
 	assert_not_null(StoryText.image("defeat"), "defeat picture")
+
+# --- chapter set pieces (extras on top of the default starting cards) -------------
+func _war_for(n: int, with_extras: bool) -> MapWar:
+	WorldMap.use_map("story_%d" % n)
+	var saved: Array = WorldMap.EXTRAS
+	if not with_extras:
+		WorldMap.EXTRAS = []
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	var c := MapCampaign.new("State Troops")
+	var w := MapWar.new()
+	w.setup(c, func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name("State Troops", true))
+	WorldMap.EXTRAS = saved
+	gs.free()
+	return w
+
+func _counts(w: MapWar) -> Dictionary:
+	var out := {}
+	for k in w.units.keys():
+		var key := "%s|%s" % [w.units[k]["owner"], (w.units[k]["card"] as Card).card_name]
+		out[key] = int(out.get(key, 0)) + 1
+	return out
+
+func _cards(w: MapWar, nation: String, card_name: String) -> Array:
+	var out: Array = []
+	for k in w.units.keys():
+		if str(w.units[k]["owner"]) == nation and (w.units[k]["card"] as Card).card_name == card_name:
+			out.append(k)
+	return out
+
+func _touches(w: MapWar, k: String, pred: Callable) -> bool:
+	for nb in MapCampaign.wrapped_neighbors(MapWar.key_to_hex(k)):
+		if pred.call(nb as Vector2i):
+			return true
+	return false
+
+func test_chapter_extras_come_on_top_of_the_defaults():
+	var expect := {
+		1: {"Insurgents|Infantry": 8, "State Troops|Housing": 4},
+		2: {"Fundamentalists|Barracks": 4, "State Troops|Infantry": 2},
+		3: {"Horde|Tank": 2, "Horde|Special Ops": 2, "Mercenaries|Artilery": 2, "Mercenaries|Barracks": 1,
+			"State Troops|Housing": 3, "State Troops|Factory": 2},
+		4: {"Coalition Army|Corporation": 3, "Coalition Army|Interceptor": 3, "Coalition Army|Fighter Jet": 3,
+			"State Troops|Tank": 2, "State Troops|Artilery": 2, "State Troops|Housing": 2},
+		5: {},
+	}
+	for n in expect.keys():
+		var a := _counts(_war_for(n, true))
+		var b := _counts(_war_for(n, false))
+		var diff := {}
+		for key in a.keys():
+			var d: int = int(a[key]) - int(b.get(key, 0))
+			if d != 0:
+				diff[key] = d
+		assert_eq(diff, expect[n], "chapter %d adds exactly its extras" % n)
+
+func test_chapter_one_set_pieces():
+	var w := _war_for(1, true)
+	var c: MapCampaign = w.campaign
+	var damaged: Array = _cards(w, "State Troops", "Housing").filter(func(k): return w.card_hp(w.units[k]["card"]) == 10)
+	assert_eq(damaged.size(), 2, "two housings start at 10 HP")
+	for k in damaged:
+		assert_gt(int((w.units[k]["card"] as Card).get_meta("map_max_hp")), 10, "shown against their full HP")
+		assert_true(_touches(w, k, func(t): return c.owner_of(t.x, t.y) == "Insurgents"), "on the Insurgent border")
+	var inf: Array = _cards(w, "Insurgents", "Infantry")
+	assert_eq(inf.size(), 8, "eight Insurgent Infantry")
+	for k in inf:
+		var t := MapWar.key_to_hex(k)
+		assert_eq(WorldMap.terrain_at(t.x, t.y), WorldMap.MOUNTAIN, "every one dug in on a mountain")
+	assert_false(StoryText.chapter(1).get("briefing", {}).is_empty(), "chapter 1 briefs the player at the start")
+	assert_false(StoryText.chapter(1).get("combat_briefing", {}).is_empty(), "and after the first End Turn")
+	var istanbul := WorldMap.hex_for_latlon(41.01, 28.98)
+	var near: Array = _cards(w, "State Troops", "Housing").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), istanbul) <= 3)
+	assert_true(near.size() >= 2, "two housings at Istanbul")
+
+func test_chapter_three_set_pieces():
+	var w := _war_for(3, true)
+	var c: MapCampaign = w.campaign
+	var barracks: Array = _cards(w, "Mercenaries", "Barracks")
+	var frontline: Array = barracks.filter(func(k): return _touches(w, k, func(t): return c.owner_of(t.x, t.y) == "State Troops"))
+	assert_false(frontline.is_empty(), "a Mercenary Barracks on Libya's eastern border")
+	# (their default cards include Barracks too: find the one flanked by the two Artilery)
+	var flanked: Array = frontline.filter(func(bk):
+		return _cards(w, "Mercenaries", "Artilery").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), MapWar.key_to_hex(bk)) == 1).size() >= 2)
+	assert_eq(flanked.size(), 1, "an Artilery either side of it")
+	for card in ["Tank", "Special Ops"]:
+		var in_caucasus: Array = _cards(w, "Horde", card).filter(func(k):
+			var ll := WorldMap.hex_latlon(MapWar.key_to_hex(k).x, MapWar.key_to_hex(k).y)
+			return ll.x >= 43.3 and ll.x <= 46.5 and ll.y >= 36.6 and ll.y <= 49.0)
+		assert_true(in_caucasus.size() >= 2, "two Horde %s in the Caucasus" % card)
+
+func test_chapter_four_set_pieces():
+	var w := _war_for(4, true)
+	var corps: Array = _cards(w, "Coalition Army", "Corporation")
+	assert_eq(corps.size(), 3, "three Corporations")
+	for ck in corps:
+		var icp: Array = _cards(w, "Coalition Army", "Interceptor").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), MapWar.key_to_hex(ck)) == 1)
+		assert_eq(icp.size(), 1, "an Interceptor beside each Corporation")
+		var jets: Array = _cards(w, "Coalition Army", "Fighter Jet").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), MapWar.key_to_hex(icp[0])) == 1)
+		assert_true(jets.size() >= 1, "and a Fighter Jet beside that Interceptor")

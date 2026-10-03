@@ -19,6 +19,28 @@ const CHAPTERS := [
 			"Nobody in Constantinople asked where the trucks had come from. There wasn't time.",
 		],
 		"objective": "Retake Anatolia. Wipe out the Insurgents.",
+		# shown on the map: at the start of the chapter, and after your first End Turn.
+		# [Brackets] are highlighted. {wall_hint} is filled in by the map screen.
+		"briefing": {
+			"title": "Field Briefing",
+			"lines": [
+				"Look at the hills, commander. Every Insurgent [Infantry] is dug in on a [Mountain]. A ground unit standing on a mountain hex takes [1 less damage] from every hit, so they will be stubborn to shift.",
+				"How targeting works: units without range ([Melee]) always shoot the [closest enemy target] anywhere on the map, a card or a flag. Units with [HasRange] pick the closest enemy nation and hit a random one of its targets. Hover any card on the map to see its next shot.",
+				"So here is the trick: put a [Wall] between your Infantry and theirs. Their Infantry will fire at whatever is closest, and a Wall can soak up a lot of bullets while your troops shoot back.",
+				"{wall_hint}",
+			],
+			"button": "Understood",
+		},
+		"combat_briefing": {
+			"title": "How Combat Works",
+			"lines": [
+				"Every one of your units now fires once ([Rocket Launcher]s and [Howitzer]s four times). Each one marches out towards its target, shoots and marches home. That part is just a show: the cards never leave their hexes.",
+				"Damage comes off a card's HP. A destroyed card costs its owner [HP] equal to its [BioCost], and hits on a [flag] go straight to that nation's HP.",
+				"When a nation's HP reaches 0 it [collapses]: it gives up border land to whoever hurt it most, then rebuilds. Every hex you take earns [Influence] to spend in the [Shop]. Take every last Insurgent hex to win the chapter.",
+				"After you, the Insurgents take their turn the same way, and the camera follows the fighting. Good luck, commander.",
+			],
+			"button": "Good luck to us all",
+		},
 		"outro": [
 			"The last Insurgent flag came down over Diyarbakir on a grey Thursday afternoon. The State Troops went home, hung up their helmets and slept for two days straight.",
 			"On the third day, a supply clerk found a crate among the Insurgents' abandoned stores. It was stamped with a flame.",

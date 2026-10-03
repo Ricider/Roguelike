@@ -147,5 +147,23 @@
   "xxxxxxxxxxxxxxxxxxxxxx...............................",
   "xxxxxxxxxxxxxxxxxxxxxx..............................."
  ],
- "story_chapter": 2
+ "story_chapter": 2,
+ "extras": [
+  {
+   "nation": "Fundamentalists",
+   "card": "Barracks",
+   "count": 4,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  }
+ ]
 }

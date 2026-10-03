@@ -147,5 +147,36 @@
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
  ],
- "story_chapter": 1
+ "story_chapter": 1,
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 8,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   },
+   "hp": 10
+  }
+ ]
 }

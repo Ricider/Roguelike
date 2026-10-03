@@ -65,6 +65,125 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 			var t := best_hex_for(nm, card as Card)
 			if t.x >= 0:
 				_put(nm, card as Card, t)
+	# story chapters add their own set pieces on top of the default starting cards
+	place_extras(WorldMap.EXTRAS)
+
+# ------------------------------------------------------------------ story extras
+# Free cards a story chapter starts with (tools/make_story.py, "extras"). Each rule:
+# {nation, card, count, at, hp?, id?}; "at" is one of
+#   {"random": true}                  anywhere in the nation's free land
+#   {"random_in": [[lat0, lat1, lon0, lon1], ...]}   ...inside those boxes
+#   {"near": [lat, lon]}              its free hexes nearest that point
+#   {"border": nation}                random free hexes of its land touching that nation
+#   {"border": nation, "middle": true}   the free hex in the middle of that border
+#       (with "room": n, the nearest one to the middle with n free hexes beside it)
+#   {"next_to": id}                   free hexes beside an earlier rule's cards
+# Any of these may add "terrain": "mountain" (or another terrain) to keep to such hexes.
+# A rule with "hp" starts its cards damaged (shown against their full HP).
+# Returns the placed [[nation, card name, hex], ...].
+func place_extras(rules: Array) -> Array:
+	var placed: Array = []
+	var by_id: Dictionary = {}
+	for r in rules:
+		var rule: Dictionary = r
+		var nation := str(rule.get("nation", ""))
+		if not players.has(nation) or not alive(nation):
+			continue
+		var p: Player = players[nation]
+		var at: Dictionary = rule.get("at", {})
+		var spots: Array = []
+		for i in range(int(rule.get("count", 1))):
+			var t := _extra_spot(nation, at, by_id)
+			if t.x < 0:
+				break
+			var card: Card = p._base_card_by_name(str(rule.get("card", "")))
+			if card == null:
+				break
+			p.apply_hitpoints_modifier(card)
+			card.set_meta("map_max_hp", maxi(card_hp(card), 1))
+			if rule.has("hp"):
+				var hp := clampi(int(rule["hp"]), 1, card_hp(card))
+				if card is Unit:
+					(card as Unit).HitPoints = hp
+				elif card is Building:
+					(card as Building).HitPoints = hp
+			_put(nation, card, t)
+			spots.append(t)
+			placed.append([nation, card.card_name, t])
+		if rule.has("id"):
+			by_id[str(rule["id"])] = spots
+	return placed
+
+func _extra_free(nation: String, t: Vector2i) -> bool:
+	return campaign.owner_of(t.x, t.y) == nation and not units.has(MapCampaign.key_of(t.x, t.y)) and campaign.capital_site(nation) != t
+
+func _extra_spot(nation: String, at: Dictionary, by_id: Dictionary) -> Vector2i:
+	var free: Array = []
+	for t in campaign.tiles_of(nation):
+		if _extra_free(nation, t):
+			free.append(t)
+	if at.has("terrain"):
+		var on_terrain: Array = free.filter(func(t: Vector2i) -> bool: return WorldMap.terrain_at(t.x, t.y) == str(at["terrain"]))
+		if not on_terrain.is_empty():
+			free = on_terrain # none of that terrain left: fall back to any free land
+	if free.is_empty():
+		return Vector2i(-1, -1)
+	if at.has("near"):
+		var ll: Array = at["near"]
+		var goal := WorldMap.hex_for_latlon(float(ll[0]), float(ll[1]))
+		return _nearest_of(free, [goal])
+	if at.has("next_to"):
+		var anchors: Array = by_id.get(str(at["next_to"]), [])
+		if anchors.is_empty():
+			return Vector2i(-1, -1)
+		return _nearest_of(free, anchors) # right beside it, or as close as the land allows
+	var pool: Array = free
+	if at.has("random_in"):
+		pool = free.filter(func(t: Vector2i) -> bool:
+			var ll2 := WorldMap.hex_latlon(t.x, t.y)
+			for b in at["random_in"]:
+				if ll2.x >= float(b[0]) and ll2.x <= float(b[1]) and ll2.y >= float(b[2]) and ll2.y <= float(b[3]):
+					return true
+			return false)
+	elif at.has("border"):
+		var other := str(at["border"])
+		pool = free.filter(func(t: Vector2i) -> bool:
+			for nb in MapCampaign.wrapped_neighbors(t):
+				if campaign.owner_of((nb as Vector2i).x, (nb as Vector2i).y) == other:
+					return true
+			return false)
+		if bool(at.get("middle", false)) and not pool.is_empty():
+			pool.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y if a.y != b.y else a.x < b.x)
+			# from the middle outwards, the first hex with "room" free hexes of its own beside it
+			var room := int(at.get("room", 0))
+			var mid: int = pool.size() / 2
+			var order: Array = range(pool.size())
+			order.sort_custom(func(a: int, b: int) -> bool: return absi(a - mid) < absi(b - mid) if absi(a - mid) != absi(b - mid) else a < b)
+			for i in order:
+				var cand: Vector2i = pool[i]
+				var roomy := 0
+				for nb in MapCampaign.wrapped_neighbors(cand):
+					if _extra_free(nation, nb as Vector2i):
+						roomy += 1
+				if roomy >= room:
+					return cand
+			return pool[mid]
+	if pool.is_empty():
+		pool = free # nothing matched: anywhere in its land rather than nowhere
+	return pool[rng.randi_range(0, pool.size() - 1)]
+
+# The hex of `pool` nearest any of `targets` (ties broken by position, so it is stable).
+static func _nearest_of(pool: Array, targets: Array) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := 1 << 30
+	for t in pool:
+		var d := 1 << 30
+		for g in targets:
+			d = mini(d, MapCampaign.hex_distance(t, g))
+		if d < best_d or (d == best_d and (t.y < best.y or (t.y == best.y and t.x < best.x))):
+			best_d = d
+			best = t
+	return best
 
 # ------------------------------------------------------------------ geometry
 static func hex_distance(a: Vector2i, b: Vector2i) -> int:

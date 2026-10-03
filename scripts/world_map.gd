@@ -39,6 +39,8 @@ var _inf_label: Label = null
 var _inf_box: Control = null
 var _shop_btn: Button = null
 var _shop_panel: PanelContainer = null
+var _briefing: Control = null
+signal briefing_closed
 var _report_panel: PanelContainer = null
 var _report: Dictionary = {}     # the last round's MapWar.round_stats
 var _report_turn: int = 0
@@ -80,6 +82,7 @@ func _ready() -> void:
 	# camera needs the laid-out view size before it can centre
 	await get_tree().process_frame
 	_go_home()
+	await _story_start_briefing()
 
 func _go_home() -> void:
 	var c := _campaign()
@@ -996,6 +999,7 @@ func _on_end_turn() -> void:
 	_close_shop()
 	_close_report()
 	_clear_selection()
+	await _story_combat_briefing()
 	_sfx("end_turn", -2.0)
 	_status.text = "Your units open fire..."
 	var my_cam: Array = _view.camera_goal() # handed back when your turn comes round
@@ -1399,6 +1403,148 @@ func _story_end(won: bool) -> void:
 # remove_card_from_deck), paid with Influence earned by taking hexes. Stock
 # refreshes at the start of each of your turns; bought cards join your draw pile.
 const REMOVE_COST := MapWar.REMOVE_COST
+
+# ------------------------------------------------------------ story briefings
+# A chapter can brief the player on the map (StoryText "briefing" at the start,
+# "combat_briefing" after the first End Turn). Shown once per war, on turn 1.
+func _story_start_briefing() -> void:
+	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_start"):
+		return
+	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER).get("briefing", {})
+	if b.is_empty():
+		return
+	_war.set_meta("briefed_start", true)
+	# show the dug-in enemy Infantry while the briefing is up
+	var enemy_inf: Array = []
+	for k in _war.units.keys():
+		if str(_war.units[k]["owner"]) != _me() and _war.units[k]["card"] is Infantry:
+			enemy_inf.append(MapWar.key_to_hex(k))
+	if not enemy_inf.is_empty():
+		await _view.glide_to(_view.frame_for(enemy_inf, 1.0), 0.8)
+	var has_wall := false
+	for c in _human().Hand:
+		if c is Wall:
+			has_wall = true
+	var hint := "You have a [Wall] in your hand: pick it below and place it on one of your hexes between the two armies." if has_wall \
+		else "No [Wall] in your hand yet? Keep the trick in mind: one will turn up from your deck, or buy one in the [Shop] once you have Influence."
+	var lines: Array = []
+	for l in b["lines"]:
+		lines.append(str(l).replace("{wall_hint}", hint))
+	var foe := ""
+	for n in WorldMap.nations():
+		if str(n["name"]) != _me():
+			foe = str(n["name"])
+			break
+	await _show_briefing(str(b["title"]), lines, str(b.get("button", "OK")),
+		[["Infantry", foe, "mountain", "Dug in: 1 less damage per hit"], ["Wall", _me(), "grassland", "Your shield: soaks up their fire"]])
+	var home := _campaign().capital_site(_me())
+	await _view.glide_to(_view.frame_for([home] + enemy_inf, 1.0), 0.8)
+
+func _story_combat_briefing() -> void:
+	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_combat"):
+		return
+	var b: Dictionary = StoryText.chapter(WorldMap.STORY_CHAPTER).get("combat_briefing", {})
+	if b.is_empty():
+		return
+	_war.set_meta("briefed_combat", true)
+	await _show_briefing(str(b["title"]), b["lines"], str(b.get("button", "OK")))
+
+# A modal briefing card over the map: title, highlighted text, optional pictures
+# ([card, nation, terrain, caption]), one button. Await it; it returns when closed.
+func _show_briefing(title: String, lines: Array, button: String, pictures: Array = []) -> void:
+	if _briefing != null and is_instance_valid(_briefing):
+		_briefing.queue_free()
+	var layer := Control.new()
+	layer.name = "Briefing"
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.z_index = 70
+	add_child(layer)
+	_briefing = layer
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.02, 0.05, 0.45)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP # the map waits until the briefing is read
+	layer.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"GoldPanel"
+	layer.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	v.custom_minimum_size = Vector2(760, 0)
+	panel.add_child(v)
+	var t := Label.new()
+	t.text = title.to_upper()
+	t.theme_type_variation = &"TitleLabel"
+	t.add_theme_font_size_override("font_size", 24)
+	t.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	v.add_child(t)
+	if not pictures.is_empty():
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 28)
+		v.add_child(row)
+		for pic in pictures:
+			row.add_child(_briefing_picture(str(pic[0]), str(pic[1]), str(pic[2]), str(pic[3])))
+	var body := RichTextLabel.new()
+	body.bbcode_enabled = true
+	body.fit_content = true
+	body.scroll_active = false
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(760, 0)
+	body.add_theme_font_size_override("normal_font_size", 18)
+	body.add_theme_constant_override("line_separation", 4)
+	body.text = CardHover.highlight("\n\n".join(lines))
+	v.add_child(body)
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	v.add_child(foot)
+	var ok := Button.new()
+	ok.name = "BriefingOK"
+	ok.text = button
+	ok.theme_type_variation = &"PrimaryButton"
+	ok.custom_minimum_size = Vector2(220, 46)
+	ok.add_theme_font_size_override("font_size", 18)
+	ok.focus_mode = Control.FOCUS_NONE
+	ok.pressed.connect(func():
+		layer.queue_free()
+		_briefing = null
+		briefing_closed.emit())
+	foot.add_child(ok)
+	_sfx("map_select")
+	await get_tree().process_frame
+	if is_instance_valid(panel):
+		panel.reset_size()
+		panel.position = ((size - panel.size) * 0.5).floor()
+	await briefing_closed
+
+# A card standing on a terrain tile, with a caption: the briefing's little pictures.
+func _briefing_picture(card_name: String, nation: String, terrain: String, caption: String) -> Control:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	var tile := Control.new()
+	tile.custom_minimum_size = Vector2(110, 96)
+	col.add_child(tile)
+	var tiles: Array = _view._tiles.get(terrain, [])
+	if not tiles.is_empty():
+		var ground := TextureRect.new()
+		ground.texture = tiles[0]
+		ground.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ground.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ground.stretch_mode = TextureRect.STRETCH_SCALE
+		ground.position = Vector2(7, 0)
+		ground.size = Vector2(96, 96)
+		tile.add_child(ground)
+	var art := Card.create_sprite_for(card_name, Vector2(80, 80), nation)
+	art.position = Vector2(15, 4)
+	art.size = Vector2(80, 80)
+	tile.add_child(art)
+	var cap := Label.new()
+	cap.text = caption
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.add_theme_font_size_override("font_size", 14)
+	cap.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	col.add_child(cap)
+	return col
 
 # ------------------------------------------------------------ round report
 # Who did what to whom last round: damage dealt and where it came from (Barracks,

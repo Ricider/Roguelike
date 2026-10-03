@@ -203,6 +203,7 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 		var waited := 0
 		var cam0: Array = gc._view.camera_state() # the follow camera should hand this back each round
 		for rnd in range(rounds):
+			_dismiss_briefing(gc)
 			for card in gc._human().Hand.duplicate():
 				if gc._war.shortfall(gc._me(), card) == "" and gc._busy == false:
 					gc._select_card([card])
@@ -218,6 +219,7 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 			while gc._busy and waited < 20000:
 				await process_frame
 				waited += 1
+				_dismiss_briefing(gc)
 				if snap_every > 0 and waited % snap_every == 0:
 					RenderingServer.force_draw(false)
 					root.get_viewport().get_texture().get_image().save_png(out.get_basename() + "_%04d.png" % waited)
@@ -278,3 +280,12 @@ func _run(scene: String, out: String, frames: int, setup: String) -> void:
 	img.save_png(out)
 	print("saved ", out, " ", img.get_size())
 	quit()
+
+# Story briefings wait for their button; automated rounds press it (KEEP_BRIEFING=1 to leave them up).
+func _dismiss_briefing(gc) -> void:
+	if OS.get_environment("KEEP_BRIEFING") == "1" or gc == null or gc.get("_briefing") == null:
+		return
+	if is_instance_valid(gc._briefing):
+		var ok = gc._briefing.find_child("BriefingOK", true, false)
+		if ok != null:
+			ok.pressed.emit()

@@ -225,5 +225,127 @@
   "xxxxxxxxxxxxxxxx...........................xxx",
   "xxxxxxxxxxxxxxx............................xxx"
  ],
- "story_chapter": 4
+ "story_chapter": 4,
+ "extras": [
+  {
+   "nation": "Coalition Army",
+   "card": "Corporation",
+   "count": 1,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   },
+   "id": "corp_london"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "next_to": "corp_london"
+   },
+   "id": "icp_london"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Fighter Jet",
+   "count": 1,
+   "at": {
+    "next_to": "icp_london"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Corporation",
+   "count": 1,
+   "at": {
+    "near": [
+     52.52,
+     13.4
+    ]
+   },
+   "id": "corp_berlin"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "next_to": "corp_berlin"
+   },
+   "id": "icp_berlin"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Fighter Jet",
+   "count": 1,
+   "at": {
+    "next_to": "icp_berlin"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Corporation",
+   "count": 1,
+   "at": {
+    "near": [
+     48.86,
+     2.35
+    ]
+   },
+   "id": "corp_paris"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "next_to": "corp_paris"
+   },
+   "id": "icp_paris"
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Fighter Jet",
+   "count": 1,
+   "at": {
+    "next_to": "icp_paris"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  }
+ ]
 }

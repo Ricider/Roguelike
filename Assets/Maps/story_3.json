@@ -232,5 +232,78 @@
   "xxxxxxxxxxxxxxxx...........................xxx",
   "xxxxxxxxxxxxxxx............................xxx"
  ],
- "story_chapter": 3
+ "story_chapter": 3,
+ "extras": [
+  {
+   "nation": "Horde",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "random_in": [
+     [
+      43.3,
+      46.5,
+      36.6,
+      49.0
+     ]
+    ]
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "random_in": [
+     [
+      43.3,
+      46.5,
+      36.6,
+      49.0
+     ]
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "border": "State Troops",
+    "middle": true,
+    "room": 2
+   },
+   "id": "merc_barracks"
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "next_to": "merc_barracks"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Housing",
+   "count": 3,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Factory",
+   "count": 2,
+   "at": {
+    "near": [
+     41.0,
+     39.72
+    ]
+   }
+  }
+ ]
 }
