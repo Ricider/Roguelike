@@ -1375,13 +1375,21 @@ func _draw_text_fx() -> void:
 # each shot deals from where it stands (Barracks, home ground and modifiers included;
 # "2x4" for guns that fire 4 times). Hidden when zoomed far out.
 const STAT_CHIP_MIN_HEX := 15.0 # hex radius in pixels below which the chips are hidden
+var _chip_box: StyleBoxFlat = null # rounded, see-through pill behind each chip
 
 func _draw_stat_chips(m: Array, font: Font) -> void:
 	var s: float = m[0]
 	var margin: float = s * 2.0
-	var fs := int(clampf(s * 0.44, 10.0, 18.0))
+	var fs := int(clampf(s * 0.4, 10.0, 16.0))
 	var pad: float = maxf(2.0, s * 0.06)
-	var icon: float = fs * 0.7
+	var icon: float = fs * 0.62
+	if _chip_box == null:
+		_chip_box = StyleBoxFlat.new()
+		_chip_box.bg_color = Color(0.06, 0.05, 0.1, 0.45)
+		_chip_box.border_color = Color(1, 1, 1, 0.12)
+		_chip_box.set_border_width_all(1)
+		_chip_box.anti_aliasing = true
+	_chip_box.set_corner_radius_all(int(maxf(3.0, (fs + pad * 1.2) * 0.5))) # a full pill
 	for k in war.units.keys():
 		var info: Dictionary = war.units[k]
 		var card: Card = info["card"]
@@ -1402,7 +1410,7 @@ func _draw_stat_chips(m: Array, font: Font) -> void:
 			var widths: Array = []
 			var total: float = 0.0
 			for ch in chips:
-				var w: float = icon + pad * 3.0 + font.get_string_size(str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+				var w: float = icon + pad * 4.5 + font.get_string_size(str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 				widths.append(w)
 				total += w
 			total += pad * 2.0 * (chips.size() - 1)
@@ -1413,15 +1421,14 @@ func _draw_stat_chips(m: Array, font: Font) -> void:
 				var ch: Array = chips[i]
 				var w2: float = widths[i]
 				var r := Rect2(x, y, w2, h)
-				_text_layer.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.92), true)
-				_text_layer.draw_rect(r, Color(0.13, 0.12, 0.2, 0.92), true)
-				var ic := Vector2(x + pad + icon * 0.5, y + h * 0.5)
+				_text_layer.draw_style_box(_chip_box, r)
+				var ic := Vector2(x + pad * 1.8 + icon * 0.5, y + h * 0.5)
 				if str(ch[0]) == "hp":
 					_draw_heart(ic, icon * 0.5, Color(1.0, 0.32, 0.36))
 				else:
 					_draw_sword(ic, icon * 0.5, Color(0.92, 0.92, 1.0))
-				var tx := Vector2(x + pad * 2.0 + icon, y + h * 0.5 + fs * 0.36)
-				_text_layer.draw_string_outline(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.05, 0.04, 0.08))
+				var tx := Vector2(x + pad * 2.8 + icon, y + h * 0.5 + fs * 0.36)
+				_text_layer.draw_string_outline(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.04, 0.03, 0.07, 0.75))
 				_text_layer.draw_string(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ch[2])
 				x += w2 + pad * 2.0
 

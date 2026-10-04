@@ -45,6 +45,7 @@ var _last_intercept_from := Vector2i(-1, -1) # hex of the Interceptor that halve
 # [[nation, card name, hex], ...] that landed in the latest begin_turn, for the map screen.
 var pending: Array = []
 var last_arrivals: Array = []
+var last_upkeep: Dictionary = {} # {"money", "bio"} paid in the latest begin_turn
 
 # make_player: Callable(nation: String) -> Player for the AI nations.
 func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
@@ -418,8 +419,32 @@ func _remove(k: String) -> void:
 	units.erase(k)
 
 # ------------------------------------------------------------------ turns
+# Upkeep: every turn a nation pays UPKEEP_RATE of the total cost of its units on the
+# map, MoneyCost out of its Money and BioCost out of its Bio (buildings are free to
+# keep). Rounded on the totals; supplies never drop below 0.
+const UPKEEP_RATE := 0.05
+
+# {"money": int, "bio": int} that `nation` pays at the start of its next turn.
+func upkeep(nation: String) -> Dictionary:
+	var money := 0
+	var bio := 0
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		if c is Unit:
+			money += c.MoneyCost
+			bio += c.BioCost
+	return {"money": roundi(money * UPKEEP_RATE), "bio": roundi(bio * UPKEEP_RATE)}
+
+func pay_upkeep(nation: String) -> Dictionary:
+	var up := upkeep(nation)
+	var p: Player = players[nation]
+	p.MoneySupply = maxi(p.MoneySupply - int(up["money"]), 0)
+	p.BioSupply = maxi(p.BioSupply - int(up["bio"]), 0)
+	return up
+
 func begin_turn(nation: String) -> void:
 	(players[nation] as Player).economy_phase() # income from map buildings + draw to 10
+	last_upkeep = pay_upkeep(nation) # then the army's upkeep comes out of it
 	restock_shop(nation)
 	last_arrivals = arrive_reinforcements(nation) # before the refill: they can move at once
 	refill_moves(nation)

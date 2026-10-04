@@ -1131,3 +1131,40 @@ func test_units_in_boats_take_more_per_hit():
 	assert_eq(hp0 - boat.HitPoints, plain + MapWar.SEA_DAMAGE_PENALTY, "+1 for being caught at sea")
 	assert_eq(int(w.round_stats[A + "|" + B].get("boat", 0)), MapWar.SEA_DAMAGE_PENALTY, "the report counts it")
 	assert_true(w.in_boat(boat, c[1]) and not w.in_boat(Drone.new(), c[1]), "only ground units sit in boats")
+
+# --- upkeep -------------------------------------------------------------------------
+func test_upkeep_is_five_percent_of_the_units_on_the_map():
+	var w := _war()
+	assert_eq(w.upkeep(A), {"money": 0, "bio": 0}, "no units, no upkeep")
+	for x in range(10, 14):
+		_drop(w, A, Infantry.new(), x) # 4 x (5 Money, 15 Bio)
+	_drop(w, A, Tank.new(), 14) # 25 Money, 10 Bio
+	var money: int = 4 * Infantry.new().MoneyCost + Tank.new().MoneyCost # 45
+	var bio: int = 4 * Infantry.new().BioCost + Tank.new().BioCost # 70
+	assert_eq(w.upkeep(A), {"money": roundi(money * 0.05), "bio": roundi(bio * 0.05)}, "5% of each, rounded on the total")
+	w.campaign.owner[MapCampaign.key_of(9, 10)] = A
+	w._put(A, Factory.new(), Vector2i(9, 10))
+	assert_eq(w.upkeep(A), {"money": roundi(money * 0.05), "bio": roundi(bio * 0.05)}, "buildings cost nothing to keep")
+	assert_eq(w.upkeep(B), {"money": 0, "bio": 0}, "each nation pays for its own")
+
+func test_upkeep_comes_out_of_the_turns_income():
+	var w := _war()
+	for x in range(10, 15):
+		_drop(w, A, SpecialOps.new(), x) # 5 x (15 Money, 20 Bio): 4 Money, 5 Bio a turn
+	var up := w.upkeep(A)
+	assert_eq(up, {"money": 4, "bio": 5}, "75 Money, 100 Bio of units")
+	var p: Player = w.players[A]
+	p.MoneySupply = 50
+	p.BioSupply = 50
+	var money_gain := p.predicted_money_gain()
+	var bio_gain := p.predicted_bio_gain()
+	w.begin_turn(A)
+	assert_eq(p.MoneySupply, 50 + money_gain - 4, "income minus upkeep")
+	assert_eq(p.BioSupply, 50 + bio_gain - 5, "for Bio too")
+	assert_eq(w.last_upkeep, up, "and the map screen is told what was paid")
+	# a broke nation just hits 0
+	p.MoneySupply = 0
+	p.BioSupply = 0
+	w.pay_upkeep(A)
+	assert_eq(p.MoneySupply, 0, "never below 0")
+	assert_eq(p.BioSupply, 0, "never below 0")

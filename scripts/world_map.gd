@@ -540,9 +540,17 @@ func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: Str
 	_gauges[key] = {"bar": bar, "value": value, "income": income}
 	match key:
 		"hp": _tip(col, func(): return TIP_HP)
-		"bio": _tip(col, func(): return TIP_BIO)
-		"money": _tip(col, func(): return TIP_MONEY)
+		"bio": _tip(col, func(): return TIP_BIO + _upkeep_tip("bio"))
+		"money": _tip(col, func(): return TIP_MONEY + _upkeep_tip("money"))
 	return col
+
+# " Upkeep: -N per turn (5% of your units' total BioCost / MoneyCost)."
+func _upkeep_tip(key: String) -> String:
+	if _war == null:
+		return ""
+	var up: Dictionary = _war.upkeep(_me())
+	var label := "BioCost" if key == "bio" else "MoneyCost"
+	return "\n[Upkeep]: -%d per turn, %d%% of the total %s of your units on the map." % [int(up[key]), roundi(MapWar.UPKEEP_RATE * 100.0), label]
 
 func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
 	var g: Dictionary = _gauges[key]
@@ -551,7 +559,8 @@ func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
 	var tw := bar.create_tween()
 	tw.tween_property(bar, "value", float(val), 0.35).set_trans(Tween.TRANS_SINE)
 	(g["value"] as Label).text = "%d/%d" % [val, max_val] if key == "hp" else str(val)
-	(g["income"] as Label).text = ("+%d" % gain) if gain > 0 else " "
+	(g["income"] as Label).text = ("+%d" % gain) if gain > 0 else (str(gain) if gain < 0 else " ")
+	(g["income"] as Label).add_theme_color_override("font_color", Color(0.55, 1.0, 0.55) if gain >= 0 else Color(1.0, 0.45, 0.4))
 	if key == "hp":
 		bar.tint_progress = Color(1, 0.6, 0.6) if val * 4 < max_val else Color.WHITE
 
@@ -583,8 +592,10 @@ func _refresh_player_card() -> void:
 	_player_name.text = c.player_nation
 	if p != null:
 		_set_gauge("hp", p.HitPoints, p.MaxHitPoints, p.predicted_hp_gain())
-		_set_gauge("bio", p.BioSupply, 200, p.predicted_bio_gain())
-		_set_gauge("money", p.MoneySupply, 200, p.predicted_money_gain())
+		# next turn's income minus the army's upkeep (MapWar.upkeep)
+		var up: Dictionary = _war.upkeep(_me()) if _war != null else {"money": 0, "bio": 0}
+		_set_gauge("bio", p.BioSupply, 200, p.predicted_bio_gain() - int(up["bio"]))
+		_set_gauge("money", p.MoneySupply, 200, p.predicted_money_gain() - int(up["money"]))
 		_inf_label.text = str(p.Influence)
 	_shop_btn.disabled = _busy or c.has_won() or c.has_lost()
 	if p != null:
@@ -1240,6 +1251,9 @@ func _start_player_turn(round_over: bool = false) -> void:
 		_report_turn = _war.turn - 1
 	_war.reset_round_stats()
 	_war.begin_turn(_me())
+	var up: Dictionary = _war.last_upkeep
+	if int(up.get("money", 0)) > 0 or int(up.get("bio", 0)) > 0:
+		_log_line("[color=#ff9a7a]Upkeep:[/color] your army costs %d Money and %d Bio this turn." % [int(up["money"]), int(up["bio"])])
 	_announce_arrivals(_me())
 	_busy = false
 	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
