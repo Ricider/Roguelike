@@ -59,7 +59,7 @@ var _follow_cam: bool = true # the camera follows other nations' turns and fight
 var _log: RichTextLabel = null
 var _selected: Card = null
 var _moving: String = "" # key of the unit picked to move ("" = none)
-var _group: Array = [] # keys of the units picked for a bulk move (Shift+click / Shift+drag)
+var _group: Array = [] # keys of the units picked for a bulk move (drag a box / Shift+click)
 const DEPLOY_ZONE := Color(0.55, 1.0, 0.5) # where a selected unit card can be summoned (green, like the glowing hexes)
 const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
 var _busy: bool = false
@@ -249,7 +249,7 @@ func _build_ui() -> void:
 		zoom_bar.add_child(zb)
 	_hover_bar = Label.new()
 	_hover_bar.name = "HoverBar"
-	_hover_bar.text = "Pick a card below, then click a glowing hex. Click a unit to move it; Shift+drag or Shift+click picks several. Scroll to zoom, drag to pan, H returns home."
+	_hover_bar.text = "Pick a card below, then click a glowing hex. Click a unit to move it; drag a box (or Shift+click) to pick several. Scroll to zoom, right-drag to pan, H returns home."
 	_hover_bar.add_theme_font_size_override("font_size", 16)
 	_hover_bar.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
 	map_col.add_child(_hover_bar)
@@ -729,13 +729,13 @@ func _unit_info(k: String) -> Dictionary:
 			if not _war.can_sail(owner, u):
 				notes.append("[color=#c8b89a]Too slow to board a boat: it can't cross water.[/color]")
 			elif not WorldMap.is_land(t.x, t.y):
-				notes.append("[color=#c8b89a]In a boat: %d hex slower a turn.[/color]" % MapWar.SEA_PENALTY)
+				notes.append("[color=#ff8a7a]In a boat: %d hex slower a turn, %d hexes less range, takes +%d damage from every hit.[/color]" % [MapWar.SEA_PENALTY, MapWar.SEA_RANGE_PENALTY, MapWar.SEA_DAMAGE_PENALTY])
 			else:
-				notes.append("[color=#c8b89a]Boarding a boat costs 1 extra move; %d hex slower a turn at sea.[/color]" % MapWar.SEA_PENALTY)
+				notes.append("[color=#c8b89a]Boarding a boat costs 1 extra move; at sea it is %d hex slower, has %d hexes less range and takes +%d damage.[/color]" % [MapWar.SEA_PENALTY, MapWar.SEA_RANGE_PENALTY, MapWar.SEA_DAMAGE_PENALTY])
 		if WorldMap.terrain_at(t.x, t.y) == WorldMap.JUNGLE:
 			notes.append("[color=#8fcf7a]Forest cover: takes 1 less damage from flying attackers.[/color]")
 		var aim := _war.predict_target(k)
-		var reach := _war.attack_range(owner, u)
+		var reach := _war.attack_range(owner, u, t)
 		if aim.is_empty():
 			notes.append("[color=#ff9a7a]No target within its range of %d hexes: move it closer.[/color]" % reach)
 		else:
@@ -956,7 +956,7 @@ func _move_unit_to(t: Vector2i) -> void:
 		_refresh_hand()
 
 # ------------------------------------------------------------ bulk moves
-# Shift+click your units (or Shift+drag a box round them) to pick several, then click
+# Drag a box round your units (Shift+drag adds to the pick) or Shift+click them to pick several, then click
 # any hex: each marches towards it as far as its moves allow, the nearest taking the
 # closest spots (MapWar.move_group). Hovering a hex previews where each would end up
 # and the group's attack range from there. Esc drops the selection.
@@ -970,16 +970,18 @@ func _toggle_group(k: String) -> void:
 		keys.append(k)
 	_set_group(keys)
 
-func _on_box_selected(rect: Rect2) -> void:
+func _on_box_selected(rect: Rect2, additive: bool) -> void:
 	if _war == null or _busy:
 		return
 	var found: Array = _view.units_in_rect(rect, _me())
 	if found.is_empty():
-		_hover_bar.text = "No units of yours in that box."
+		_hover_bar.text = "No units of yours in that box (drag with the right mouse button to move the map)."
 		return
-	var keys: Array = _group.duplicate()
-	if _moving != "" and not keys.has(_moving):
-		keys.append(_moving)
+	var keys: Array = []
+	if additive: # Shift+drag adds to what is picked; a plain drag starts afresh
+		keys = _group.duplicate()
+		if _moving != "" and not keys.has(_moving):
+			keys.append(_moving)
 	for k in found:
 		if not keys.has(k):
 			keys.append(k)
@@ -1011,7 +1013,7 @@ func _set_group(keys: Array) -> void:
 	_view.plan_marks = []
 	_show_range(_group)
 	_sfx("card_select", -3.0)
-	_hover_bar.text = "%d units picked (%d can still move): click any hex to march them towards it. Shift+click adds or drops one; Esc cancels." % [_group.size(), ready]
+	_hover_bar.text = "%d units picked (%d can still move): click any hex to march them towards it. Shift+click adds or drops one, Shift+drag adds more; Esc cancels." % [_group.size(), ready]
 	_refresh_hand()
 
 func _preview_group(goal: Vector2i) -> void:
@@ -1056,9 +1058,9 @@ func _show_range(keys: Array, at: Dictionary = {}) -> void:
 		if not _war.units.has(k) or not (_war.units[k]["card"] is Unit):
 			continue
 		var u := _war.units[k]["card"] as Unit
-		var r := _war.attack_range(_me(), u)
-		var ranged: bool = (_war.players[_me()] as Player).has_range_for(u)
 		var from: Vector2i = at.get(k, MapWar.key_to_hex(k))
+		var r := _war.attack_range(_me(), u, from) # shorter from a boat
+		var ranged: bool = (_war.players[_me()] as Player).has_range_for(u)
 		for h in _war.hexes_within(from, r):
 			zones[ranged][h] = true
 		for t in _war.targets_in_range(_me(), from, r):
@@ -1879,6 +1881,7 @@ const REPORT_COLS := [
 	["home", "+Home", "Added by firing from the attacker's own land (+1 per shot).", "add"],
 	["modifiers", "+Modifiers", "Added (or taken away) by the attacker's modifiers: Guerilla Warfare, Aerial Supremacy, Defensive Doctrine.", "add"],
 	["unit_bonus", "+Unit bonus", "Special Ops x2 against ground units, Anti Aircraft x3 against flying ones.", "add"],
+	["boat", "+In boat", "Extra damage on ground units caught at sea in a boat (+1 per hit).", "add"],
 	["flank", "+Flanked", "Extra damage on units hemmed in by enemy units: +1 flanked (enemies on opposite sides), +2 surrounded (4+), +4 encircled (all 6).", "add"],
 	["splash", "+Splash", "Fighter Jet splash on the target's neighbours.", "add"],
 	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they halve ranged and flying hits).", "block"],
@@ -2087,7 +2090,7 @@ func _report_summary() -> Label:
 		var st: Dictionary = _report[k]
 		if parts[0] == me:
 			dealt += int(st.get("dealt", 0))
-			boosted += int(st.get("barracks", 0)) + int(st.get("home", 0)) + int(st.get("flank", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
+			boosted += int(st.get("barracks", 0)) + int(st.get("home", 0)) + int(st.get("flank", 0)) + int(st.get("boat", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
 		elif parts[1] == me:
 			taken += int(st.get("dealt", 0))
 			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]:

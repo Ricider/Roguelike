@@ -691,16 +691,19 @@ func test_ranged_units_reach_eight_hexes_and_pick_only_within_reach():
 	w.campaign.flag_sites[C] = Vector2i(30, 10)
 	var arty := _drop(w, A, Artilery.new(), 10)
 	assert_eq(w.attack_range(A, w.units[arty]["card"]), MapWar.RANGED_RANGE, "ranged range")
+	# (10, 10) may be open sea on the world map: then the gun sits in a boat and reaches 2 less
+	var r := w.attack_range(A, w.units[arty]["card"], Vector2i(10, 10))
+	assert_eq(r, MapWar.RANGED_RANGE - (MapWar.SEA_RANGE_PENALTY if not WorldMap.is_land(10, 10) else 0), "8, or 6 from a boat")
 	var near := Wall.new()
 	near.HitPoints = 999
-	_drop(w, B, near, 18) # 8 hexes away
-	_drop(w, B, Wall.new(), 22) # 12: out of reach
+	_drop(w, B, near, 10 + r) # right at the edge of its reach
+	_drop(w, B, Wall.new(), 10 + r + 4) # out of reach
 	for i in range(12):
 		var log := w.fire(arty)
 		assert_eq(log.size(), 1, "fires")
-		assert_eq(log[0]["to"], Vector2i(18, 10), "only ever at the target within 8 hexes")
-	w._remove(MapCampaign.key_of(18, 10))
-	assert_true(w.fire(arty).is_empty(), "nothing within 8 hexes: no shot")
+		assert_eq(log[0]["to"], Vector2i(10 + r, 10), "only ever at the target within reach")
+	w._remove(MapCampaign.key_of(10 + r, 10))
+	assert_true(w.fire(arty).is_empty(), "nothing within reach: no shot")
 
 func test_ai_marches_into_range():
 	var w := _war()
@@ -1077,3 +1080,54 @@ func test_flying_units_ignore_the_sea():
 	w._put(A, Drone.new(), c[1])
 	var k := MapCampaign.key_of(c[1].x, c[1].y)
 	assert_eq(w.turn_allowance(k), MapWar.MOVE_FLYING, "a Drone over the sea keeps its 4 moves")
+
+# --- fighting from boats ------------------------------------------------------------
+func test_units_in_boats_have_less_range():
+	var w := _war()
+	var c := _coast(w)
+	var inf := Infantry.new()
+	var arty := Artilery.new()
+	assert_eq(w.attack_range(A, inf, c[0]), MapWar.MELEE_RANGE, "on land: 4")
+	assert_eq(w.attack_range(A, inf, c[1]), MapWar.MELEE_RANGE - MapWar.SEA_RANGE_PENALTY, "in a boat: 2")
+	assert_eq(w.attack_range(A, arty, c[1]), MapWar.RANGED_RANGE - MapWar.SEA_RANGE_PENALTY, "a gun in a boat: 6")
+	assert_eq(w.attack_range(A, Drone.new(), c[1]), MapWar.MELEE_RANGE, "flying units don't sit in boats")
+	assert_eq(w.attack_range(A, inf), MapWar.MELEE_RANGE, "no position given: the plain range")
+
+func test_a_boat_fires_only_within_its_shorter_reach():
+	var w := _war()
+	var c := _coast(w)
+	for nm in [B, C]:
+		w.campaign.flag_sites[nm] = Vector2i(-50, -50) # flags well out of the way
+	# an enemy Wall 3 hexes from the boat: in reach from land (4), not from the boat (2)
+	var target := Vector2i(-1, -1)
+	for y in range(WorldMap.GRID_H):
+		for x in range(WorldMap.GRID_W):
+			var t := Vector2i(x, y)
+			if target.x < 0 and MapCampaign.hex_distance(t, c[1]) == 3 and not w.units.has(MapCampaign.key_of(x, y)) and not WorldMap.is_void(x, y):
+				target = t
+	var wall := Wall.new()
+	wall.HitPoints = 999
+	w._put(B, wall, target)
+	w._put(A, Infantry.new(), c[1])
+	var k := MapCampaign.key_of(c[1].x, c[1].y)
+	assert_true(w.predict_target(k).is_empty(), "3 hexes is out of a boat's reach")
+	assert_true(w.fire(k).is_empty(), "so it holds its fire")
+
+func test_units_in_boats_take_more_per_hit():
+	var w := _war()
+	var c := _coast(w)
+	for nm in [B, C]:
+		w.campaign.flag_sites[nm] = Vector2i(-50, -50)
+	var boat := Infantry.new()
+	boat.HitPoints = 999
+	w._put(B, boat, c[1]) # B's Infantry in a boat, A's Tank on the coast beside it
+	var tk := MapCampaign.key_of(c[0].x, c[0].y)
+	w._put(A, Tank.new(), c[0])
+	w.reset_round_stats()
+	var hp0 := boat.HitPoints
+	var log := w.fire(tk)
+	assert_eq(log[0]["to"], c[1], "the Tank hits the boat")
+	var plain: int = w.effective_damage(A, Tank.new(), c[0])
+	assert_eq(hp0 - boat.HitPoints, plain + MapWar.SEA_DAMAGE_PENALTY, "+1 for being caught at sea")
+	assert_eq(int(w.round_stats[A + "|" + B].get("boat", 0)), MapWar.SEA_DAMAGE_PENALTY, "the report counts it")
+	assert_true(w.in_boat(boat, c[1]) and not w.in_boat(Drone.new(), c[1]), "only ground units sit in boats")

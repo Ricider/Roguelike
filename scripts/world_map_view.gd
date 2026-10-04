@@ -6,7 +6,8 @@
 # borders along hex edges and flag-on-pole capitals are drawn on the base layer;
 # fast-changing bits (units, FX, hover, selection, placement hints) live on a
 # child overlay so the base layer only redraws on camera moves and map changes.
-# Controls: mouse wheel zooms at the cursor, drag (any button) pans, and
+# Controls: mouse wheel zooms at the cursor, right (or middle) drag pans, left drag
+# draws a selection box (box_selected), a left click selects a hex, and
 # zoom_by()/pan_by()/center_on() are public for buttons and keys.
 extends Control
 class_name WorldMapView
@@ -14,7 +15,7 @@ class_name WorldMapView
 signal tile_selected(x: int, y: int)
 signal tile_hovered(x: int, y: int)
 signal hover_cleared # mouse left the map or moved off the grid
-signal box_selected(rect: Rect2) # Shift+drag: a selection box (local coordinates)
+signal box_selected(rect: Rect2, additive: bool) # left drag: a selection box (local coordinates); Shift held = add to the selection
 
 const TERRAIN_COLORS = {
 	"ocean": Color(0.10, 0.22, 0.38),
@@ -121,7 +122,7 @@ var _unit_tex: Dictionary = {} # card name -> Array[Texture2D] (32px idle frames
 var _press_pos := Vector2.ZERO
 var _pressed: bool = false
 var _dragging: bool = false
-var _boxing: bool = false # Shift+drag draws a selection box instead of panning
+var _boxing: bool = false # a left drag draws a selection box (right/middle drags pan)
 var _box_end := Vector2.ZERO
 var click_shift: bool = false # Shift was held on the latest map click (read by tile_selected handlers)
 
@@ -552,9 +553,9 @@ func _gui_input(event: InputEvent) -> void:
 		if mb.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
 			if mb.pressed:
 				_pressed = true
-				_dragging = mb.button_index != MOUSE_BUTTON_LEFT # right/middle always pan
+				_dragging = mb.button_index != MOUSE_BUTTON_LEFT # right/middle drags pan
 				_press_pos = mb.position
-				_boxing = mb.button_index == MOUSE_BUTTON_LEFT and mb.shift_pressed
+				_boxing = mb.button_index == MOUSE_BUTTON_LEFT # left drags box-select
 				_box_end = mb.position
 			else:
 				if _boxing and mb.button_index == MOUSE_BUTTON_LEFT:
@@ -563,9 +564,9 @@ func _gui_input(event: InputEvent) -> void:
 					_overlay.queue_redraw()
 					if boxed:
 						_pressed = false
-						box_selected.emit(Rect2(_press_pos, Vector2.ZERO).expand(mb.position))
+						box_selected.emit(Rect2(_press_pos, Vector2.ZERO).expand(mb.position), mb.shift_pressed)
 						return
-					# a Shift+click without a drag is still a click (it adds to the selection)
+					# a left press that never really moved is a click
 				var was_click := _pressed and not _dragging and mb.button_index == MOUSE_BUTTON_LEFT
 				_pressed = false
 				_dragging = false
@@ -1405,7 +1406,7 @@ func _draw_overlay() -> void:
 		_draw_range_targets(m)
 	if not aim.is_empty():
 		_draw_aim(m)
-	if _boxing and _pressed:
+	if _boxing and _pressed and _press_pos.distance_to(_box_end) > DRAG_THRESHOLD:
 		var box := Rect2(_press_pos, Vector2.ZERO).expand(_box_end)
 		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.12), true)
 		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.9), false, 2.0)

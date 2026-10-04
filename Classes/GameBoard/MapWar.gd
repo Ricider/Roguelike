@@ -654,6 +654,7 @@ func targets_in_range(nation: String, from: Vector2i, r: int) -> Array:
 #   + tucked behind one of its own Walls (the wall sits between it and the nearest enemy)
 #   + beside its own Barracks (+2 damage) or Interceptor (halves ranged/flying hits)
 #   - flanked, surrounded or encircled by enemy units there (takes more per hit)
+#   - in a boat there (shorter reach, takes more per hit)
 #   + closing in on weakened enemy cards (to finish them off)
 # Returns [[from key, to hex, path], ...] in the order moved.
 func ai_move(nation: String) -> Array:
@@ -681,11 +682,11 @@ func ai_move(nation: String) -> Array:
 		var reach := reachable(k)
 		if reach.is_empty():
 			continue
-		var rng_hexes := attack_range(nation, units[k]["card"] as Unit)
+		var u := units[k]["card"] as Unit
 		var best := here
-		var best_score := _position_score(nation, k, here, foes, enemy_flags, rng_hexes) + 0.25 # a small bias to stay put
+		var best_score := _position_score(nation, k, here, foes, enemy_flags, attack_range(nation, u, here)) + 0.25 # a small bias to stay put
 		for t in reach.keys():
-			var sc := _position_score(nation, k, t, foes, enemy_flags, rng_hexes)
+			var sc := _position_score(nation, k, t, foes, enemy_flags, attack_range(nation, u, t)) # shorter reach from a boat
 			if sc > best_score:
 				best_score = sc
 				best = t
@@ -722,6 +723,8 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 		score -= 0.8 * float(target_d - reach_hexes) # else: as close as it can get
 	score += weak_pull
 	score -= 2.5 * float(flank_at(nation, t)) # don't walk into a pincer
+	if units.has(k) and in_boat(units[k]["card"], t):
+		score -= 1.5 * float(SEA_DAMAGE_PENALTY) # boats are exposed: land when it can
 	for nb in MapCampaign.wrapped_neighbors(t):
 		var info := unit_at(nb as Vector2i)
 		if info.is_empty() or str(info["owner"]) != nation or MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y) == k:
@@ -1074,12 +1077,24 @@ func flag_sites() -> Dictionary:
 	return out
 
 # How far a unit can shoot, in hexes: units with Range (modifiers included) reach
-# RANGED_RANGE, the rest MELEE_RANGE. Nothing further away can be hit.
+# RANGED_RANGE, the rest MELEE_RANGE. Nothing further away can be hit. A ground unit
+# firing from a boat (standing on a sea hex) reaches SEA_RANGE_PENALTY less.
 const MELEE_RANGE := 4
 const RANGED_RANGE := 8
+const SEA_RANGE_PENALTY := 2
+# ...and takes SEA_DAMAGE_PENALTY more from every hit while it sits in that boat.
+const SEA_DAMAGE_PENALTY := 1
 
-func attack_range(nation: String, unit: Unit) -> int:
-	return RANGED_RANGE if (players[nation] as Player).has_range_for(unit) else MELEE_RANGE
+# A ground unit on a sea hex (in a boat)?
+func in_boat(unit: Card, t: Vector2i) -> bool:
+	return unit is Unit and not (unit as Unit).Flying and WorldMap.in_bounds(t.x, t.y) and _at_sea(t)
+
+# `at`: where the unit stands (or would stand); Vector2i(-1, -1) = ignore its position.
+func attack_range(nation: String, unit: Unit, at: Vector2i = Vector2i(-1, -1)) -> int:
+	var r := RANGED_RANGE if (players[nation] as Player).has_range_for(unit) else MELEE_RANGE
+	if at.x >= 0 and in_boat(unit, at):
+		r = maxi(r - SEA_RANGE_PENALTY, 1)
+	return r
 
 # {} when nothing to shoot; {"key": String} for a card; {"flag": nation, "hex": Vector2i} for a flag.
 # Targets are enemy cards plus enemy flags within `reach` hexes. Units without Range
@@ -1115,7 +1130,7 @@ func predict_target(k: String) -> Dictionary:
 	var nation := str(units[k]["owner"])
 	var unit := units[k]["card"] as Unit
 	var from := key_to_hex(k)
-	var closest := _closest_targets(nation, from, flag_sites(), attack_range(nation, unit))
+	var closest := _closest_targets(nation, from, flag_sites(), attack_range(nation, unit, from))
 	if closest.is_empty():
 		return {}
 	closest.sort_custom(func(a, b): return str(a.get("key", a.get("flag", ""))) < str(b.get("key", b.get("flag", ""))))
@@ -1240,7 +1255,7 @@ func fire(k: String) -> Array:
 		if not units.has(k) or unit.HitPoints <= 0:
 			break
 		var flags := flag_sites() # a flag moves the moment its nation collapses
-		var tgt := pick_target(nation, from, ranged, flags, attack_range(nation, unit))
+		var tgt := pick_target(nation, from, ranged, flags, attack_range(nation, unit, from))
 		if tgt.is_empty():
 			break
 		var dmg := effective_damage(nation, unit, from)
@@ -1288,6 +1303,8 @@ func fire(k: String) -> Array:
 			actual = maxi(1, actual / 2)
 		var flank := flank_bonus(tk) # hemmed in: it takes more from every hit
 		actual += flank
+		var boat := SEA_DAMAGE_PENALTY if in_boat(target, to) else 0 # caught at sea
+		actual += boat
 		var before := actual
 		actual = _intercept(victim2, to, unit, nation, actual)
 		var intercept_from := _last_intercept_from
@@ -1301,6 +1318,7 @@ func fire(k: String) -> Array:
 		_stat(nation, victim2, "modifiers", mod_delta)
 		_stat(nation, victim2, "unit_bonus", unit_bonus)
 		_stat(nation, victim2, "flank", flank)
+		_stat(nation, victim2, "boat", boat)
 		_stat(nation, victim2, "blocked_flying", pre_fly - before)
 		_stat(nation, victim2, "blocked_interceptor", before - pre_terrain)
 		var cover := "blocked_mountain" if WorldMap.terrain_at(to.x, to.y) == WorldMap.MOUNTAIN else "blocked_forest"
@@ -1331,11 +1349,12 @@ var pending_collapses: Array = []
 # turn began. "attacker|victim" -> {category: amount}. Categories:
 #   dealt (all damage that landed, flags included), flag, kills, kill_hp (HP the
 #   victim lost for destroyed cards), barracks, home (firing from own land), modifiers (can be negative),
-#   unit_bonus (Special Ops x2 / Anti Aircraft x3), flank (target hemmed in), splash (Fighter Jets),
+#   unit_bonus (Special Ops x2 / Anti Aircraft x3), flank (target hemmed in), boat (target
+#   a ground unit at sea), splash (Fighter Jets),
 #   blocked_interceptor, blocked_mountain, blocked_forest, blocked_flying.
 # The world map shows it at the start of the player's turn, then resets it.
 var round_stats: Dictionary = {}
-const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "home", "modifiers", "unit_bonus", "flank", "splash",
+const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "home", "modifiers", "unit_bonus", "flank", "boat", "splash",
 	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]
 
 func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
