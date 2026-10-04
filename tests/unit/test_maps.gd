@@ -156,6 +156,7 @@ func test_buildings_cannot_be_placed_on_mountains():
 		assert_eq(w.can_place(nation, b, peak), "Buildings can't be placed on mountains", "%s is refused" % (b as Card).card_name)
 	var inf := Infantry.new()
 	p.Hand = [inf]
+	w._put(nation, Housing.new(), MapCampaign.wrapped_neighbors(peak)[0]) # in its deploy zone
 	assert_eq(w.can_place(nation, inf, peak), "", "units may stand on mountains")
 	# the AI never picks a mountain for a building either
 	for i in range(20):

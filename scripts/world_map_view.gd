@@ -14,6 +14,7 @@ class_name WorldMapView
 signal tile_selected(x: int, y: int)
 signal tile_hovered(x: int, y: int)
 signal hover_cleared # mouse left the map or moved off the grid
+signal box_selected(rect: Rect2) # Shift+drag: a selection box (local coordinates)
 
 const TERRAIN_COLORS = {
 	"ocean": Color(0.10, 0.22, 0.38),
@@ -101,6 +102,15 @@ var flag_hp_shown: Dictionary = {} # nation -> HP to show on its flag bar
 var flag_site_shown: Dictionary = {} # nation -> hex its flag is shown on (it may already have moved)
 var walks: Dictionary = {} # "x,y" -> {"path": [hexes, home first], "t0", "step", "back"}: visual-only march
 var aim: Dictionary = {} # hover help: {"from": hex, "to": hex, "ranged": bool} -> targeting arrow
+# Selected units: their attack range as tinted, outlined zones, the enemy targets
+# inside them, a ring under each selected unit and, while planning a bulk move, a
+# marker on each hex a unit would march to.
+var range_zones: Array = [] # [{"hexes": {Vector2i: true}, "ranged": bool or "color": Color}, ...]
+var range_targets: Array = [] # enemy card/flag hexes within those zones
+var group_marks: Array = [] # hexes of the selected units
+var plan_marks: Array = [] # [[from hex, to hex], ...]: where a bulk move would send them
+const RANGE_MELEE := Color(1.0, 0.45, 0.35)  # same colours as the targeting arrow
+const RANGE_RANGED := Color(0.55, 0.85, 1.0)
 var _text_layer: Control = null # damage numbers: smooth filtering (the overlay is NEAREST for pixel sprites)
 const GOLD := Color(1.0, 0.82, 0.3)
 const CYAN := Color(0.45, 0.9, 1.0)
@@ -111,6 +121,9 @@ var _unit_tex: Dictionary = {} # card name -> Array[Texture2D] (32px idle frames
 var _press_pos := Vector2.ZERO
 var _pressed: bool = false
 var _dragging: bool = false
+var _boxing: bool = false # Shift+drag draws a selection box instead of panning
+var _box_end := Vector2.ZERO
+var click_shift: bool = false # Shift was held on the latest map click (read by tile_selected handlers)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -541,11 +554,23 @@ func _gui_input(event: InputEvent) -> void:
 				_pressed = true
 				_dragging = mb.button_index != MOUSE_BUTTON_LEFT # right/middle always pan
 				_press_pos = mb.position
+				_boxing = mb.button_index == MOUSE_BUTTON_LEFT and mb.shift_pressed
+				_box_end = mb.position
 			else:
+				if _boxing and mb.button_index == MOUSE_BUTTON_LEFT:
+					var boxed := _press_pos.distance_to(mb.position) > DRAG_THRESHOLD
+					_boxing = false
+					_overlay.queue_redraw()
+					if boxed:
+						_pressed = false
+						box_selected.emit(Rect2(_press_pos, Vector2.ZERO).expand(mb.position))
+						return
+					# a Shift+click without a drag is still a click (it adds to the selection)
 				var was_click := _pressed and not _dragging and mb.button_index == MOUSE_BUTTON_LEFT
 				_pressed = false
 				_dragging = false
 				if was_click:
+					click_shift = mb.shift_pressed
 					var t := tile_at_point(mb.position)
 					if t.x >= 0:
 						select_tile(t)
@@ -558,6 +583,10 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
+		if _pressed and _boxing:
+			_box_end = mm.position
+			_overlay.queue_redraw()
+			return
 		if _pressed:
 			if not _dragging and mm.position.distance_to(_press_pos) > DRAG_THRESHOLD:
 				_dragging = true
@@ -582,11 +611,34 @@ func _gui_input(event: InputEvent) -> void:
 		if t2.x >= 0:
 			select_tile(t2)
 
+# Keys of `owner`'s units whose hex centre lies inside `rect` (local coordinates).
+func units_in_rect(rect: Rect2, owner: String) -> Array:
+	var out: Array = []
+	if war == null:
+		return out
+	var m := metrics()
+	for k in war.units.keys():
+		if str(war.units[k]["owner"]) != owner or not (war.units[k]["card"] is Unit):
+			continue
+		for cp in _visible_copies(MapWar.key_to_hex(str(k)), m, 0.0):
+			if rect.has_point(cp as Vector2):
+				out.append(str(k))
+				break
+	return out
+
+func clear_range() -> void:
+	range_zones = []
+	range_targets = []
+	group_marks = []
+	plan_marks = []
+	_overlay.queue_redraw()
+
 func select_tile(t: Vector2i, emit: bool = true) -> void:
 	selected = t
 	_redraw_all() # selected nation tint lives on the base layer
 	if emit:
 		tile_selected.emit(t.x, t.y)
+	click_shift = false # only ever describes the click being handled
 
 # ---------------------------------------------------------------- base layer
 func _draw_hex_tex(ci: CanvasItem, c: Vector2, s: float, tex: Texture2D, tint: Color = Color.WHITE) -> void:
@@ -936,14 +988,17 @@ func unit_offset(k: String, m: Array) -> Vector2:
 		hop = absf(sin(f * PI)) * s * 0.18 if pos > 0.0 and pos < float(path.size() - 1) else 0.0
 	return a.lerp(b, f) - home - Vector2(0, hop)
 
-# True while a marching ground card is on a sea hex (it rides a boat there).
+# True while a ground card is on a sea hex, marching or parked there (it rides a boat).
 func at_sea(k: String) -> bool:
-	var w: Dictionary = walks.get(k, {})
-	if w.is_empty() or war == null or not war.units.has(k):
+	if war == null or not war.units.has(k):
 		return false
 	var card: Card = war.units[k]["card"]
 	if card is Unit and (card as Unit).Flying:
 		return false
+	var w: Dictionary = walks.get(k, {})
+	if w.is_empty():
+		var here := MapWar.key_to_hex(k)
+		return not WorldMap.is_land(here.x, here.y)
 	var path: Array = w["path"]
 	var t: Vector2i = path[clampi(roundi(_walk_progress(w)), 0, path.size() - 1)]
 	return not WorldMap.is_land(t.x, t.y)
@@ -958,6 +1013,26 @@ func _walk_facing(k: String, m: Array) -> float:
 	var b := _wrap_target(a, screen_pos(path[path.size() - 1] as Vector2i, m), m)
 	var dx: float = (b.x - a.x) * (-1.0 if bool(w["back"]) else 1.0)
 	return -1.0 if dx < 0.0 else 1.0
+
+# A unit hemmed in by enemies: red arrows pointing in at it, two when flanked (+1),
+# four when surrounded (+2), all six when encircled (+4).
+func _draw_flank_marks(c: Vector2, s: float, bonus: int) -> void:
+	var n := 2 if bonus <= MapWar.FLANK_FLANKED else (4 if bonus <= MapWar.FLANK_SURROUNDED else 6)
+	var dirs: Array = {2: [0, 3], 4: [0, 1, 3, 4], 6: [0, 1, 2, 3, 4, 5]}[n]
+	var pulse: float = 0.8 + 0.2 * sin(_clock * 7.0)
+	var push: float = s * 0.06 * sin(_clock * 7.0) # the arrows jab inwards
+	for i in dirs:
+		var ang: float = float(i) * TAU / 6.0
+		var d := Vector2(cos(ang), sin(ang))
+		var tip: Vector2 = c + d * (s * 0.62 - push)
+		var base: Vector2 = c + d * (s * 1.12 - push)
+		var side := Vector2(-d.y, d.x) * s * 0.3
+		var tri := PackedVector2Array([tip, base + side, base - side])
+		var outline := tri.duplicate()
+		outline.append(tri[0])
+		_overlay.draw_colored_polygon(tri, Color(1.0, 0.25, 0.18, pulse))
+		_overlay.draw_polyline(outline, Color(0.05, 0.04, 0.08, 0.95), maxf(2.0, s * 0.07))
+		_overlay.draw_line(tip.lerp(base, 0.25), tip.lerp(base, 0.8), Color(1.0, 0.85, 0.7, 0.8 * pulse), maxf(1.0, s * 0.04))
 
 # Pixel boat under a card crossing the sea: wake behind, then the hull drawn over
 # the sprite's feet so the unit stands inside it. Bow points along `facing`.
@@ -1059,6 +1134,7 @@ func _draw_units(m: Array) -> void:
 	var s: float = m[0]
 	var margin: float = s * 2.0
 	_draw_barracks_ripples(m)
+	var flanked: Array = [] # [[screen centre, bonus], ...]
 	for k in war.units.keys():
 		var info: Dictionary = war.units[k]
 		var t := MapWar.key_to_hex(str(k))
@@ -1070,6 +1146,7 @@ func _draw_units(m: Array) -> void:
 		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
 		var buffed: bool = war.is_buffed(str(k))
 		var shielded: bool = war.is_shielded(str(k)) and not (card is Interceptor)
+		var flank: int = war.flank_bonus(str(k)) if card is Unit else 0
 		var seed_i: int = t.x * 13 + t.y * 7
 		var shift := unit_offset(str(k), m)
 		var sea := at_sea(str(k))
@@ -1091,11 +1168,15 @@ func _draw_units(m: Array) -> void:
 				_draw_boat_hull(c, s, nc, facing)
 			if shielded:
 				_draw_shield_aura(c, s, seed_i)
+			if flank > 0:
+				flanked.append([c, flank]) # drawn after every unit, so neighbours can't hide them
 			# HP bar under the unit
 			var bwid: float = s * 1.3
 			var r := Rect2(c + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, maxf(2.0, s * 0.16)))
 			_overlay.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
 			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
+	for f in flanked:
+		_draw_flank_marks(f[0], s, int(f[1]))
 	# cards the logic already destroyed, standing until the shot that kills them
 	for gk in ghosts.keys():
 		var gd: Dictionary = ghosts[gk]
@@ -1307,6 +1388,10 @@ func _draw_overlay() -> void:
 				var ring2 := _hex_points(c, s - 1.5)
 				ring2.append(ring2[0])
 				_overlay.draw_polyline(ring2, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
+	if not range_zones.is_empty():
+		_draw_range_zones(m)
+	if not group_marks.is_empty() or not plan_marks.is_empty():
+		_draw_group_marks(m)
 	if war != null:
 		_draw_units(m)
 		_draw_flag_hp(m)
@@ -1316,13 +1401,107 @@ func _draw_overlay() -> void:
 			for cp in _visible_copies(hovered, m, margin):
 				if (cp as Vector2).distance_to(gp) < s * 2.0:
 					_draw_card(ghost_card, cp as Vector2, s, Color(1, 1, 1, 0.55), 0, _player_nation)
+	if not range_targets.is_empty():
+		_draw_range_targets(m)
 	if not aim.is_empty():
 		_draw_aim(m)
+	if _boxing and _pressed:
+		var box := Rect2(_press_pos, Vector2.ZERO).expand(_box_end)
+		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.12), true)
+		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.9), false, 2.0)
 	if hovered.x >= 0 and hovered != selected:
 		_hex_outline(hovered, m, Color(1, 1, 1, 0.6), 2.0)
 	if selected.x >= 0:
 		_hex_outline(selected, m, Color8(20, 16, 30), 5.0)
 		_hex_outline(selected, m, Color(1.0, 0.86, 0.3), 2.5)
+
+# Attack range of the selected unit(s): a tint over every hex in reach and a thick
+# rim (with a white dashed stripe) round the zone's edge, on every hex side whose
+# neighbour is outside. Red for melee, blue for ranged, like the targeting arrow.
+func _draw_range_zones(m: Array) -> void:
+	var s: float = m[0]
+	var margin: float = s * 2.0
+	var a: float = 0.85 + 0.15 * sin(_clock * 3.0)
+	for z in range_zones:
+		var hexes: Dictionary = z["hexes"]
+		var col: Color = z["color"] if z.has("color") else (RANGE_RANGED if bool(z["ranged"]) else RANGE_MELEE)
+		var edges: Array = [] # [p0, p1] on the zone's rim, drawn after every fill
+		for h in hexes.keys():
+			var t := h as Vector2i
+			# directions (in hex units) to the neighbours outside the zone
+			var out_dirs: Array = []
+			for i in range(6):
+				var nb := MapCampaign.hex_neighbor(t, i)
+				if not WorldMap.in_bounds(nb.x, nb.y) or not hexes.has(nb):
+					out_dirs.append(_neighbor_dir(t, i))
+			for cp in _visible_copies(t, m, margin):
+				var c := cp as Vector2
+				var pts := _hex_points(c, s)
+				_overlay.draw_colored_polygon(pts, Color(col.r, col.g, col.b, 0.22))
+				for d in out_dirs:
+					# the hex edge facing that neighbour: its midpoint points the same way
+					var best := 0
+					var best_dot := -INF
+					for i in range(6):
+						var mid: Vector2 = (pts[i] + pts[(i + 1) % 6]) * 0.5 - c
+						var dot := mid.normalized().dot(d as Vector2)
+						if dot > best_dot:
+							best_dot = dot
+							best = i
+					edges.append([pts[best], pts[(best + 1) % 6]])
+		var w: float = clampf(s * 0.14, 3.0, 6.0)
+		for e in edges:
+			_overlay.draw_line(e[0], e[1], Color(0.05, 0.04, 0.08, 0.9), w + 3.0)
+		for e in edges:
+			_overlay.draw_line(e[0], e[1], Color(col.r, col.g, col.b, a), w)
+		# a white dashed stripe down the middle, so the rim never reads as a border
+		for e in edges:
+			_overlay.draw_dashed_line(e[0], e[1], Color(1, 1, 1, 0.9 * a), maxf(1.5, w * 0.4), maxf(3.0, s * 0.18))
+
+# Screen direction from hex `t` to its neighbour `i` (unit length; odd-r rows are
+# shifted half a hex, so it is the same whatever the row).
+func _neighbor_dir(t: Vector2i, i: int) -> Vector2:
+	var nb := MapCampaign.hex_neighbor(t, i)
+	var dx: float = float(nb.x - t.x) + 0.5 * float(nb.y & 1) - 0.5 * float(t.y & 1)
+	if WorldMap.WRAPS and absf(dx) > WorldMap.GRID_W * 0.5:
+		dx -= signf(dx) * WorldMap.GRID_W
+	return Vector2(dx, float(nb.y - t.y) * 0.8660254).normalized()
+
+# Pulsing corner brackets on every enemy card or flag the selection could hit.
+func _draw_range_targets(m: Array) -> void:
+	var s: float = m[0]
+	var k: float = 0.62 + 0.08 * sin(_clock * 6.0)
+	for t in range_targets:
+		for cp in _visible_copies(t as Vector2i, m, s * 2.0):
+			var c := cp as Vector2
+			for sx in [-1.0, 1.0]:
+				for sy in [-1.0, 1.0]:
+					var corner := c + Vector2(sx, sy) * s * k
+					_overlay.draw_line(corner, corner - Vector2(sx * s * 0.28, 0), Color(1.0, 0.3, 0.25, 0.95), 2.5)
+					_overlay.draw_line(corner, corner - Vector2(0, sy * s * 0.28), Color(1.0, 0.3, 0.25, 0.95), 2.5)
+
+# A gold ring under each selected unit; for a planned bulk move, a dotted line to
+# the hex each one would reach and a hollow marker there.
+func _draw_group_marks(m: Array) -> void:
+	var s: float = m[0]
+	var margin: float = s * 2.0
+	for t in group_marks:
+		for cp in _visible_copies(t as Vector2i, m, margin):
+			_overlay.draw_set_transform((cp as Vector2) + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
+			_overlay.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(0.05, 0.04, 0.08, 0.85), 5.0)
+			_overlay.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(1.0, 0.86, 0.3, 0.95), 2.5)
+			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for pm in plan_marks:
+		var from: Vector2i = pm[0]
+		var to: Vector2i = pm[1]
+		for cp in _visible_copies(to, m, margin):
+			var b := cp as Vector2
+			var a := _wrap_target(b, screen_pos(from, m), m)
+			var n := maxi(2, int(a.distance_to(b) / maxf(6.0, s * 0.35)))
+			for i in range(1, n):
+				_overlay.draw_circle(a.lerp(b, float(i) / n), maxf(1.5, s * 0.06), Color(1.0, 0.86, 0.3, 0.8))
+			_overlay.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(0.05, 0.04, 0.08, 0.85), 4.0)
+			_overlay.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(1.0, 0.86, 0.3, 0.95), 2.0)
 
 # Hover help (like the old battle screen's attack arrow): dashed line from the
 # hovered unit to the target it would hit next, with a pulsing crosshair.

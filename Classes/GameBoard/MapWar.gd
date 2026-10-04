@@ -66,10 +66,14 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 		for row in p.Board:
 			for sq in row.Squares:
 				sq.clear()
+		# buildings first, so units can be summoned near them (deploy zones)
+		start_cards.sort_custom(func(a, b): return (a is Building) and not (b is Building))
 		for card in start_cards:
 			var t := best_hex_for(nm, card as Card)
 			if t.x >= 0:
 				_put(nm, card as Card, t)
+			else:
+				p.DiscardPile.append(card) # no room near its flag or buildings: back into the deck
 	# story chapters start some nations stronger or weaker than usual...
 	apply_setup(WorldMap.SETUP)
 	# ...and add their own set pieces on top of the default starting cards; rules
@@ -305,6 +309,66 @@ func shortfall(nation: String, card: Card) -> String:
 	return " and ".join(parts)
 
 # "" when the card can go on hex t, else a human-readable reason.
+# ------------------------------------------------------------- deploy zones
+# Units are summoned near what raises them; buildings go anywhere on your land.
+# Within DEPLOY_RADIUS hexes of your flag or one of your standing buildings:
+#   BioCost >= MoneyCost (people: Infantry, Special Ops)       -> Housing
+#   MoneyCost > BioCost, Flying (Drone, Fighter Jet)            -> Corporation or Factory
+#   MoneyCost > BioCost, on the ground (Tank, Artilery, AA...)  -> Factory or Barracks
+const DEPLOY_RADIUS := 2
+
+# Names of the buildings (besides the flag) a card can be deployed near; [] = anywhere.
+static func deploy_anchors(card: Card) -> Array:
+	if not (card is Unit):
+		return []
+	if card.BioCost >= card.MoneyCost:
+		return ["Housing"]
+	if (card as Unit).Flying:
+		return ["Corporation", "Factory"]
+	return ["Factory", "Barracks"]
+
+# "your flag or a Housing", "your flag, a Corporation or a Factory", ...
+static func deploy_anchor_text(card: Card) -> String:
+	var names: Array = deploy_anchors(card).map(func(n): return "a " + str(n))
+	if names.size() == 1:
+		return "your flag or %s" % names[0]
+	return "your flag, %s or %s" % [", ".join(names.slice(0, names.size() - 1)), names[-1]]
+
+# Hexes a card of `nation` may be deployed from: its flag and its standing anchor buildings.
+func deploy_sources(nation: String, card: Card) -> Array:
+	var anchors := deploy_anchors(card)
+	var out: Array = [campaign.capital_site(nation)]
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		if anchors.has(c.card_name) and card_hp(c) > 0:
+			out.append(key_to_hex(k))
+	return out
+
+func in_deploy_zone(nation: String, card: Card, t: Vector2i, sources: Array = []) -> bool:
+	if not (card is Unit):
+		return true
+	if sources.is_empty():
+		sources = deploy_sources(nation, card)
+	for src in sources:
+		if hex_distance(t, src as Vector2i) <= DEPLOY_RADIUS:
+			return true
+	return false
+
+# Every hex `card` could be deployed on now (own, free, not the flag, terrain allows,
+# within its deploy zone), ignoring whether it is in hand or affordable.
+func deploy_hexes(nation: String, card: Card) -> Array:
+	var out: Array = []
+	var flag := campaign.capital_site(nation)
+	var sources := deploy_sources(nation, card) if card is Unit else []
+	for t in campaign.tiles_of(nation):
+		var tv := t as Vector2i
+		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag or not can_build_on(card, tv):
+			continue
+		if card is Unit and not in_deploy_zone(nation, card, tv, sources):
+			continue
+		out.append(tv)
+	return out
+
 func can_place(nation: String, card: Card, t: Vector2i) -> String:
 	if not WorldMap.in_bounds(t.x, t.y) or campaign.owner_of(t.x, t.y) != nation:
 		return "You can only build on your own territory"
@@ -314,6 +378,8 @@ func can_place(nation: String, card: Card, t: Vector2i) -> String:
 		return "Your flag stands here; it needs its own hex"
 	if not can_build_on(card, t):
 		return "Buildings can't be placed on mountains"
+	if not in_deploy_zone(nation, card, t):
+		return "%s must be deployed within %d hexes of %s" % [card.card_name, DEPLOY_RADIUS, deploy_anchor_text(card)]
 	var p: Player = players[nation]
 	if not p.Hand.has(card):
 		return "That card is not in your hand"
@@ -359,17 +425,20 @@ func begin_turn(nation: String) -> void:
 	refill_moves(nation)
 
 # ------------------------------------------------------------------- movement
-# Units can walk each turn, within their own nation's land; buildings (walls
-# included) and flags never move. Hexes per turn, first rule that applies:
-#   Flying 4  >  ranged (HasRange, modifiers included) 1  >  BioCost < MoneyCost 2  >  else 3
-# Ground units walk over their own land (passing their own cards, not stopping on
-# them); flying units cross anything, sea and enemy land included, but land on
-# their own. A card deployed this turn starts moving next turn. Moves left are
+# Units can move each turn; buildings (walls included) and flags never move.
+# Hexes per turn, first rule that applies:
+#   Flying 6  >  ranged (HasRange, modifiers included) 3  >  BioCost < MoneyCost 4  >  else 5
+# Units cross borders: they can stop on any free hex in play, enemy land and sea
+# included (ground units sail there by boat), but never on a flag. Ground units
+# pass their own cards but not other nations'; flying units pass over anything.
+# Standing on enemy land takes nothing: hexes still change hands only when a nation
+# collapses. Ground units are slower by boat, and 1-move units can't sail
+# (SEA_PENALTY). A card deployed this turn starts moving next turn. Moves left are
 # kept on the card (meta "moves_left"); missing means a full turn's worth.
-const MOVE_FLYING := 4
-const MOVE_RANGED := 1
-const MOVE_CHEAP := 2   # BioCost < MoneyCost (machines more than men: tanks, AA...)
-const MOVE_DEFAULT := 3
+const MOVE_FLYING := 6
+const MOVE_RANGED := 3
+const MOVE_CHEAP := 4   # BioCost < MoneyCost (machines more than men: tanks, AA...)
+const MOVE_DEFAULT := 5
 
 func move_allowance(nation: String, card: Card) -> int:
 	if not (card is Unit):
@@ -383,18 +452,59 @@ func move_allowance(nation: String, card: Card) -> int:
 		return MOVE_CHEAP
 	return MOVE_DEFAULT
 
+# Boats: ground units are slower at sea. Boarding (a step from land onto the sea)
+# costs 1 extra move, and a turn begun at sea refills SEA_PENALTY fewer moves; so an
+# Infantry sails 4 hexes a turn instead of walking 5. A ground unit with only 1 move a
+# turn couldn't board at all (none has so few now). A unit stuck at sea still gets 1 move.
+const SEA_PENALTY := 1
+
+func _at_sea(t: Vector2i) -> bool:
+	return not WorldMap.is_land(t.x, t.y)
+
+# Moves a card on hex key `k` gets at the start of a turn (fewer for ground units at sea).
+func turn_allowance(k: String) -> int:
+	var card: Card = units[k]["card"]
+	var full := move_allowance(str(units[k]["owner"]), card)
+	if full > 0 and card is Unit and not (card as Unit).Flying and _at_sea(key_to_hex(k)):
+		return maxi(full - SEA_PENALTY, 1)
+	return full
+
+# Can this ground unit board a boat? Not with only 1 move a turn.
+func can_sail(nation: String, card: Card) -> bool:
+	return card is Unit and ((card as Unit).Flying or move_allowance(nation, card) > SEA_PENALTY)
+
 func moves_left(k: String) -> int:
 	if not units.has(k):
 		return 0
 	var card: Card = units[k]["card"]
-	return int(card.get_meta("moves_left", move_allowance(str(units[k]["owner"]), card)))
+	return int(card.get_meta("moves_left", turn_allowance(k)))
 
 func refill_moves(nation: String) -> void:
 	for k in cards_of(nation):
 		var card: Card = units[k]["card"]
-		card.set_meta("moves_left", move_allowance(nation, card))
+		card.set_meta("moves_left", turn_allowance(k))
+
+# Moves one step from `a` onto `b` costs: 1, or 1 + SEA_PENALTY for a ground unit
+# boarding (land onto sea); -1 = not allowed (a ground unit that can't sail, onto sea).
+func _step_cost(a: Vector2i, b: Vector2i, flying: bool, sails: bool) -> int:
+	if flying or not _at_sea(b):
+		return 1
+	if not sails:
+		return -1
+	return 1 if _at_sea(a) else 1 + SEA_PENALTY
+
+# Moves a path costs the card on `k` (see _step_cost).
+func path_cost(k: String, path: Array) -> int:
+	var card: Card = units[k]["card"]
+	var flying := card is Unit and (card as Unit).Flying
+	var sails := can_sail(str(units[k]["owner"]), card)
+	var total := 0
+	for i in range(1, path.size()):
+		total += maxi(_step_cost(path[i - 1], path[i], flying, sails), 1)
+	return total
 
 # Hexes the card at `k` can move to this turn: {hex: [path from k's hex to it]}.
+# Cheapest paths first (boarding costs extra), fewest steps among equals.
 func reachable(k: String) -> Dictionary:
 	var out := {}
 	if not units.has(k):
@@ -405,31 +515,41 @@ func reachable(k: String) -> Dictionary:
 		return out
 	var nation := str(units[k]["owner"])
 	var flying := (card as Unit).Flying
+	var sails := can_sail(nation, card)
 	var start := key_to_hex(k)
-	var flag := campaign.capital_site(nation)
+	var flags: Dictionary = {}
+	for site in flag_sites().values():
+		flags[site] = true
 	var parent := {start: start}
-	var depth := {start: 0}
+	var cost := {start: 0}
 	var queue: Array = [start]
 	var head := 0
-	while head < queue.size():
+	while head < queue.size(): # small budgets: relax until nothing improves
 		var cur: Vector2i = queue[head]
 		head += 1
-		if int(depth[cur]) >= budget:
-			continue
 		for nb in MapCampaign.wrapped_neighbors(cur):
 			var t := nb as Vector2i
-			if parent.has(t) or WorldMap.is_void(t.x, t.y):
+			if t == start or WorldMap.is_void(t.x, t.y):
 				continue
-			if not flying and campaign.owner_of(t.x, t.y) != nation:
-				continue # ground units keep to their own land
+			var tk := MapCampaign.key_of(t.x, t.y)
+			if not flying and units.has(tk) and str(units[tk]["owner"]) != nation:
+				continue # ground units can't push through another nation's cards
+			var step := _step_cost(cur, t, flying, sails)
+			if step < 0:
+				continue # too slow to board a boat
+			var c: int = int(cost[cur]) + step
+			if c > budget or (cost.has(t) and c >= int(cost[t])):
+				continue
+			cost[t] = c
 			parent[t] = cur
-			depth[t] = int(depth[cur]) + 1
 			queue.append(t)
-			if campaign.owner_of(t.x, t.y) == nation and t != flag and not units.has(MapCampaign.key_of(t.x, t.y)):
-				var path: Array = [t]
-				while path[0] != start:
-					path.push_front(parent[path[0]])
-				out[t] = path
+	for t in cost.keys():
+		if t == start or flags.has(t) or units.has(MapCampaign.key_of(t.x, t.y)):
+			continue
+		var path: Array = [t]
+		while path[0] != start:
+			path.push_front(parent[path[0]])
+		out[t] = path
 	return out
 
 # Move the card at `k` to hex `to`. Returns the path walked ([] = not allowed).
@@ -440,26 +560,119 @@ func move(nation: String, k: String, to: Vector2i) -> Array:
 	if not reach.has(to):
 		return []
 	var path: Array = reach[to]
+	var spent := path_cost(k, path)
 	var info: Dictionary = units[k]
 	var card: Card = info["card"]
-	card.set_meta("moves_left", moves_left(k) - (path.size() - 1))
+	card.set_meta("moves_left", moves_left(k) - spent)
 	units.erase(k)
 	units[MapCampaign.key_of(to.x, to.y)] = info
 	return path
 
+# Bulk move: march the cards on `keys` towards hex `goal`, each as close as its
+# moves allow. Those already nearest go first and take the hexes closest to the goal,
+# so the group fans out around it instead of queueing. A unit that can't get any
+# closer stays put. Returns [[from key, to hex, path], ...] in the order moved.
+func move_group(nation: String, keys: Array, goal: Vector2i) -> Array:
+	var order: Array = []
+	for k in keys:
+		if units.has(k) and str(units[k]["owner"]) == nation and units[k]["card"] is Unit and moves_left(k) > 0:
+			order.append(k)
+	order.sort_custom(func(a, b):
+		var da := hex_distance(key_to_hex(a), goal)
+		var db := hex_distance(key_to_hex(b), goal)
+		return da < db if da != db else str(a) < str(b))
+	var moves: Array = []
+	for k in order:
+		var here := key_to_hex(k)
+		var best := here
+		var best_d := hex_distance(here, goal)
+		var best_len := 0
+		var reach := reachable(k)
+		for t in reach.keys():
+			var d := hex_distance(t, goal)
+			var steps: int = (reach[t] as Array).size() - 1
+			if d < best_d or (d == best_d and steps < best_len):
+				best = t
+				best_d = d
+				best_len = steps
+		if best != here:
+			var path := move(nation, k, best)
+			if not path.is_empty():
+				moves.append([k, best, path])
+	return moves
+
+# Where move_group would send each card, without moving anything (for the preview).
+func plan_group(nation: String, keys: Array, goal: Vector2i) -> Array:
+	var saved: Dictionary = {} # card -> moves_left meta before (null = none)
+	for k in keys:
+		if units.has(k):
+			var card: Card = units[k]["card"]
+			saved[card] = card.get_meta("moves_left") if card.has_meta("moves_left") else null
+	var moves := move_group(nation, keys, goal)
+	for i in range(moves.size() - 1, -1, -1): # undo, last move first
+		var to: Vector2i = moves[i][1]
+		var tk := MapCampaign.key_of(to.x, to.y)
+		var info: Dictionary = units[tk]
+		units.erase(tk)
+		units[str(moves[i][0])] = info
+	for card in saved.keys():
+		if saved[card] == null:
+			(card as Card).remove_meta("moves_left")
+		else:
+			(card as Card).set_meta("moves_left", saved[card])
+	return moves
+
+# Every hex in play within `r` hexes of `center`.
+func hexes_within(center: Vector2i, r: int) -> Array:
+	var seen: Dictionary = {}
+	for y in range(center.y - r, center.y + r + 1):
+		for x in range(center.x - r - 1, center.x + r + 2):
+			var t := Vector2i(posmod(x, WorldMap.GRID_W) if WorldMap.WRAPS else x, y)
+			if not WorldMap.in_bounds(t.x, t.y) or WorldMap.is_void(t.x, t.y):
+				continue
+			if hex_distance(center, t) <= r:
+				seen[t] = true
+	return seen.keys()
+
+# The enemy cards and flags a unit of `nation` standing on `from` could hit (within `r`).
+func targets_in_range(nation: String, from: Vector2i, r: int) -> Array:
+	var out: Array = []
+	for k in units.keys():
+		if str(units[k]["owner"]) != nation and card_hp(units[k]["card"]) > 0:
+			var t := key_to_hex(k)
+			if hex_distance(from, t) <= r:
+				out.append(t)
+	var fs := flag_sites()
+	for fnation in fs.keys():
+		if str(fnation) != nation and hex_distance(from, fs[fnation]) <= r:
+			out.append(fs[fnation])
+	return out
+
 # The AI repositions its units before it fires. Each unit weighs every hex it can
 # reach (staying put included) and takes the best one:
+#   + something to shoot within its attack range (else: closer to the nearest target)
 #   + tucked behind one of its own Walls (the wall sits between it and the nearest enemy)
 #   + beside its own Barracks (+2 damage) or Interceptor (halves ranged/flying hits)
+#   - flanked, surrounded or encircled by enemy units there (takes more per hit)
 #   + closing in on weakened enemy cards (to finish them off)
 # Returns [[from key, to hex, path], ...] in the order moved.
 func ai_move(nation: String) -> Array:
 	var moves: Array = []
-	var enemies: Array = []
+	# every enemy card once: [hex, how badly hurt 0..1] (parsed here, not per candidate hex)
+	var foes: Array = []
 	for k in units.keys():
-		if str(units[k]["owner"]) != nation:
-			enemies.append(k)
-	if enemies.is_empty():
+		if str(units[k]["owner"]) == nation:
+			continue
+		var card: Card = units[k]["card"]
+		var mx: int = int(card.get_meta("map_max_hp", maxi(card_hp(card), 1)))
+		var hurt: float = 1.0 - clampf(float(card_hp(card)) / float(maxi(mx, 1)), 0.0, 1.0)
+		foes.append([key_to_hex(k), hurt])
+	var enemy_flags: Array = []
+	var fs := flag_sites()
+	for fn in fs.keys():
+		if str(fn) != nation:
+			enemy_flags.append(fs[fn])
+	if foes.is_empty() and enemy_flags.is_empty():
 		return moves
 	for k in cards_of(nation):
 		if not units.has(k) or not (units[k]["card"] is Unit) or moves_left(k) <= 0:
@@ -468,10 +681,11 @@ func ai_move(nation: String) -> Array:
 		var reach := reachable(k)
 		if reach.is_empty():
 			continue
+		var rng_hexes := attack_range(nation, units[k]["card"] as Unit)
 		var best := here
-		var best_score := _position_score(nation, k, here, enemies) + 0.25 # a small bias to stay put
+		var best_score := _position_score(nation, k, here, foes, enemy_flags, rng_hexes) + 0.25 # a small bias to stay put
 		for t in reach.keys():
-			var sc := _position_score(nation, k, t, enemies)
+			var sc := _position_score(nation, k, t, foes, enemy_flags, rng_hexes)
 			if sc > best_score:
 				best_score = sc
 				best = t
@@ -481,24 +695,33 @@ func ai_move(nation: String) -> Array:
 				moves.append([k, best, path])
 	return moves
 
-func _position_score(nation: String, k: String, t: Vector2i, enemies: Array) -> float:
+# How good hex `t` is for the unit on key `k`. foes: [[hex, hurt 0..1], ...] for every
+# enemy card; enemy_flags: their flag hexes; reach_hexes: the unit's attack range.
+func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_flags: Array = [], reach_hexes: int = 1 << 20) -> float:
 	var score := 0.0
-	# nearest enemy card, and the weakest ones nearby
+	# the nearest enemy card (for walls), the nearest target (cards or flags, for range),
+	# and a pull towards badly hurt enemies nearby
 	var nearest := Vector2i(-1, -1)
 	var nearest_d := 1 << 30
 	var weak_pull := 0.0
-	for ek in enemies:
-		var et := key_to_hex(ek)
+	for f in foes:
+		var et: Vector2i = f[0]
 		var d := MapCampaign.hex_distance(t, et)
 		if d < nearest_d:
 			nearest_d = d
 			nearest = et
-		var card: Card = units[ek]["card"]
-		var mx: int = int(card.get_meta("map_max_hp", maxi(card_hp(card), 1)))
-		var hurt: float = 1.0 - clampf(float(card_hp(card)) / float(maxi(mx, 1)), 0.0, 1.0)
+		var hurt: float = f[1]
 		if hurt > 0.0:
 			weak_pull += hurt * 6.0 / float(1 + d) # closer to a badly hurt enemy is better
+	var target_d := nearest_d
+	for fl in enemy_flags:
+		target_d = mini(target_d, MapCampaign.hex_distance(t, fl as Vector2i))
+	if target_d <= reach_hexes:
+		score += 5.0 # something to shoot from here
+	elif target_d < (1 << 30):
+		score -= 0.8 * float(target_d - reach_hexes) # else: as close as it can get
 	score += weak_pull
+	score -= 2.5 * float(flank_at(nation, t)) # don't walk into a pincer
 	for nb in MapCampaign.wrapped_neighbors(t):
 		var info := unit_at(nb as Vector2i)
 		if info.is_empty() or str(info["owner"]) != nation or MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y) == k:
@@ -696,11 +919,8 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 		fdist = frontier_distance(nation)
 	var best := Vector2i(-1, -1)
 	var best_score: float = -1e9
-	var flag := campaign.capital_site(nation)
-	for t in campaign.tiles_of(nation):
+	for t in deploy_hexes(nation, card):
 		var tv := t as Vector2i
-		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag or not can_build_on(card, tv):
-			continue
 		var d: float = float(fdist.get(MapCampaign.key_of(tv.x, tv.y), 50))
 		var score: float
 		if card is Unit or card is Wall:
@@ -730,7 +950,7 @@ func ai_build(nation: String) -> Array:
 			continue
 		var t := best_hex_for(nation, card, fdist)
 		if t.x < 0:
-			break
+			continue # nowhere for this one (land full, or no flag/building near enough): try the rest
 		if place(nation, card, t):
 			placed.append([card, t])
 	return placed
@@ -789,9 +1009,60 @@ func is_shielded(k: String) -> bool:
 			return true
 	return false
 
+# Home ground: a unit firing from its own nation's land deals HOME_BONUS more per shot
+# (not from enemy land, unclaimed land or the sea).
+const HOME_BONUS := 1
+
+func _home_bonus(nation: String, t: Vector2i) -> int:
+	return HOME_BONUS if campaign.owner_of(t.x, t.y) == nation else 0
+
+# Flanking: a unit hemmed in by enemy units takes more from every hit (highest tier only).
+# Enemies = living units of any other nation on the 6 neighbouring hexes (not buildings).
+#   flanked    enemy units on two opposite sides    +FLANK_FLANKED
+#   surrounded 4 or more enemy neighbours           +FLANK_SURROUNDED
+#   encircled  all 6 neighbours are enemy units     +FLANK_ENCIRCLED
+const FLANK_FLANKED := 1
+const FLANK_SURROUNDED := 2
+const FLANK_ENCIRCLED := 4
+
+# Extra damage a unit of `nation` standing on `t` would take per hit (0 = not flanked).
+func flank_at(nation: String, t: Vector2i) -> int:
+	var enemy: Array = []
+	var n := 0
+	for i in range(6):
+		var nb := MapCampaign.hex_neighbor(t, i)
+		var e := false
+		if WorldMap.in_bounds(nb.x, nb.y):
+			var info := unit_at(nb)
+			e = not info.is_empty() and str(info["owner"]) != nation and info["card"] is Unit and card_hp(info["card"]) > 0
+		enemy.append(e)
+		if e:
+			n += 1
+	if n >= 6:
+		return FLANK_ENCIRCLED
+	if n >= 4:
+		return FLANK_SURROUNDED
+	for i in range(3): # directions i and i + 3 are opposite
+		if enemy[i] and enemy[i + 3]:
+			return FLANK_FLANKED
+	return 0
+
+# The flanking penalty of the unit on hex key `k` (0 for buildings and flags).
+func flank_bonus(k: String) -> int:
+	if not units.has(k) or not (units[k]["card"] is Unit):
+		return 0
+	return flank_at(str(units[k]["owner"]), key_to_hex(k))
+
+func flank_name(bonus: int) -> String:
+	match bonus:
+		FLANK_ENCIRCLED: return "encircled"
+		FLANK_SURROUNDED: return "surrounded"
+		FLANK_FLANKED: return "flanked"
+	return ""
+
 func effective_damage(nation: String, unit: Unit, t: Vector2i) -> int:
 	var p: Player = players[nation]
-	return p.effective_damage_for(unit, null) + _barracks_bonus(nation, t)
+	return p.effective_damage_for(unit, null) + _barracks_bonus(nation, t) + _home_bonus(nation, t)
 
 # Where each living nation's flag stands (its capital, or the owned hex nearest it).
 func flag_sites() -> Dictionary:
@@ -802,38 +1073,49 @@ func flag_sites() -> Dictionary:
 			out[nm] = campaign.capital_site(nm)
 	return out
 
+# How far a unit can shoot, in hexes: units with Range (modifiers included) reach
+# RANGED_RANGE, the rest MELEE_RANGE. Nothing further away can be hit.
+const MELEE_RANGE := 4
+const RANGED_RANGE := 8
+
+func attack_range(nation: String, unit: Unit) -> int:
+	return RANGED_RANGE if (players[nation] as Player).has_range_for(unit) else MELEE_RANGE
+
 # {} when nothing to shoot; {"key": String} for a card; {"flag": nation, "hex": Vector2i} for a flag.
-# Targets are enemy cards plus enemy flags. Units without Range take the closest
-# (random among ties); ranged units find the closest enemy nation and pick a random
-# target of that nation (any of its cards or its flag).
-func pick_target(nation: String, from: Vector2i, ranged: bool, flags: Dictionary = {}) -> Dictionary:
+# Targets are enemy cards plus enemy flags within `reach` hexes. Units without Range
+# take the closest (random among ties); ranged units find the closest enemy nation
+# and pick a random target of that nation within reach (any of its cards or its flag).
+func pick_target(nation: String, from: Vector2i, ranged: bool, flags: Dictionary = {}, reach: int = -1) -> Dictionary:
 	if flags.is_empty():
 		flags = flag_sites()
-	var closest := _closest_targets(nation, from, flags)
+	if reach < 0:
+		reach = RANGED_RANGE if ranged else MELEE_RANGE
+	var closest := _closest_targets(nation, from, flags, reach)
 	if closest.is_empty():
 		return {}
 	var pick: Dictionary = closest[rng.randi_range(0, closest.size() - 1)]
 	if not ranged:
 		return pick
-	# Ranged: a random target (card or flag) of the closest enemy nation.
+	# Ranged: a random target (card or flag) of the closest enemy nation, within reach.
 	var victim := str(pick["owner"])
 	var pool: Array = []
 	for k in cards_of(victim):
-		if card_hp(units[k]["card"]) > 0:
+		if card_hp(units[k]["card"]) > 0 and hex_distance(from, key_to_hex(k)) <= reach:
 			pool.append({"key": k, "owner": victim})
-	if flags.has(victim):
+	if flags.has(victim) and hex_distance(from, flags[victim]) <= reach:
 		pool.append({"flag": victim, "hex": flags[victim], "owner": victim})
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
 # Where the unit on hex key `k` would shoot next, without rolling dice (for hover help):
 # {"hex", "owner", "name", "distance", "ranged", "ties"}; ranged units report the nation they aim at.
+# {} when nothing is within its attack range.
 func predict_target(k: String) -> Dictionary:
 	if not units.has(k) or not (units[k]["card"] is Unit):
 		return {}
 	var nation := str(units[k]["owner"])
 	var unit := units[k]["card"] as Unit
 	var from := key_to_hex(k)
-	var closest := _closest_targets(nation, from, flag_sites())
+	var closest := _closest_targets(nation, from, flag_sites(), attack_range(nation, unit))
 	if closest.is_empty():
 		return {}
 	closest.sort_custom(func(a, b): return str(a.get("key", a.get("flag", ""))) < str(b.get("key", b.get("flag", ""))))
@@ -843,8 +1125,9 @@ func predict_target(k: String) -> Dictionary:
 	return {"hex": hex, "owner": str(first["owner"]), "name": nm, "distance": hex_distance(from, hex),
 		"ranged": (players[nation] as Player).has_range_for(unit), "ties": closest.size()}
 
-# Every enemy target (cards and flags) at the smallest hex distance from `from`.
-func _closest_targets(nation: String, from: Vector2i, flags: Dictionary) -> Array:
+# Every enemy target (cards and flags) at the smallest hex distance from `from`,
+# no further than `reach` hexes.
+func _closest_targets(nation: String, from: Vector2i, flags: Dictionary, reach: int = 1 << 29) -> Array:
 	var best: int = 1 << 30
 	var closest: Array = []
 	for k in units.keys():
@@ -853,6 +1136,8 @@ func _closest_targets(nation: String, from: Vector2i, flags: Dictionary) -> Arra
 		if o == nation or card_hp(info["card"]) <= 0:
 			continue
 		var d := hex_distance(from, key_to_hex(str(k)))
+		if d > reach:
+			continue
 		if d < best:
 			best = d
 			closest = [{"key": k, "owner": o}]
@@ -863,6 +1148,8 @@ func _closest_targets(nation: String, from: Vector2i, flags: Dictionary) -> Arra
 			continue
 		var site: Vector2i = flags[fnation]
 		var d2 := hex_distance(from, site)
+		if d2 > reach:
+			continue
 		var cand := {"flag": str(fnation), "hex": site, "owner": str(fnation)}
 		if d2 < best:
 			best = d2
@@ -953,12 +1240,13 @@ func fire(k: String) -> Array:
 		if not units.has(k) or unit.HitPoints <= 0:
 			break
 		var flags := flag_sites() # a flag moves the moment its nation collapses
-		var tgt := pick_target(nation, from, ranged, flags)
+		var tgt := pick_target(nation, from, ranged, flags, attack_range(nation, unit))
 		if tgt.is_empty():
 			break
 		var dmg := effective_damage(nation, unit, from)
 		var buff := _barracks_bonus(nation, from)
 		var buffed := buff > 0
+		var home := _home_bonus(nation, from)
 		var mod_delta: int = (players[nation] as Player).effective_damage_for(unit, null) - unit.Damage
 		if tgt.has("flag"):
 			# Flag hit: the damage goes to the nation's HP (Fighter Jets still splash around it).
@@ -968,6 +1256,7 @@ func fire(k: String) -> Array:
 			_stat(nation, victim, "dealt", dmg)
 			_stat(nation, victim, "flag", dmg)
 			_stat(nation, victim, "barracks", buff)
+			_stat(nation, victim, "home", home)
 			_stat(nation, victim, "modifiers", mod_delta)
 			var fsplash: Array = []
 			if unit is FighterJet:
@@ -997,6 +1286,8 @@ func fire(k: String) -> Array:
 		var pre_fly := actual
 		if target is Unit and (target as Unit).Flying and not ranged and not (unit is AntiAircraft):
 			actual = maxi(1, actual / 2)
+		var flank := flank_bonus(tk) # hemmed in: it takes more from every hit
+		actual += flank
 		var before := actual
 		actual = _intercept(victim2, to, unit, nation, actual)
 		var intercept_from := _last_intercept_from
@@ -1006,8 +1297,10 @@ func fire(k: String) -> Array:
 		# round report (see round_stats)
 		_stat(nation, victim2, "dealt", actual)
 		_stat(nation, victim2, "barracks", buff)
+		_stat(nation, victim2, "home", home)
 		_stat(nation, victim2, "modifiers", mod_delta)
 		_stat(nation, victim2, "unit_bonus", unit_bonus)
+		_stat(nation, victim2, "flank", flank)
 		_stat(nation, victim2, "blocked_flying", pre_fly - before)
 		_stat(nation, victim2, "blocked_interceptor", before - pre_terrain)
 		var cover := "blocked_mountain" if WorldMap.terrain_at(to.x, to.y) == WorldMap.MOUNTAIN else "blocked_forest"
@@ -1024,7 +1317,7 @@ func fire(k: String) -> Array:
 		var destroyed := _reap(nation)
 		log.append({"from": from, "to": to, "attacker": nation, "card": unit.card_name, "target_name": target.card_name,
 			"victim": victim2, "damage": actual, "direct": false, "intercepted": pre_terrain < before, "mountain": actual < pre_terrain,
-			"destroyed": destroyed, "splash": splash, "buffed": buffed, "intercept_from": intercept_from})
+			"destroyed": destroyed, "splash": splash, "buffed": buffed, "intercept_from": intercept_from, "flank": flank})
 		_collapse_now(log)
 	return log
 
@@ -1037,12 +1330,12 @@ var pending_collapses: Array = []
 # Round report: what each nation did to each other nation since the player's last
 # turn began. "attacker|victim" -> {category: amount}. Categories:
 #   dealt (all damage that landed, flags included), flag, kills, kill_hp (HP the
-#   victim lost for destroyed cards), barracks, modifiers (can be negative),
-#   unit_bonus (Special Ops x2 / Anti Aircraft x3), splash (Fighter Jets),
+#   victim lost for destroyed cards), barracks, home (firing from own land), modifiers (can be negative),
+#   unit_bonus (Special Ops x2 / Anti Aircraft x3), flank (target hemmed in), splash (Fighter Jets),
 #   blocked_interceptor, blocked_mountain, blocked_forest, blocked_flying.
 # The world map shows it at the start of the player's turn, then resets it.
 var round_stats: Dictionary = {}
-const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "modifiers", "unit_bonus", "splash",
+const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "home", "modifiers", "unit_bonus", "flank", "splash",
 	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]
 
 func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
@@ -1084,6 +1377,12 @@ func _collapse_all() -> Array:
 		ranked.sort_custom(func(a, b): return int(row[a]) > int(row[b]))
 		var mult := loss_multiplier(loser)
 		var old_flag := campaign.capital_site(loser)
+		# the loser's cards standing on its own land: those whose hex changes hands go with it
+		var at_home: Array = []
+		for k in cards_of(loser):
+			var th := key_to_hex(k)
+			if campaign.owner_of(th.x, th.y) == loser:
+				at_home.append(k)
 		var winner := ""
 		var moved := 0
 		for cand in ranked:
@@ -1094,25 +1393,28 @@ func _collapse_all() -> Array:
 			if moved > 0:
 				winner = w
 				break
-		# Loser's cards on hexes it no longer owns are lost with the land.
+		# Loser's cards on the hexes it just ceded are lost with the land; units away
+		# from home (on enemy land or at sea) carry on, unless the nation is gone.
 		var lost: Array = []
-		for k in cards_of(loser):
+		var gone := not alive(loser)
+		for k in (cards_of(loser) if gone else at_home):
 			var t := key_to_hex(k)
-			if campaign.owner_of(t.x, t.y) != loser:
+			if gone or campaign.owner_of(t.x, t.y) != loser:
 				lost.append(k)
 				_remove(k)
 		# Flag fell: move it to the free hex nearest the centre of what's left.
 		var flag_moved := false
 		if alive(loser) and campaign.owner_of(old_flag.x, old_flag.y) != loser:
 			var blocked: Dictionary = {}
-			for k in cards_of(loser):
-				blocked[k] = true
+			for k in units.keys():
+				blocked[k] = true # its own cards, and enemy units standing on its land
 			var site := campaign.relocate_flag(loser, blocked)
 			var fk := MapCampaign.key_of(site.x, site.y)
 			if units.has(fk):
 				# every hex was full: the card there makes way for the flag
-				(players[loser] as Player).DiscardPile.append(units[fk]["card"])
-				(players[loser] as Player).MapCards.erase(units[fk]["card"])
+				var evicted: Player = players[str(units[fk]["owner"])]
+				evicted.DiscardPile.append(units[fk]["card"])
+				evicted.MapCards.erase(units[fk]["card"])
 				units.erase(fk)
 				lost.append(fk)
 			flag_moved = true

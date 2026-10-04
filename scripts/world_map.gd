@@ -59,6 +59,8 @@ var _follow_cam: bool = true # the camera follows other nations' turns and fight
 var _log: RichTextLabel = null
 var _selected: Card = null
 var _moving: String = "" # key of the unit picked to move ("" = none)
+var _group: Array = [] # keys of the units picked for a bulk move (Shift+click / Shift+drag)
+const DEPLOY_ZONE := Color(0.55, 1.0, 0.5) # where a selected unit card can be summoned (green, like the glowing hexes)
 const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
 var _busy: bool = false
 var _speed_idx: int = 1 # 2x: a full round of 8 nations stays snappy
@@ -202,6 +204,7 @@ func _build_ui() -> void:
 	_view.tile_selected.connect(_on_tile_selected)
 	_view.tile_hovered.connect(_on_tile_hovered)
 	_view.hover_cleared.connect(_clear_map_hover)
+	_view.box_selected.connect(_on_box_selected)
 	map_col.add_child(_view)
 	# minimap in the map's bottom-left corner
 	_minimap = Minimap.new()
@@ -246,7 +249,7 @@ func _build_ui() -> void:
 		zoom_bar.add_child(zb)
 	_hover_bar = Label.new()
 	_hover_bar.name = "HoverBar"
-	_hover_bar.text = "Pick a card below, then click a glowing hex. Scroll to zoom, drag to pan, arrows/WASD move, H returns home."
+	_hover_bar.text = "Pick a card below, then click a glowing hex. Click a unit to move it; Shift+drag or Shift+click picks several. Scroll to zoom, drag to pan, H returns home."
 	_hover_bar.add_theme_font_size_override("font_size", 16)
 	_hover_bar.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
 	map_col.add_child(_hover_bar)
@@ -708,17 +711,34 @@ func _unit_info(k: String) -> Dictionary:
 		d["ranged"] = p.has_range_for(u)
 		if _war._barracks_bonus(owner, t) > 0:
 			notes.append("[color=#8fe08f]+2 damage from an adjacent Barracks.[/color]")
+		var flank := _war.flank_bonus(k)
+		if flank > 0:
+			notes.append("[color=#ff8a7a]%s: takes +%d damage from every hit.[/color]" % [_war.flank_name(flank).capitalize(), flank])
+		if _war._home_bonus(owner, t) > 0:
+			notes.append("[color=#8fe08f]+1 damage: fighting on home ground.[/color]")
+		else:
+			notes.append("[color=#c8b89a]Away from home: no +1 home-ground damage.[/color]")
 		if not u.Flying and WorldMap.terrain_at(t.x, t.y) == WorldMap.MOUNTAIN:
 			notes.append("[color=#c8b89a]Mountain cover: takes 1 less damage.[/color]")
-		var full_moves := _war.move_allowance(owner, u)
+		var full_moves := _war.turn_allowance(k)
 		if owner == _me():
 			notes.append("[color=#9fd3ff]Moves: %d of %d left this turn. Click it to move.[/color]" % [_war.moves_left(k), full_moves])
 		else:
 			notes.append("[color=#9fd3ff]Moves up to %d hex%s a turn.[/color]" % [full_moves, "" if full_moves == 1 else "es"])
+		if not u.Flying:
+			if not _war.can_sail(owner, u):
+				notes.append("[color=#c8b89a]Too slow to board a boat: it can't cross water.[/color]")
+			elif not WorldMap.is_land(t.x, t.y):
+				notes.append("[color=#c8b89a]In a boat: %d hex slower a turn.[/color]" % MapWar.SEA_PENALTY)
+			else:
+				notes.append("[color=#c8b89a]Boarding a boat costs 1 extra move; %d hex slower a turn at sea.[/color]" % MapWar.SEA_PENALTY)
 		if WorldMap.terrain_at(t.x, t.y) == WorldMap.JUNGLE:
 			notes.append("[color=#8fcf7a]Forest cover: takes 1 less damage from flying attackers.[/color]")
 		var aim := _war.predict_target(k)
-		if not aim.is_empty():
+		var reach := _war.attack_range(owner, u)
+		if aim.is_empty():
+			notes.append("[color=#ff9a7a]No target within its range of %d hexes: move it closer.[/color]" % reach)
+		else:
 			var col := _nation_hex_color(str(aim["owner"]))
 			if bool(aim["ranged"]):
 				notes.append("Next shot: a random target of [color=#%s]%s[/color] (closest nation, %d hexes)." % [col, aim["owner"], int(aim["distance"])])
@@ -727,6 +747,7 @@ func _unit_info(k: String) -> Dictionary:
 				notes.append("Next shot: [color=#%s]%s[/color]'s %s, %d hexes away%s." % [col, aim["owner"], str(aim["name"]).trim_prefix(str(aim["owner"]) + " "), int(aim["distance"]), tie])
 			if card is RocketLauncher or card is Howitzer:
 				notes.append("Fires 4 times each turn.")
+		notes.append("[color=#9fd3ff]Attack range: %d hexes.[/color]" % reach)
 	elif card is Building:
 		d["income"] = (card as Building).Income
 	d["notes"] = notes
@@ -734,6 +755,12 @@ func _unit_info(k: String) -> Dictionary:
 
 func _clear_map_hover() -> void:
 	_view.aim = {}
+	# a bulk-move or move preview falls back to where the units stand now
+	if _war != null and not _group.is_empty():
+		_view.plan_marks = []
+		_show_range(_group)
+	elif _war != null and _moving != "" and _war.units.has(_moving):
+		_show_range([_moving])
 	if _hover != null:
 		_hover.hide_all()
 
@@ -837,20 +864,34 @@ func _select_card(stack: Array) -> void:
 	_sfx("card_select", -3.0)
 	_selected = card
 	_moving = ""
+	_group = []
+	_view.clear_range()
 	var keys: Dictionary = {}
-	var flag := _campaign().capital_site(_me())
-	for t in _campaign().tiles_of(_me()):
-		var tv := t as Vector2i
-		if not _war.units.has(MapCampaign.key_of(tv.x, tv.y)) and tv != flag and MapWar.can_build_on(card, tv):
-			keys[MapCampaign.key_of(tv.x, tv.y)] = true
+	for t in _war.deploy_hexes(_me(), card):
+		keys[MapCampaign.key_of((t as Vector2i).x, (t as Vector2i).y)] = true
 	_view.placeable = keys
 	_view.ghost_card = card.card_name
 	_hover_bar.text = "Deploy %s: click a glowing hex (Esc to cancel)." % card.card_name
+	if card is Unit:
+		# units are summoned near what raises them: show that area and its sources
+		var zone := {}
+		var sources: Array = _war.deploy_sources(_me(), card)
+		for src in sources:
+			for h in _war.hexes_within(src as Vector2i, MapWar.DEPLOY_RADIUS):
+				if _campaign().owner_of((h as Vector2i).x, (h as Vector2i).y) == _me():
+					zone[h] = true
+		_view.range_zones = [{"hexes": zone, "color": DEPLOY_ZONE}]
+		_view.group_marks = sources
+		_hover_bar.text = "Deploy %s within %d hexes of %s: click a glowing hex (Esc to cancel)." % [card.card_name, MapWar.DEPLOY_RADIUS, MapWar.deploy_anchor_text(card)]
+		if keys.is_empty():
+			_hover_bar.text = "No free hex within %d hexes of %s for %s." % [MapWar.DEPLOY_RADIUS, MapWar.deploy_anchor_text(card), card.card_name]
 	_refresh_hand()
 
 func _clear_selection() -> void:
 	_selected = null
 	_moving = ""
+	_group = []
+	_view.clear_range()
 	_view.placeable = {}
 	_view.ghost_card = ""
 	_refresh_hand()
@@ -861,9 +902,13 @@ func _clear_selection() -> void:
 func _pick_mover(k: String) -> void:
 	_selected = null
 	_view.ghost_card = ""
+	_group = []
+	_view.plan_marks = []
+	_view.group_marks = [MapWar.key_to_hex(k)]
+	_show_range([k]) # where it can shoot from here (hovering a glowing hex previews from there)
 	var card: Card = _war.units[k]["card"]
 	var left := _war.moves_left(k)
-	var full := _war.move_allowance(_me(), card)
+	var full := _war.turn_allowance(k)
 	if left <= 0:
 		_moving = ""
 		_view.placeable = {}
@@ -882,7 +927,7 @@ func _pick_mover(k: String) -> void:
 	_view.placeable = keys
 	_sfx("card_select", -3.0)
 	if keys.is_empty():
-		_hover_bar.text = "%s has nowhere to go: every hex within %d is taken or not yours." % [card.card_name, left]
+		_hover_bar.text = "%s has nowhere to go: every hex within %d is taken or blocked." % [card.card_name, left]
 	else:
 		_hover_bar.text = "Move %s: click a glowing hex (%d of %d move%s left this turn; Esc to cancel)." % [card.card_name, left, full, "" if full == 1 else "s"]
 	_refresh_hand()
@@ -906,8 +951,124 @@ func _move_unit_to(t: Vector2i) -> void:
 	if _war.moves_left(nk) > 0:
 		_pick_mover(nk) # still has moves: keep it picked
 	else:
+		_view.clear_range()
 		_hover_bar.text = "Moved %s. Pick another unit or card, or End Turn." % card.card_name
 		_refresh_hand()
+
+# ------------------------------------------------------------ bulk moves
+# Shift+click your units (or Shift+drag a box round them) to pick several, then click
+# any hex: each marches towards it as far as its moves allow, the nearest taking the
+# closest spots (MapWar.move_group). Hovering a hex previews where each would end up
+# and the group's attack range from there. Esc drops the selection.
+func _toggle_group(k: String) -> void:
+	var keys: Array = _group.duplicate()
+	if _moving != "" and not keys.has(_moving):
+		keys.append(_moving)
+	if keys.has(k):
+		keys.erase(k)
+	else:
+		keys.append(k)
+	_set_group(keys)
+
+func _on_box_selected(rect: Rect2) -> void:
+	if _war == null or _busy:
+		return
+	var found: Array = _view.units_in_rect(rect, _me())
+	if found.is_empty():
+		_hover_bar.text = "No units of yours in that box."
+		return
+	var keys: Array = _group.duplicate()
+	if _moving != "" and not keys.has(_moving):
+		keys.append(_moving)
+	for k in found:
+		if not keys.has(k):
+			keys.append(k)
+	_set_group(keys)
+
+func _set_group(keys: Array) -> void:
+	var mine: Array = keys.filter(func(k): return _war.units.has(k) and str(_war.units[k]["owner"]) == _me() and _war.units[k]["card"] is Unit)
+	if mine.is_empty():
+		_clear_selection()
+		return
+	if mine.size() == 1:
+		_pick_mover(str(mine[0]))
+		return
+	_selected = null
+	_view.ghost_card = ""
+	_moving = ""
+	_group = mine
+	var keys2 := {}
+	var ready := 0
+	var marks: Array = []
+	for k in _group:
+		marks.append(MapWar.key_to_hex(k))
+		if _war.moves_left(k) > 0:
+			ready += 1
+		for t in _war.reachable(k).keys():
+			keys2[MapCampaign.key_of((t as Vector2i).x, (t as Vector2i).y)] = true
+	_view.placeable = keys2
+	_view.group_marks = marks
+	_view.plan_marks = []
+	_show_range(_group)
+	_sfx("card_select", -3.0)
+	_hover_bar.text = "%d units picked (%d can still move): click any hex to march them towards it. Shift+click adds or drops one; Esc cancels." % [_group.size(), ready]
+	_refresh_hand()
+
+func _preview_group(goal: Vector2i) -> void:
+	var plan: Array = _war.plan_group(_me(), _group, goal)
+	var at := {}
+	var marks: Array = []
+	for mv in plan:
+		at[str(mv[0])] = mv[1]
+		marks.append([MapWar.key_to_hex(str(mv[0])), mv[1]])
+	_view.plan_marks = marks
+	_show_range(_group, at)
+	_hover_bar.text = "March %d of %d units towards here (Esc cancels)." % [plan.size(), _group.size()] if not plan.is_empty() \
+		else "None of the %d units can get any closer to here this turn." % _group.size()
+
+func _move_group_to(goal: Vector2i) -> void:
+	var moves: Array = _war.move_group(_me(), _group, goal)
+	if moves.is_empty():
+		_sfx("deny", -4.0)
+		_hover_bar.text = "None of them can get any closer to there this turn."
+		return
+	var moved := {}
+	for mv in moves:
+		_view.animate_move(mv[2], MOVE_STEP)
+		var to: Vector2i = mv[1]
+		moved[str(mv[0])] = MapCampaign.key_of(to.x, to.y)
+	_sfx("card_place", -6.0)
+	_log_line("You move %d unit%s." % [moves.size(), "" if moves.size() == 1 else "s"])
+	var keys: Array = []
+	for k in _group:
+		keys.append(moved.get(k, k))
+	_set_group(keys) # stays picked: march on, or Esc
+	_hover_bar.text = "Moved %d of %d units. Click another hex to march on, or Esc." % [moves.size(), keys.size()]
+
+# ------------------------------------------------------------ attack range display
+# Show where the units on `keys` can shoot, standing where `at` puts them (key -> hex;
+# missing = where they are now): one zone for the melee units (4 hexes) and one for
+# the ranged (8), plus a bracket on every enemy card or flag inside.
+func _show_range(keys: Array, at: Dictionary = {}) -> void:
+	var zones := {false: {}, true: {}}
+	var targets := {}
+	for k in keys:
+		if not _war.units.has(k) or not (_war.units[k]["card"] is Unit):
+			continue
+		var u := _war.units[k]["card"] as Unit
+		var r := _war.attack_range(_me(), u)
+		var ranged: bool = (_war.players[_me()] as Player).has_range_for(u)
+		var from: Vector2i = at.get(k, MapWar.key_to_hex(k))
+		for h in _war.hexes_within(from, r):
+			zones[ranged][h] = true
+		for t in _war.targets_in_range(_me(), from, r):
+			targets[t] = true
+	var out: Array = []
+	for ranged in [false, true]:
+		if not (zones[ranged] as Dictionary).is_empty():
+			out.append({"hexes": zones[ranged], "ranged": ranged})
+	_view.range_zones = out
+	_view.range_targets = targets.keys()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -918,7 +1079,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif kc == KEY_ESCAPE and _shop_panel != null:
 			_close_shop()
 			get_viewport().set_input_as_handled()
-		elif kc == KEY_ESCAPE and (_selected != null or _moving != ""):
+		elif kc == KEY_ESCAPE and (_selected != null or _moving != "" or not _group.is_empty() or not _view.range_zones.is_empty()):
 			_clear_selection()
 			get_viewport().set_input_as_handled()
 		elif (kc == KEY_SPACE or kc == KEY_ENTER) and not _busy and not _end_btn.disabled:
@@ -969,6 +1130,13 @@ func _on_tile_hovered(x: int, y: int) -> void:
 	if _campaign() == null or _war == null:
 		return
 	_show_map_hover(x, y)
+	if not _busy and not _group.is_empty():
+		_preview_group(Vector2i(x, y))
+		return
+	if not _busy and _moving != "" and _war.units.has(_moving):
+		# preview its range from the hovered hex if it can go there, else from where it is
+		var hk := MapCampaign.key_of(x, y)
+		_show_range([_moving], {_moving: Vector2i(x, y)} if _view.placeable.has(hk) else {})
 	if _selected != null:
 		var why := _war.can_place(_me(), _selected, Vector2i(x, y))
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
@@ -1012,6 +1180,17 @@ func _on_tile_selected(x: int, y: int) -> void:
 	if _selected == null:
 		var t0 := Vector2i(x, y)
 		var k0 := MapCampaign.key_of(x, y)
+		var info0 := _war.unit_at(t0)
+		var mine: bool = not info0.is_empty() and str(info0["owner"]) == _me() and info0["card"] is Unit
+		if mine and (_view.click_shift or Input.is_key_pressed(KEY_SHIFT)):
+			_toggle_group(k0)
+			return
+		if not _group.is_empty():
+			if mine and not _group.has(k0):
+				_pick_mover(k0) # a plain click on another unit picks just that one
+			else:
+				_move_group_to(t0)
+			return
 		if _moving != "" and _view.placeable.has(k0):
 			_move_unit_to(t0)
 			return
@@ -1037,6 +1216,7 @@ func _on_tile_selected(x: int, y: int) -> void:
 	_selected = null
 	_view.placeable = {}
 	_view.ghost_card = ""
+	_view.clear_range()
 	# keep deploying the same card type while copies remain and are affordable
 	var next: Card = null
 	for c in _human().Hand:
@@ -1400,6 +1580,7 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary, min_gap: int = 1
 	# farther from the target than home are never worth the detour
 	var c := _campaign()
 	var enemy := c.owner_of(target.x, target.y)
+	var sails: bool = _war.can_sail(nation, info["card"]) # 1-move units never take a boat
 	var reach: int = home_d + 8
 	var parent := {home: home}
 	var depth_of := {home: 0}
@@ -1417,6 +1598,8 @@ func _walk_path(k: String, target: Vector2i, taken: Dictionary, min_gap: int = 1
 			best = t
 		for nb in MapCampaign.wrapped_neighbors(t):
 			if parent.has(nb) or MapCampaign.hex_distance(nb, target) > reach or WorldMap.is_void(nb.x, nb.y):
+				continue
+			if not sails and not WorldMap.is_land(nb.x, nb.y):
 				continue
 			if WorldMap.is_land(nb.x, nb.y) and c.owner_of(nb.x, nb.y) != nation and (enemy == "" or c.owner_of(nb.x, nb.y) != enemy):
 				continue
@@ -1693,8 +1876,10 @@ const REPORT_COLS := [
 	["flag", "Flag", "Of that, damage straight to the nation's flag (its HP).", "val"],
 	["kills", "Kills", "Cards destroyed, and the HP their owner lost for them (their BioCost).", "val"],
 	["barracks", "+Barracks", "Added by adjacent Barracks (+2 per shot).", "add"],
+	["home", "+Home", "Added by firing from the attacker's own land (+1 per shot).", "add"],
 	["modifiers", "+Modifiers", "Added (or taken away) by the attacker's modifiers: Guerilla Warfare, Aerial Supremacy, Defensive Doctrine.", "add"],
 	["unit_bonus", "+Unit bonus", "Special Ops x2 against ground units, Anti Aircraft x3 against flying ones.", "add"],
+	["flank", "+Flanked", "Extra damage on units hemmed in by enemy units: +1 flanked (enemies on opposite sides), +2 surrounded (4+), +4 encircled (all 6).", "add"],
 	["splash", "+Splash", "Fighter Jet splash on the target's neighbours.", "add"],
 	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they halve ranged and flying hits).", "block"],
 	["blocked_mountain", "-Mountains", "Stopped by mountain cover (1 per hit on ground units).", "block"],
@@ -1902,7 +2087,7 @@ func _report_summary() -> Label:
 		var st: Dictionary = _report[k]
 		if parts[0] == me:
 			dealt += int(st.get("dealt", 0))
-			boosted += int(st.get("barracks", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
+			boosted += int(st.get("barracks", 0)) + int(st.get("home", 0)) + int(st.get("flank", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
 		elif parts[1] == me:
 			taken += int(st.get("dealt", 0))
 			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]:

@@ -169,8 +169,9 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 			"Takes half damage from attackers without Range. Gets no mountain cover. In a forest it takes 1 less damage from flying attackers." if flying
 			else "On a mountain hex it takes 1 less damage from every hit. In a forest it takes 1 less damage from flying attackers.")
 		_trait_box("[HasRange]" if ranged else "[Melee]",
-			"Fires at a random target (any card or the flag) of the closest enemy nation." if ranged
-			else "Fires at the closest enemy target (card or flag) anywhere on the map. Deals half damage to Flying units.")
+			"Fires at a random target (any card or the flag) of the closest enemy nation, up to 8 hexes away." if ranged
+			else "Fires at the closest enemy target (card or flag) up to 4 hexes away. Deals half damage to Flying units.")
+		_trait_box("[Deploy]", "Summoned within %d hexes of %s." % [MapWar.DEPLOY_RADIUS, MapWar.deploy_anchor_text(card)])
 		_traits.visible = true
 	elif card is Building:
 		_trait_box("[Building]", "Can't be placed on mountain hexes.")

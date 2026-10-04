@@ -116,20 +116,23 @@ func test_kill_costs_biocost_and_is_credited():
 
 func test_flag_is_a_target_and_hurts_nation_hp():
 	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(16, 10) # within a Tank's reach
 	var shooter := _drop(w, A, Tank.new(), 14)
 	var b_flag: Vector2i = w.flag_sites()[B]
 	var log := w.fire(shooter)
 	assert_true(log[0]["direct"], "flag hit")
 	assert_eq(log[0]["to"], b_flag, "shot lands on B's flag hex")
 	assert_eq(log[0]["victim"], B, "closest enemy flag")
-	assert_eq((w.players[B] as Player).HitPoints, 100 - Tank.new().Damage, "flag damage comes off B's HP")
-	assert_eq(int(w.ledger[B][A]), Tank.new().Damage, "credited to the attacker")
+	var shot: int = Tank.new().Damage + MapWar.HOME_BONUS # fired from A's own land
+	assert_eq((w.players[B] as Player).HitPoints, 100 - shot, "flag damage comes off B's HP")
+	assert_eq(int(w.ledger[B][A]), shot, "credited to the attacker")
 
 func test_melee_prefers_closer_flag_over_farther_card():
 	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(15, 10)
 	var shooter := _drop(w, A, Tank.new(), 14)
 	var b_flag: Vector2i = w.flag_sites()[B]
-	_drop(w, C, Wall.new(), b_flag.x + 3) # a card, but farther than B's flag
+	_drop(w, C, Wall.new(), b_flag.x + 3) # a card, but farther than B's flag (still in reach)
 	var log := w.fire(shooter)
 	assert_eq(log[0]["to"], b_flag, "closest target is the flag")
 	assert_true(log[0]["direct"], "flag, not the wall")
@@ -307,7 +310,11 @@ func test_ai_build_places_on_own_land():
 	var fd := w.frontier_distance(B)
 	var inf_hex: Vector2i = by_name["Infantry"]
 	var house_hex: Vector2i = by_name["Housing"]
-	assert_eq(int(fd[MapCampaign.key_of(inf_hex.x, inf_hex.y)]), 1, "infantry on a border hex")
+	# infantry as close to the front as its deploy zone (2 hexes of the flag or a Housing) allows
+	var best_fd := int(fd[MapCampaign.key_of(inf_hex.x, inf_hex.y)])
+	for t in w.deploy_hexes(B, Infantry.new()):
+		best_fd = mini(best_fd, int(fd[MapCampaign.key_of(t.x, t.y)]))
+	assert_eq(int(fd[MapCampaign.key_of(inf_hex.x, inf_hex.y)]), best_fd, "infantry as near the border as it may go")
 	assert_true(int(fd[MapCampaign.key_of(house_hex.x, house_hex.y)]) > 3, "housing deep in the rear")
 
 func test_save_roundtrip():
@@ -508,12 +515,12 @@ func test_shop_odds_stay_on_the_starting_deck():
 func test_flag_reforms_the_moment_its_nation_falls():
 	var w := _war()
 	w.campaign.flag_sites[B] = Vector2i(15, 10) # B's flag right on the border
-	for x in [22, 24, 25]:
+	for x in [18, 24, 25]:
 		_drop(w, B, Infantry.new(), x)
 	(w.players[B] as Player).HitPoints = 1
 	(w.players[A] as Player).HitPoints = 35
 	var first := _drop(w, A, Tank.new(), 14)
-	var second := _drop(w, A, Tank.new(), 13)
+	var second := _drop(w, A, Artilery.new(), 12) # reaches 8 hexes: the Infantry at 18 after the collapse
 	var log := w.fire(first)
 	assert_true(log[0]["direct"], "the first tank hits B's flag")
 	assert_true(log[0].has("collapses"), "B collapses on that very shot")
@@ -526,7 +533,7 @@ func test_flag_reforms_the_moment_its_nation_falls():
 	assert_eq(ev["flag"], site, "the event says where")
 	# the next attacker shoots at the new state, not a dead flag
 	var log2 := w.fire(second)
-	assert_false(log2.is_empty(), "the second tank still has a target")
+	assert_false(log2.is_empty(), "the second gun still has a target")
 	if log2[0]["direct"]:
 		assert_eq(log2[0]["to"], site, "a flag shot goes to the re-formed flag")
 	assert_false(log2[0].has("collapses"), "B is back at full HP: no second collapse")
@@ -557,8 +564,9 @@ func test_round_stats_split_damage_by_source():
 	var log := w.fire(drone)
 	assert_eq(log[0]["to"], Vector2i(15, 10), "the drone hits the infantry")
 	var st: Dictionary = w.round_stats[A + "|" + B]
-	var dmg: int = Drone.new().Damage + 2
+	var dmg: int = Drone.new().Damage + 2 + MapWar.HOME_BONUS
 	assert_eq(int(st.get("barracks", 0)), 2, "Barracks +2 is credited")
+	assert_eq(int(st.get("home", 0)), MapWar.HOME_BONUS, "so is the home-ground +1")
 	assert_true(int(st.get("blocked_interceptor", 0)) > 0, "the Interceptor's cut is counted")
 	assert_eq(int(st.get("dealt", 0)) + int(st.get("blocked_interceptor", 0)) + int(st.get("blocked_mountain", 0)) + int(st.get("blocked_forest", 0)), dmg,
 		"what landed plus what was stopped adds up to the shot")
@@ -571,35 +579,156 @@ func test_round_stats_split_damage_by_source():
 # --- moving units -----------------------------------------------------------------
 func test_move_allowances():
 	var w := _war()
-	assert_eq(w.move_allowance(A, Drone.new()), MapWar.MOVE_FLYING, "flying: 4")
-	assert_eq(w.move_allowance(A, Artilery.new()), MapWar.MOVE_RANGED, "ranged: 1")
+	assert_eq(w.move_allowance(A, Drone.new()), MapWar.MOVE_FLYING, "flying: 6")
+	assert_eq(MapWar.MOVE_FLYING, 6, "flying units: 6 hexes a turn")
+	assert_eq(w.move_allowance(A, Artilery.new()), MapWar.MOVE_RANGED, "ranged: 3")
+	assert_eq(MapWar.MOVE_RANGED, 3, "ranged units: 3")
 	var tank := Tank.new()
 	assert_true(tank.BioCost < tank.MoneyCost, "a Tank costs more money than bio")
-	assert_eq(w.move_allowance(A, tank), MapWar.MOVE_CHEAP, "BioCost < MoneyCost: 2")
+	assert_eq(w.move_allowance(A, tank), MapWar.MOVE_CHEAP, "BioCost < MoneyCost: 4")
+	assert_eq(MapWar.MOVE_CHEAP, 4, "machines: 4")
 	var inf := Infantry.new()
 	assert_true(inf.BioCost >= inf.MoneyCost, "Infantry costs more bio than money")
-	assert_eq(w.move_allowance(A, inf), MapWar.MOVE_DEFAULT, "everything else: 3")
+	assert_eq(w.move_allowance(A, inf), MapWar.MOVE_DEFAULT, "everything else: 5")
+	assert_eq(MapWar.MOVE_DEFAULT, 5, "everything else: 5")
 	assert_eq(w.move_allowance(A, Wall.new()), 0, "buildings never move")
 	assert_eq(w.move_allowance(A, Barracks.new()), 0, "buildings never move")
 
-func test_ground_units_walk_their_own_land_within_their_moves():
+func test_ground_units_cross_borders_within_their_moves():
 	var w := _war()
 	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	w.campaign.flag_sites[B] = Vector2i(20, 10)
 	var k := _drop(w, A, Infantry.new(), 12)
 	var reach := w.reachable(k)
-	for x in [11, 13, 14]:
+	for x in [11, 13, 14, 15, 16, 17]:
 		assert_true(reach.has(Vector2i(x, 10)), "can reach %d" % x)
+	assert_eq(w.campaign.owner_of(15, 10), B, "15 is enemy land...")
 	assert_false(reach.has(Vector2i(10, 10)), "not onto its own flag")
-	assert_false(reach.has(Vector2i(15, 10)), "not into enemy land")
-	var path := w.move(A, k, Vector2i(14, 10))
-	assert_eq(path.size(), 3, "walked two hexes")
-	var nk := MapCampaign.key_of(14, 10)
+	assert_false(reach.has(Vector2i(18, 10)), "no further than its moves")
+	for t in reach.keys():
+		assert_true(MapCampaign.hex_distance(t, Vector2i(12, 10)) <= MapWar.MOVE_DEFAULT, "all within 5 hexes")
+	var path := w.move(A, k, Vector2i(16, 10))
+	assert_eq(path.size(), 5, "walked four hexes")
+	var nk := MapCampaign.key_of(16, 10)
 	assert_true(w.units.has(nk) and not w.units.has(k), "the card is on its new hex")
 	assert_eq(w.moves_left(nk), 1, "one move left this turn")
-	assert_eq(w.reachable(nk).keys(), [Vector2i(13, 10)], "only one hex more")
-	assert_true(w.move(A, nk, Vector2i(11, 10)).is_empty(), "can't go further than its moves")
+	assert_true(w.reachable(nk).has(Vector2i(17, 10)), "one more step")
+	for t in w.reachable(nk).keys():
+		assert_eq(MapCampaign.hex_distance(t, Vector2i(16, 10)), 1, "only one hex more")
+	assert_true(w.move(A, nk, Vector2i(14, 10)).is_empty(), "can't go further than its moves")
+	assert_false(w.move(A, nk, Vector2i(17, 10)).is_empty(), "steps on into enemy land")
+	assert_eq(w.campaign.owner_of(17, 10), B, "...which stays the enemy's")
 	w.begin_turn(A)
-	assert_eq(w.moves_left(nk), MapWar.MOVE_DEFAULT, "a new turn refills its moves")
+	assert_eq(w.moves_left(MapCampaign.key_of(17, 10)), MapWar.MOVE_DEFAULT, "a new turn refills its moves")
+
+func test_ground_units_cant_push_through_enemy_cards_or_onto_flags():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	w.campaign.flag_sites[B] = Vector2i(16, 10)
+	var k := _drop(w, A, Infantry.new(), 14)
+	_drop(w, B, Wall.new(), 15)
+	var reach := w.reachable(k)
+	assert_false(reach.has(Vector2i(15, 10)), "not onto an enemy card")
+	assert_false(reach.has(Vector2i(16, 10)), "nor onto an enemy flag")
+	for t in reach.keys():
+		for step in reach[t]:
+			assert_ne(step, Vector2i(15, 10), "and never through the enemy card")
+
+func test_ground_units_sail():
+	# a coastal hex of A's with open sea next to it
+	var w := _war()
+	var coast := Vector2i(-1, -1)
+	var sea := Vector2i(-1, -1)
+	for y in range(2, WorldMap.GRID_H - 2):
+		for x in range(WorldMap.GRID_W):
+			if not WorldMap.is_land(x, y) or WorldMap.is_void(x, y):
+				continue
+			for nb in MapCampaign.wrapped_neighbors(Vector2i(x, y)):
+				if not WorldMap.is_land(nb.x, nb.y) and not WorldMap.is_void(nb.x, nb.y):
+					coast = Vector2i(x, y)
+					sea = nb
+					break
+			if coast.x >= 0:
+				break
+		if coast.x >= 0:
+			break
+	assert_true(coast.x >= 0, "found a coast")
+	w.campaign.owner[MapCampaign.key_of(coast.x, coast.y)] = A
+	w._put(A, Infantry.new(), coast)
+	var k := MapCampaign.key_of(coast.x, coast.y)
+	assert_true(w.reachable(k).has(sea), "a ground unit can put out to sea")
+	assert_false(w.move(A, k, sea).is_empty(), "and stop there, by boat")
+
+func test_flying_units_cross_anything_and_land_anywhere_free():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(16, 10)
+	var dk := _drop(w, A, Drone.new(), 14)
+	_drop(w, B, Wall.new(), 15)
+	var reach := w.reachable(dk)
+	assert_true(reach.has(Vector2i(18, 10)), "flies over the enemy card, onto enemy land 4 hexes away")
+	assert_false(reach.has(Vector2i(16, 10)), "but not onto a flag")
+	assert_false(reach.has(Vector2i(15, 10)), "nor onto a card")
+
+# --- attack ranges ----------------------------------------------------------
+func test_melee_units_reach_four_hexes():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var tank := _drop(w, A, Tank.new(), 10)
+	_drop(w, B, Wall.new(), 15) # 5 hexes away
+	assert_eq(w.attack_range(A, w.units[tank]["card"]), MapWar.MELEE_RANGE, "melee range")
+	assert_true(w.fire(tank).is_empty(), "nothing within 4 hexes: no shot")
+	assert_true(w.predict_target(tank).is_empty(), "and the hover says so")
+	w.move(A, tank, Vector2i(11, 10))
+	var k := MapCampaign.key_of(11, 10)
+	var log := w.fire(k)
+	assert_eq(log.size(), 1, "one step closer it fires")
+	assert_eq(log[0]["to"], Vector2i(15, 10), "at the Wall 4 hexes away")
+
+func test_ranged_units_reach_eight_hexes_and_pick_only_within_reach():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var arty := _drop(w, A, Artilery.new(), 10)
+	assert_eq(w.attack_range(A, w.units[arty]["card"]), MapWar.RANGED_RANGE, "ranged range")
+	var near := Wall.new()
+	near.HitPoints = 999
+	_drop(w, B, near, 18) # 8 hexes away
+	_drop(w, B, Wall.new(), 22) # 12: out of reach
+	for i in range(12):
+		var log := w.fire(arty)
+		assert_eq(log.size(), 1, "fires")
+		assert_eq(log[0]["to"], Vector2i(18, 10), "only ever at the target within 8 hexes")
+	w._remove(MapCampaign.key_of(18, 10))
+	assert_true(w.fire(arty).is_empty(), "nothing within 8 hexes: no shot")
+
+func test_ai_marches_into_range():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(14, 10)
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var k := _drop(w, A, Tank.new(), 10)
+	_drop(w, B, Wall.new(), 17) # 7 hexes: out of a Tank's reach
+	var moves := w.ai_move(A)
+	assert_eq(moves.size(), 1, "the tank moves")
+	assert_lt(MapCampaign.hex_distance(moves[0][1], Vector2i(17, 10)), 7, "towards the enemy")
+
+func test_units_abroad_survive_their_nations_collapse():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(20, 10)
+	var home := _drop(w, B, Infantry.new(), 15) # on the border hex B will cede
+	var abroad := _drop(w, B, Infantry.new(), 12) # standing on A's land
+	for x in [21, 22]:
+		_drop(w, B, Infantry.new(), x)
+	(w.players[A] as Player).HitPoints = 30 # cedes 3 hexes
+	(w.players[B] as Player).HitPoints = 0
+	w.ledger[B] = {A: 50}
+	var events := w.resolve_collapses()
+	assert_eq(events.size(), 1, "B collapses")
+	assert_eq(w.campaign.owner_of(15, 10), A, "the border hex goes to A")
+	assert_false(w.units.has(home), "the card on it is lost with the land")
+	assert_true(w.units.has(abroad), "the unit away from home carries on")
+	assert_eq(str(w.units[abroad]["owner"]), B, "still B's")
 
 func test_buildings_and_new_cards_stay_put():
 	var w := _war()
@@ -611,14 +740,6 @@ func test_buildings_and_new_cards_stay_put():
 	p.Hand = [inf]
 	assert_true(w.place(A, inf, Vector2i(11, 10)), "deployed")
 	assert_eq(w.moves_left(MapCampaign.key_of(11, 10)), 0, "it moves from next turn")
-
-func test_flying_units_cross_anything_but_land_at_home():
-	var w := _war()
-	var dk := _drop(w, A, Drone.new(), 14)
-	var reach := w.reachable(dk)
-	for t in reach.keys():
-		assert_eq(w.campaign.owner_of((t as Vector2i).x, (t as Vector2i).y), A, "lands only on its own land")
-	assert_true(reach.has(Vector2i(10, 10)) or w.campaign.capital_site(A) == Vector2i(10, 10), "4 hexes reach the far end")
 
 func test_ai_hides_behind_its_wall():
 	var w := _war()
@@ -640,7 +761,7 @@ func test_ai_closes_on_a_wounded_enemy():
 	_drop(w, B, hurt, 16)
 	var moves := w.ai_move(A)
 	assert_eq(moves.size(), 1, "it moves")
-	assert_eq(moves[0][1], Vector2i(14, 10), "as close to the wounded enemy as it can get")
+	assert_eq(moves[0][1], Vector2i(15, 10), "right beside the wounded enemy")
 
 func test_corporation_discount_works_on_the_map():
 	var w := _war()
@@ -656,3 +777,303 @@ func test_every_card_explains_itself():
 	for c in [Infantry.new(), Tank.new(), SpecialOps.new(), AntiAircraft.new(), Drone.new(), Artilery.new(), Howitzer.new(),
 			RocketLauncher.new(), FighterJet.new(), Wall.new(), Barracks.new(), Factory.new(), Housing.new(), Corporation.new(), Interceptor.new()]:
 		assert_true((c as Card).SpecialEffect.length() > 30, "%s has a real description" % (c as Card).card_name)
+
+# --- bulk moves and range helpers ----------------------------------------------
+func test_group_marches_towards_a_hex_and_fans_out():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	var keys: Array = [_drop(w, A, Infantry.new(), 11), _drop(w, A, Infantry.new(), 12), _drop(w, A, Tank.new(), 13)]
+	var goal := Vector2i(17, 10)
+	var moves := w.move_group(A, keys, goal)
+	assert_eq(moves.size(), 3, "all three move")
+	var ends := {}
+	for mv in moves:
+		var to: Vector2i = mv[1]
+		assert_false(ends.has(to), "no two end on the same hex")
+		ends[to] = true
+		assert_lt(MapCampaign.hex_distance(to, goal), MapCampaign.hex_distance(MapWar.key_to_hex(mv[0]), goal), "each got closer")
+		assert_true(w.units.has(MapCampaign.key_of(to.x, to.y)), "and is really there")
+	# the Tank (2 moves, nearest) takes the spot 2 hexes on; the Infantry fan out round it
+	assert_true(w.units.has(MapCampaign.key_of(15, 10)), "the nearest unit leads")
+
+func test_group_units_that_cant_get_closer_stay_put():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	var k := _drop(w, A, Infantry.new(), 12)
+	var tired := _drop(w, A, Infantry.new(), 13)
+	(w.units[tired]["card"] as Card).set_meta("moves_left", 0)
+	var moves := w.move_group(A, [k, tired, "nope"], Vector2i(12, 10))
+	assert_true(moves.is_empty(), "the one on the goal stays, the tired one can't move, the bad key is ignored")
+	assert_true(w.units.has(k) and w.units.has(tired), "nobody moved")
+
+func test_plan_group_previews_without_moving():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	var keys: Array = [_drop(w, A, Infantry.new(), 11), _drop(w, A, Tank.new(), 12)]
+	var before := w.units.keys()
+	before.sort()
+	var plan := w.plan_group(A, keys, Vector2i(18, 10))
+	assert_eq(plan.size(), 2, "both would move")
+	var after := w.units.keys()
+	after.sort()
+	assert_eq(after, before, "nothing actually moved")
+	for k in keys:
+		assert_false((w.units[k]["card"] as Card).has_meta("moves_left"), "moves left untouched")
+	var real := w.move_group(A, keys, Vector2i(18, 10))
+	assert_eq(real.map(func(mv): return mv[1]), plan.map(func(mv): return mv[1]), "the preview matches the real move")
+
+func test_hexes_within_and_targets_in_range():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(16, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var zone := w.hexes_within(Vector2i(12, 10), 4)
+	assert_eq(zone.size(), 61, "a radius-4 hexagon: 61 hexes")
+	for t in zone:
+		assert_true(MapCampaign.hex_distance(t, Vector2i(12, 10)) <= 4, "all within 4")
+	_drop(w, B, Wall.new(), 15)
+	_drop(w, B, Wall.new(), 20)
+	_drop(w, A, Wall.new(), 13)
+	var tg := w.targets_in_range(A, Vector2i(12, 10), 4)
+	assert_true(tg.has(Vector2i(15, 10)), "the enemy wall 3 hexes away")
+	assert_true(tg.has(Vector2i(16, 10)), "and B's flag 4 away")
+	assert_false(tg.has(Vector2i(20, 10)), "not the wall 8 away")
+	assert_false(tg.has(Vector2i(13, 10)), "nor its own cards")
+
+# --- deploy zones ----------------------------------------------------------------
+func _zone_war() -> MapWar:
+	# A owns the whole of row 10 from 0 to 24, flag at 0: far hexes need a building
+	var w := _war()
+	for x in range(0, 25):
+		w.campaign.owner[MapCampaign.key_of(x, 10)] = A
+	w.campaign.flag_sites[A] = Vector2i(0, 10)
+	var p: Player = w.players[A]
+	p.MoneySupply = 500
+	p.BioSupply = 500
+	return w
+
+func test_deploy_anchors_by_cost_and_flight():
+	assert_eq(MapWar.deploy_anchors(Infantry.new()), ["Housing"], "people: near Housing")
+	assert_eq(MapWar.deploy_anchors(SpecialOps.new()), ["Housing"], "Special Ops are people too")
+	assert_eq(MapWar.deploy_anchors(Tank.new()), ["Factory", "Barracks"], "ground machines: Factory or Barracks")
+	assert_eq(MapWar.deploy_anchors(Artilery.new()), ["Factory", "Barracks"], "guns too")
+	assert_eq(MapWar.deploy_anchors(Drone.new()), ["Corporation", "Factory"], "flying machines: Corporation or Factory")
+	assert_eq(MapWar.deploy_anchors(FighterJet.new()), ["Corporation", "Factory"], "jets too")
+	assert_eq(MapWar.deploy_anchors(Wall.new()), [], "buildings go anywhere")
+
+func test_units_deploy_only_near_the_flag_or_their_buildings():
+	var w := _zone_war()
+	var p: Player = w.players[A]
+	var inf := Infantry.new()
+	p.Hand = [inf]
+	assert_eq(w.can_place(A, inf, Vector2i(2, 10)), "", "2 hexes from the flag: fine")
+	assert_string_contains(w.can_place(A, inf, Vector2i(3, 10)), "within 2 hexes of your flag or a Housing", "3 is too far")
+	w._put(A, Factory.new(), Vector2i(12, 10))
+	assert_ne(w.can_place(A, inf, Vector2i(14, 10)), "", "a Factory doesn't raise Infantry")
+	w._put(A, Housing.new(), Vector2i(18, 10))
+	assert_eq(w.can_place(A, inf, Vector2i(20, 10)), "", "near a Housing it does")
+	assert_ne(w.can_place(A, inf, Vector2i(21, 10)), "", "but only 2 hexes out")
+	var tank := Tank.new()
+	p.Hand = [tank]
+	assert_eq(w.can_place(A, tank, Vector2i(14, 10)), "", "Tanks roll out near the Factory")
+	assert_ne(w.can_place(A, tank, Vector2i(19, 10)), "", "not near Housing")
+	var jet := FighterJet.new()
+	p.Hand = [jet]
+	assert_eq(w.can_place(A, jet, Vector2i(11, 10)), "", "a jet near the Factory")
+	w._put(A, Barracks.new(), Vector2i(24, 10))
+	assert_ne(w.can_place(A, jet, Vector2i(22, 10)), "", "but not near a Barracks")
+	p.Hand = [tank]
+	assert_eq(w.can_place(A, tank, Vector2i(22, 10)), "", "where a Tank may go")
+	var wall := Wall.new()
+	p.Hand = [wall]
+	assert_eq(w.can_place(A, wall, Vector2i(9, 10)), "", "buildings: anywhere on your land")
+
+func test_a_destroyed_building_no_longer_raises_units():
+	var w := _zone_war()
+	var p: Player = w.players[A]
+	var h := Housing.new()
+	w._put(A, h, Vector2i(15, 10))
+	var inf := Infantry.new()
+	p.Hand = [inf]
+	assert_eq(w.can_place(A, inf, Vector2i(17, 10)), "", "near the Housing")
+	h.HitPoints = 0
+	assert_ne(w.can_place(A, inf, Vector2i(17, 10)), "", "not once it has fallen")
+
+func test_ai_and_deploy_hexes_respect_the_zones():
+	var w := _zone_war()
+	var hexes := w.deploy_hexes(A, Tank.new())
+	assert_false(hexes.is_empty(), "somewhere near the flag")
+	for t in hexes:
+		assert_true(MapCampaign.hex_distance(t, Vector2i(0, 10)) <= MapWar.DEPLOY_RADIUS, "all within 2 of the flag")
+	var p: Player = w.players[A]
+	p.Hand = [Tank.new(), Infantry.new(), Wall.new()]
+	var placed := w.ai_build(A)
+	assert_eq(placed.size(), 3, "the AI deploys them all")
+	for pl in placed:
+		if pl[0] is Unit:
+			assert_true(MapCampaign.hex_distance(pl[1], Vector2i(0, 10)) <= MapWar.DEPLOY_RADIUS, "%s in its zone" % (pl[0] as Card).card_name)
+
+# --- home ground ------------------------------------------------------------------
+func test_units_deal_one_more_damage_on_home_ground():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var p: Player = w.players[A]
+	var tank := Tank.new()
+	assert_eq(w.effective_damage(A, tank, Vector2i(12, 10)), tank.Damage + 1, "on A's own land: +1")
+	assert_eq(w.effective_damage(A, tank, Vector2i(17, 10)), tank.Damage, "on B's land: no bonus")
+	assert_eq(w.effective_damage(A, tank, Vector2i(12, 2)), tank.Damage, "on land nobody holds (or sea): no bonus")
+	# and it is what lands: a wall on B's side, shot from home and then from abroad
+	var wall := Wall.new()
+	wall.HitPoints = 999
+	_drop(w, B, wall, 16)
+	var home := _drop(w, A, Tank.new(), 14)
+	var hp0 := wall.HitPoints
+	w.fire(home)
+	assert_eq(hp0 - wall.HitPoints, tank.Damage + 1, "from home: +1")
+	w.move(A, home, Vector2i(15, 10)) # across the border
+	var away := MapCampaign.key_of(15, 10)
+	var hp1 := wall.HitPoints
+	w.fire(away)
+	assert_eq(hp1 - wall.HitPoints, tank.Damage, "from B's land: plain damage")
+
+# --- flanking ---------------------------------------------------------------------
+# B's unit on (20, 10), an even row: neighbours E (21,10) SE (20,11) SW (19,11) W (19,10) NW (19,9) NE (20,9)
+const RING := [Vector2i(21, 10), Vector2i(20, 11), Vector2i(19, 11), Vector2i(19, 10), Vector2i(19, 9), Vector2i(20, 9)]
+
+func _flank_war(enemy_at: Array, card_maker: Callable = func(): return Infantry.new()) -> MapWar:
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var target := Infantry.new()
+	target.HitPoints = 999
+	w._put(B, target, Vector2i(20, 10))
+	for i in enemy_at:
+		w._put(A, card_maker.call(), RING[i])
+	return w
+
+func test_flank_tiers():
+	var k := MapCampaign.key_of(20, 10)
+	assert_eq(_flank_war([]).flank_bonus(k), 0, "alone: nothing")
+	assert_eq(_flank_war([0]).flank_bonus(k), 0, "one enemy: nothing")
+	assert_eq(_flank_war([0, 1]).flank_bonus(k), 0, "two side by side: not a flank")
+	for pair in [[0, 3], [1, 4], [2, 5]]:
+		assert_eq(_flank_war(pair).flank_bonus(k), MapWar.FLANK_FLANKED, "opposite sides %s: flanked +1" % str(pair))
+	assert_eq(_flank_war([0, 1, 2]).flank_bonus(k), 0, "three on one side: still no pincer")
+	assert_eq(_flank_war([0, 1, 3, 4]).flank_bonus(k), MapWar.FLANK_SURROUNDED, "four: surrounded +2")
+	assert_eq(_flank_war([0, 1, 2, 3, 4]).flank_bonus(k), MapWar.FLANK_SURROUNDED, "five: still +2")
+	assert_eq(_flank_war([0, 1, 2, 3, 4, 5]).flank_bonus(k), MapWar.FLANK_ENCIRCLED, "all six: encircled +4")
+
+func test_only_living_enemy_units_flank():
+	var k := MapCampaign.key_of(20, 10)
+	assert_eq(_flank_war([0, 3], func(): return Wall.new()).flank_bonus(k), 0, "buildings don't flank")
+	var w := _flank_war([0])
+	w._put(B, Infantry.new(), RING[3])
+	assert_eq(w.flank_bonus(k), 0, "a friend on the other side doesn't")
+	var w2 := _flank_war([0, 3])
+	(w2.units[MapCampaign.key_of(19, 10)]["card"] as Unit).HitPoints = 0
+	assert_eq(w2.flank_bonus(k), 0, "nor does a dead one")
+	var w3 := _flank_war([0])
+	w3._put(C, Infantry.new(), RING[3])
+	assert_eq(w3.flank_bonus(k), MapWar.FLANK_FLANKED, "two different enemy nations still pin it")
+	var w4 := _flank_war([0, 1, 2, 3, 4, 5])
+	w4._put(B, Wall.new(), Vector2i(22, 10))
+	assert_eq(w4.flank_bonus(MapCampaign.key_of(22, 10)), 0, "buildings never take the penalty")
+
+func test_flanked_units_take_more_per_hit():
+	var w := _flank_war([0, 3]) # A's Infantry east and west of it, both on B's land (no home bonus)
+	var target: Unit = w.units[MapCampaign.key_of(20, 10)]["card"]
+	var hp0 := target.HitPoints
+	w.reset_round_stats()
+	var log := w.fire(MapCampaign.key_of(19, 10))
+	assert_eq(log[0]["to"], Vector2i(20, 10), "the flanker shoots it")
+	assert_eq(hp0 - target.HitPoints, Infantry.new().Damage + MapWar.FLANK_FLANKED, "+1 for the flank")
+	assert_eq(int(log[0]["flank"]), MapWar.FLANK_FLANKED, "the shot says so")
+	assert_eq(int(w.round_stats[A + "|" + B].get("flank", 0)), MapWar.FLANK_FLANKED, "and the round report counts it")
+	var w6 := _flank_war([0, 1, 2, 3, 4, 5])
+	var t6: Unit = w6.units[MapCampaign.key_of(20, 10)]["card"]
+	var h6 := t6.HitPoints
+	w6.fire(MapCampaign.key_of(19, 10))
+	assert_eq(h6 - t6.HitPoints, Infantry.new().Damage + MapWar.FLANK_ENCIRCLED, "+4 encircled")
+
+func test_ai_avoids_walking_into_a_pincer():
+	var w := _war()
+	w.campaign.flag_sites[A] = Vector2i(10, 10)
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	# B units at 16 and 18: hex 17 between them is a pincer; 15 is just as close to them
+	_drop(w, B, Wall.new(), 16)
+	_drop(w, B, Infantry.new(), 18)
+	assert_eq(w.flank_at(A, Vector2i(17, 10)), 0, "a Wall doesn't make a pincer")
+	w._remove(MapCampaign.key_of(16, 10))
+	_drop(w, B, Infantry.new(), 16)
+	assert_eq(w.flank_at(A, Vector2i(17, 10)), MapWar.FLANK_FLANKED, "two Infantry do")
+	var k := _drop(w, A, Infantry.new(), 14)
+	for mv in w.ai_move(A):
+		assert_ne(mv[1], Vector2i(17, 10), "the AI doesn't step in between")
+
+# --- boats ------------------------------------------------------------------------
+# a coastal hex of A's (land) with a run of open sea next to it
+func _coast(w: MapWar) -> Array:
+	for y in range(2, WorldMap.GRID_H - 2):
+		for x in range(WorldMap.GRID_W):
+			if not WorldMap.is_land(x, y) or WorldMap.is_void(x, y):
+				continue
+			for nb in MapCampaign.wrapped_neighbors(Vector2i(x, y)):
+				if WorldMap.is_land(nb.x, nb.y) or WorldMap.is_void(nb.x, nb.y):
+					continue
+				# and sea beyond it too
+				for nb2 in MapCampaign.wrapped_neighbors(nb):
+					if nb2 != Vector2i(x, y) and not WorldMap.is_land(nb2.x, nb2.y) and not WorldMap.is_void(nb2.x, nb2.y) \
+							and MapCampaign.hex_distance(nb2, Vector2i(x, y)) == 2:
+						w.campaign.owner[MapCampaign.key_of(x, y)] = A
+						return [Vector2i(x, y), nb, nb2]
+	return []
+
+func test_boarding_costs_an_extra_move_and_sailing_is_slower():
+	var w := _war()
+	var c := _coast(w)
+	assert_false(c.is_empty(), "found a coast")
+	w._put(A, Infantry.new(), c[0])
+	var k := MapCampaign.key_of(c[0].x, c[0].y)
+	var reach := w.reachable(k)
+	assert_true(reach.has(c[1]), "an Infantry boards (2 of its 5 moves)")
+	assert_true(reach.has(c[2]), "and sails one hex more")
+	assert_eq(w.path_cost(k, reach[c[2]]), 3, "board 2 + sail 1")
+	w.move(A, k, c[1])
+	var sk := MapCampaign.key_of(c[1].x, c[1].y)
+	assert_eq(w.moves_left(sk), MapWar.MOVE_DEFAULT - 2, "boarding took 2 moves")
+	w.begin_turn(A)
+	assert_eq(w.moves_left(sk), MapWar.MOVE_DEFAULT - MapWar.SEA_PENALTY, "a turn at sea starts 1 move short")
+	assert_eq(w.turn_allowance(sk), 4, "Infantry sails 4 hexes a turn (walks 5)")
+	assert_true(w.reachable(sk).has(c[0]), "and can land again")
+
+func test_every_ground_unit_can_sail_now_but_slower():
+	var w := _war()
+	var c := _coast(w)
+	w._put(A, Artilery.new(), c[0])
+	var k := MapCampaign.key_of(c[0].x, c[0].y)
+	assert_true(w.can_sail(A, w.units[k]["card"]), "Artilery has 3 moves: enough to board")
+	assert_true(w.reachable(k).has(c[1]), "so it can put out to sea")
+	assert_true(w.can_sail(A, Tank.new()), "a Tank too")
+	assert_true(w.can_sail(A, Drone.new()), "flying units don't need boats")
+	# the rule still stands for a unit with a single move: no boarding
+	assert_eq(w._step_cost(c[0], c[1], false, false), -1, "a non-sailor can't step onto the sea")
+	assert_eq(w._step_cost(c[0], c[1], false, true), 1 + MapWar.SEA_PENALTY, "boarding costs extra")
+	assert_eq(w._step_cost(c[1], c[2], false, true), 1, "sailing on costs 1")
+	assert_eq(w._step_cost(c[0], c[1], true, false), 1, "flying over costs 1")
+	# a gun that starts its turn at sea refills one move short
+	w._remove(k)
+	w._put(A, Artilery.new(), c[1])
+	var sk := MapCampaign.key_of(c[1].x, c[1].y)
+	w.refill_moves(A)
+	assert_eq(w.moves_left(sk), MapWar.MOVE_RANGED - MapWar.SEA_PENALTY, "2 moves at sea")
+	assert_true(w.reachable(sk).has(c[0]), "back to land")
+
+func test_flying_units_ignore_the_sea():
+	var w := _war()
+	var c := _coast(w)
+	w._put(A, Drone.new(), c[1])
+	var k := MapCampaign.key_of(c[1].x, c[1].y)
+	assert_eq(w.turn_allowance(k), MapWar.MOVE_FLYING, "a Drone over the sea keeps its 4 moves")

@@ -33,7 +33,7 @@ const CHAPTERS := [
 			"title": "Field Briefing",
 			"lines": [
 				"Look at the hills, commander. Every Insurgent [Infantry] is dug in on a [Mountain]. A ground unit standing on a mountain hex takes [1 less damage] from every hit, so they will be stubborn to shift.",
-				"How targeting works: units without range ([Melee]) always shoot the [closest enemy target] anywhere on the map, a card or a flag. Units with [HasRange] pick the closest enemy nation and hit a random one of its targets. Hover any card on the map to see its next shot.",
+				"How targeting works: units without range ([Melee]) shoot the [closest enemy target] within [4 hexes], a card or a flag. Units with [HasRange] reach [8 hexes]: they pick the closest enemy nation in reach and hit a random one of its targets there. Nothing in range, no shot, so march your units up: they can cross borders, and sail by boat. Hover any card on the map to see its next shot.",
 				"So here is the trick: put a [Wall] between your Infantry and theirs. Their Infantry will fire at whatever is closest, and a Wall can soak up a lot of bullets while your troops shoot back.",
 				"{wall_hint}",
 			],
