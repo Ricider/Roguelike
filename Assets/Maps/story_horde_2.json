@@ -149,5 +149,71 @@
  ],
  "story_chapter": 2,
  "story_campaign": "horde",
- "extras": []
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   },
+   "turn": 4
+  },
+  {
+   "nation": "Horde",
+   "card": "Artilery",
+   "count": 3,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "border": "Insurgents"
+   }
+  }
+ ],
+ "setup": {
+  "Insurgents": {
+   "max_hp": 70
+  }
+ },
+ "forces": {
+  "title": "Siege in the Mountains",
+  "lines": [
+   "Every Insurgent stands on a [Mountain]: [1 less damage] from every hit. That ruins weapons that fire many small shots, like Rocket Launchers and Howitzers.",
+   "Your big guns don't care as much: [Artilery] hits hard once. Line it up behind the [Barracks] for +2 damage a shot.",
+   "Their [Special Ops] deal double damage to ground units, so keep your Tanks out of their reach. The Insurgents have only [70 HP], but more fighters come down from the valleys on turn 4."
+  ]
+ }
 }

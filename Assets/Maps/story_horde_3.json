@@ -155,5 +155,92 @@
  ],
  "story_chapter": 3,
  "story_campaign": "horde",
- "extras": []
+ "extras": [
+  {
+   "nation": "Corporate Troops",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     64.42,
+     -173.23
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "near": [
+     64.42,
+     -173.23
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     64.42,
+     -173.23
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     64.42,
+     -173.23
+    ]
+   },
+   "turn": 5
+  },
+  {
+   "nation": "Horde",
+   "card": "Anti Aircraft",
+   "count": 3,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     59.56,
+     150.8
+    ]
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  }
+ ],
+ "setup": {
+  "Corporate Troops": {
+   "influence": 100
+  }
+ },
+ "forces": {
+  "title": "The Beachhead",
+  "lines": [
+   "The Corporate Troops hold only a sliver of Chukotka, but they keep [landing more]: Tanks on turn 3, Drones on turn 5, and [100 Influence] to spend.",
+   "Their beachhead is guarded by [Fighter Jets] and an [Interceptor]. Your [Anti Aircraft] guns are on the border: triple damage to anything that flies.",
+   "Throw them back into the sea [before] the landings pile up."
+  ]
+ }
 }

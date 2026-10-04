@@ -159,12 +159,76 @@
    }
   },
   {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "border": "State Troops"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "near": [
+     30.04,
+     31.24
+    ]
+   },
+   "turn": 3
+  },
+  {
    "nation": "State Troops",
    "card": "Infantry",
    "count": 2,
    "at": {
     "border": "Fundamentalists"
    }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Wall",
+   "count": 3,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     37.0,
+     35.32
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     37.0,
+     35.32
+    ]
+   },
+   "turn": 4
   }
- ]
+ ],
+ "setup": {
+  "Fundamentalists": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "Zeal Against Discipline",
+  "lines": [
+   "The Fundamentalists come in [waves]: a crowd of Infantry on the border now, more marching up the Nile on turn 3. Their [Barracks] make every one of them hit harder.",
+   "But zeal is brittle: their nation has only [80 HP]. Every Infantry you destroy costs them its BioCost, so a good killing ground breaks them fast.",
+   "Your [Walls] are already on the border and your [Artilery] is in the hills above Adana. Hold the line, and when the [Tanks] arrive on turn 4, go south."
+  ]
+ }
 }

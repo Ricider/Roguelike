@@ -227,5 +227,75 @@
  ],
  "story_chapter": 1,
  "story_campaign": "mercenaries",
- "extras": []
+ "extras": [
+  {
+   "nation": "Mercenaries",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     32.12,
+     20.07
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "near": [
+     32.12,
+     20.07
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     32.89,
+     13.19
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     32.89,
+     13.19
+    ]
+   },
+   "turn": 4
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "influence": 100
+  },
+  "Peace Keepers": {
+   "max_hp": 120
+  }
+ },
+ "forces": {
+  "title": "The War Chest",
+  "lines": [
+   "You landed with little land but a fat [war chest]: [100 Influence] to spend in the Shop from turn one.",
+   "The Peace Keepers hold the rest of Libya with [120 HP] and Infantry scattered across the desert. [Artilery] reaches Tripoli on turn 4.",
+   "Buy hard, hit fast. Every hex you take pays more Influence."
+  ]
+ }
 }

@@ -185,5 +185,82 @@
  ],
  "story_chapter": 3,
  "story_campaign": "insurgents",
- "extras": []
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     51.13,
+     1.31
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Rocket Launcher",
+   "count": 2,
+   "at": {
+    "near": [
+     51.13,
+     1.31
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "State Troops",
+   "card": "Wall",
+   "count": 3,
+   "at": {
+    "near": [
+     50.95,
+     1.86
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Howitzer",
+   "count": 2,
+   "at": {
+    "near": [
+     48.86,
+     2.35
+    ]
+   }
+  }
+ ],
+ "setup": {},
+ "forces": {
+  "title": "Across the Channel",
+  "lines": [
+   "The Channel is between you. Ground troops can't walk across it, so this fight is won by [guns] and [wings].",
+   "Your [Artilery] and [Rocket Launchers] at Dover hit anything in France. Their [Howitzers] in Paris answer the same way.",
+   "The forts at Calais soak up shots, so let the guns pick targets at random and [fly] over the Walls with Drones, then the [Fighter Jets] arriving on turn 3."
+  ]
+ }
 }

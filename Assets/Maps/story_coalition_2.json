@@ -185,5 +185,72 @@
  ],
  "story_chapter": 2,
  "story_campaign": "coalition",
- "extras": []
+ "extras": [
+  {
+   "nation": "Mercenaries",
+   "card": "Special Ops",
+   "count": 3,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     38.12,
+     13.36
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "near": [
+     38.12,
+     13.36
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "near": [
+     40.85,
+     14.27
+    ]
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "near": [
+     40.85,
+     14.27
+    ]
+   }
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "Raiders",
+  "lines": [
+   "The Mercenary raiders are [Special Ops], who deal double damage to ground units, and [Drones] that half-dodge your Infantry's shots.",
+   "Your [Anti Aircraft] guns around Naples shred anything that flies. Let the Drones come to them.",
+   "The raiders have only [80 HP], but more boats arrive from Tunis on turn 3. Use Walls and Tanks against the Special Ops, not Infantry."
+  ]
+ }
 }

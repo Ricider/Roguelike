@@ -316,6 +316,42 @@
    }
   },
   {
+   "nation": "Coalition Army",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "near": [
+     50.85,
+     4.35
+    ]
+   },
+   "turn": 4
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "near": [
+     50.85,
+     4.35
+    ]
+   },
+   "turn": 4
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     52.52,
+     13.4
+    ]
+   },
+   "turn": 6
+  },
+  {
    "nation": "State Troops",
    "card": "Tank",
    "count": 2,
@@ -347,6 +383,27 @@
      28.98
     ]
    }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "border": "Coalition Army"
+   }
   }
- ]
+ ],
+ "setup": {
+  "State Troops": {
+   "influence": 70
+  }
+ },
+ "forces": {
+  "title": "Blitz",
+  "lines": [
+   "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] halves hits from anything with Range or wings. Your ground troops ignore that shield entirely.",
+   "But the Coalition is slow to mobilise. Its army only turns up on [turn 4] and [turn 6]. Every hex you take before then is a hex they have to win back.",
+   "You start with [70 Influence] and [Special Ops] on the border, who deal double damage to ground units. Strike before Brussels wakes up."
+  ]
+ }
 }

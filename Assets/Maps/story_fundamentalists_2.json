@@ -149,5 +149,77 @@
  ],
  "story_chapter": 2,
  "story_campaign": "fundamentalists",
- "extras": []
+ "extras": [
+  {
+   "nation": "Peace Keepers",
+   "card": "Interceptor",
+   "count": 2,
+   "at": {
+    "near": [
+     33.51,
+     36.29
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     33.51,
+     36.29
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Anti Aircraft",
+   "count": 3,
+   "at": {
+    "border": "Peace Keepers"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Peace Keepers"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Rocket Launcher",
+   "count": 2,
+   "at": {
+    "near": [
+     33.31,
+     44.37
+    ]
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Peace Keepers": {
+   "influence": 100
+  }
+ },
+ "forces": {
+  "title": "Guns Against Wings",
+  "lines": [
+   "The Peace Keepers fight from the air: [Fighter Jets] over Damascus, and [Interceptors] that halve hits from Range or wings.",
+   "You fight on the ground. Your [Anti Aircraft] guns deal triple damage to their jets, and your [Infantry] have no Range, so the Interceptors can't stop them.",
+   "Your [Rocket Launchers] arrive on turn 3, but they have Range, so aim them away from the Interceptors."
+  ]
+ }
 }

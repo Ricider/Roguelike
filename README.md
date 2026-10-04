@@ -65,13 +65,15 @@ Turn-based dungeon roguelike that runs on Windows / macOS / Linux / Web / Androi
   | 4. Appetite | Europe & Mediterranean | The State Troops add Libya and the Russian Caucasus and turn on the Coalition (the EU) |
   | 5. The World Against Us | World | Every conquest so far, against the Horde (Russia and East China), the Corporate Troops (North America), Insurgents in Britain and northern France, and Peace Keepers everywhere else |
 
-  Chapters 1–4 also start with set pieces on top of every nation's default starting cards. They are free, and random placements differ each play:
-    - **Chapter 1:** 8 Insurgent Infantry dug in on mountains across their land; 2 Housing at Istanbul; 2 Housing at only 10 HP on the Insurgent border.
-    - **Chapter 2:** 4 Fundamentalist Barracks scattered across their land; 2 State Troops Infantry on the border.
-    - **Chapter 3:** 2 Horde Tanks and 2 Special Ops in the Caucasus; a Mercenary Barracks in the middle of Libya's eastern border, with an Artilery on either side of it; 3 Housing at Istanbul and 2 Factories at Trabzon.
-    - **Chapter 4:** Coalition Corporations at London, Berlin and Paris, each with an Interceptor beside it and a Fighter Jet beside that. Britain is outside the EU war, so the "London" one stands on the Coalition coast nearest London, at Calais. The State Troops get 2 Tanks, 2 Artilery and 2 Housing at Istanbul.
+  Every chapter of every campaign starts with its own forces on top of each nation's default starting cards, for both the player and the enemy. They are free, and random placements differ each play. After the tutorial, each chapter is built around an asymmetry between the two sides:
+    - **Extra cards at the start**, placed by rule: near a city, along a border (or the middle of it), on mountains, in a lat/lon box, or beside an earlier placement. For example, State chapter 1 has 8 Insurgent Infantry dug in on mountains; State chapter 4 has Coalition Corporations at London, Berlin and Paris, each guarded by an Interceptor and a Fighter Jet.
+    - **Reinforcements** that land at the start of their nation's turn in a given round (`turn` in a rule). Examples: a second Fundamentalist wave at Cairo on turn 3, Corporate jets on turn 4 and tanks on turn 6. Cards with no free hex to land on wait and try again the next turn, and reinforcements still on their way are kept in saves. The battle log announces each landing.
+    - **Nation tweaks** (`setup`): a different max HP, starting Influence, Money or Bio. For example, brittle 80 HP zealots, an unpaid Mercenary army with 0 Money, or a State Troops empire with 250 HP in the final chapter. Values are absolute, and factions already start differently (State Troops 180 HP, Horde 200, Corporate Troops 70, and so on).
+    - **A Forces briefing** on the map at the start of the chapter. It explains the matchup (what each side is good at, and how to exploit it) and lists every reinforcement on the way, with its turn, so nothing that lands later is a surprise.
 
-  These are the `extras` rules in `tools/make_story.py`, placed by `MapWar.place_extras`.
+  Themes include holding a line until the armour arrives, a Great Wall to fly over rather than shoot at, mountain guerrillas against siege guns, air power against flak that arrives on turn 3, an enemy economy that grows every turn you wait, and a cross-Channel war fought only by guns and wings.
+
+  These are the `FORCES` table (`extras`, `setup`, `forces`) in `tools/make_story.py`, with State chapter 1's extras inline in `CHAPTERS`. They are applied by `MapWar.apply_setup`, `MapWar.place_extras` and `MapWar.arrive_reinforcements`.
 
   Chapter 1 doubles as the tutorial, with two briefings on the map that wait for a click:
     - **At the start:** the camera glides to the dug-in Insurgent Infantry. The briefing explains mountain cover (1 less damage per hit) and how targeting works, and suggests putting a Wall between the armies (it adapts to whether you hold a Wall).

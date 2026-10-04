@@ -53,6 +53,8 @@ static var VOID_ROWS: Array = []   # rows: "x" = out of play (greyed, never owne
 static var STORY_CHAPTER: int = 0  # chapter number on story maps, 0 otherwise
 static var STORY_CAMPAIGN: String = "" # which campaign a story map belongs to ("state", "horde", ...)
 static var EXTRAS: Array = []      # story maps: extra starting cards (MapWar.place_extras)
+static var SETUP: Dictionary = {}  # story maps: per-nation starting tweaks (MapWar.apply_setup)
+static var FORCES: Dictionary = {} # story maps: {"title", "lines"} briefing on the chapter's forces
 
 static func _static_init() -> void:
 	use_map("world")
@@ -108,6 +110,8 @@ static func use_map(map_id: String) -> bool:
 	STORY_CHAPTER = int(d.get("story_chapter", 0))
 	STORY_CAMPAIGN = str(d.get("story_campaign", "state" if STORY_CHAPTER > 0 else ""))
 	EXTRAS = (d.get("extras", []) as Array).duplicate(true)
+	SETUP = (d.get("setup", {}) as Dictionary).duplicate(true)
+	FORCES = (d.get("forces", {}) as Dictionary).duplicate(true)
 	return true
 
 # Out of play on a story map: drawn greyed out, never owned, walked or fought over.

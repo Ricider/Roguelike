@@ -227,5 +227,72 @@
  ],
  "story_chapter": 3,
  "story_campaign": "mercenaries",
- "extras": []
+ "extras": [
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 5,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "near": [
+     27.04,
+     14.43
+    ]
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true
+   },
+   "turn": 5
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Rocket Launcher",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  }
+ ],
+ "setup": {
+  "Fundamentalists": {
+   "max_hp": 70
+  }
+ },
+ "forces": {
+  "title": "Desert Recruiting",
+  "lines": [
+   "The Fundamentalist stragglers are [scattered] across the dunes, and more keep wandering in: on turn 3 and turn 5.",
+   "Your [Rocket Launchers] fire four shots a turn at random targets of the nearest enemy: perfect for picking off scattered Infantry.",
+   "They have only [70 HP]. Finish them before the stragglers regroup."
+  ]
+ }
 }

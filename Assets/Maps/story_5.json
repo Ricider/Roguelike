@@ -176,5 +176,169 @@
  ],
  "story_chapter": 5,
  "story_campaign": "state",
- "extras": []
+ "extras": [
+  {
+   "nation": "State Troops",
+   "card": "Factory",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Howitzer",
+   "count": 2,
+   "at": {
+    "near": [
+     41.01,
+     28.98
+    ]
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Wall",
+   "count": 3,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "near": [
+     48.86,
+     2.35
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Horde",
+   "card": "Tank",
+   "count": 3,
+   "at": {
+    "border": "State Troops"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "State Troops"
+   },
+   "turn": 4
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Corporation",
+   "count": 2,
+   "at": {
+    "near": [
+     40.71,
+     -74.01
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     37.77,
+     -122.42
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Drone",
+   "count": 3,
+   "at": {
+    "near": [
+     40.71,
+     -74.01
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "State Troops"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Barracks",
+   "count": 2,
+   "at": {
+    "border": "State Troops"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "border": "State Troops"
+   },
+   "turn": 5
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Rocket Launcher",
+   "count": 1,
+   "at": {
+    "border": "State Troops"
+   },
+   "turn": 5
+  }
+ ],
+ "setup": {
+  "State Troops": {
+   "max_hp": 250,
+   "influence": 80
+  }
+ },
+ "forces": {
+  "title": "The World Against Us",
+  "lines": [
+   "An empire is hard to kill: you have [250 HP] and [80 Influence]. But every other army on Earth is coming, and each one keeps sending more.",
+   "[Insurgent] saboteurs strike from Britain, [Horde] armour from the east, [Peace Keeper] waves from the south, and the [Corporate Troops'] jets and drones from across the Atlantic.",
+   "You cannot hold everywhere. Pick the front that is closest to breaking and finish it, and every enemy you eliminate is one less wave."
+  ]
+ }
 }

@@ -40,6 +40,11 @@ var rng := RandomNumberGenerator.new()
 var deck_weights: Dictionary = {} # nation -> {card name: copies in its starting deck}
 var shops: Dictionary = {} # nation -> {"cards": Array[Card], "mods": Array[Modifier], "remove_used": bool}
 var _last_intercept_from := Vector2i(-1, -1) # hex of the Interceptor that halved the latest hit
+# Story reinforcements: extras rules with "turn" > 1, waiting to land at the start of
+# their nation's turn that round (see arrive_reinforcements). last_arrivals holds the
+# [[nation, card name, hex], ...] that landed in the latest begin_turn, for the map screen.
+var pending: Array = []
+var last_arrivals: Array = []
 
 # make_player: Callable(nation: String) -> Player for the AI nations.
 func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
@@ -65,8 +70,71 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 			var t := best_hex_for(nm, card as Card)
 			if t.x >= 0:
 				_put(nm, card as Card, t)
-	# story chapters add their own set pieces on top of the default starting cards
-	place_extras(WorldMap.EXTRAS)
+	# story chapters start some nations stronger or weaker than usual...
+	apply_setup(WorldMap.SETUP)
+	# ...and add their own set pieces on top of the default starting cards; rules
+	# with a later "turn" wait in `pending` and land as reinforcements.
+	pending.clear()
+	last_arrivals = []
+	var now: Array = []
+	for r in WorldMap.EXTRAS:
+		if int((r as Dictionary).get("turn", 1)) > 1:
+			pending.append((r as Dictionary).duplicate(true))
+		else:
+			now.append(r)
+	place_extras(now)
+
+# Per-nation starting tweaks of a story chapter: {nation: {"max_hp", "influence",
+# "money", "bio"}}. max_hp also sets current HP (collapses refill to it as usual).
+func apply_setup(setup_rules: Dictionary) -> void:
+	for nm in setup_rules.keys():
+		if not players.has(nm):
+			continue
+		var p: Player = players[nm]
+		var st: Dictionary = setup_rules[nm]
+		if st.has("max_hp"):
+			p.MaxHitPoints = maxi(1, int(st["max_hp"]))
+			p.HitPoints = p.MaxHitPoints
+		if st.has("influence"):
+			p.Influence = int(st["influence"])
+		if st.has("money"):
+			p.MoneySupply = int(st["money"])
+		if st.has("bio"):
+			p.BioSupply = int(st["bio"])
+
+# Land the reinforcements due for `nation` by now (rules whose "turn" has come).
+# Cards with no free hex to land on wait for the next turn; a nation that is gone
+# gets none. Rules land one by one, so a reinforcement can't use "next_to".
+# Returns the placed [[nation, card name, hex], ...].
+func arrive_reinforcements(nation: String) -> Array:
+	if not alive(nation):
+		pending = pending.filter(func(r): return str((r as Dictionary).get("nation", "")) != nation)
+		return []
+	var placed: Array = []
+	var keep: Array = []
+	for r in pending:
+		var rule: Dictionary = r
+		if str(rule.get("nation", "")) != nation or int(rule.get("turn", 1)) > turn:
+			keep.append(rule)
+			continue
+		var got := place_extras([rule])
+		placed.append_array(got)
+		if got.size() < int(rule.get("count", 1)):
+			var rest := rule.duplicate(true)
+			rest["count"] = int(rule.get("count", 1)) - got.size()
+			keep.append(rest) # no room yet: the rest try again next turn
+	pending = keep
+	return placed
+
+# What is still on its way: [{"nation", "card", "count", "turn"}, ...] by turn.
+func upcoming_reinforcements() -> Array:
+	var out: Array = []
+	for r in pending:
+		var rule: Dictionary = r
+		if alive(str(rule.get("nation", ""))):
+			out.append({"nation": str(rule["nation"]), "card": str(rule["card"]), "count": int(rule.get("count", 1)), "turn": int(rule["turn"])})
+	out.sort_custom(func(a, b): return int(a["turn"]) < int(b["turn"]))
+	return out
 
 # ------------------------------------------------------------------ story extras
 # Free cards a story chapter starts with (tools/make_story.py, "extras"). Each rule:
@@ -80,6 +148,8 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 #   {"next_to": id}                   free hexes beside an earlier rule's cards
 # Any of these may add "terrain": "mountain" (or another terrain) to keep to such hexes.
 # A rule with "hp" starts its cards damaged (shown against their full HP).
+# A rule with "turn": n (n > 1) is a reinforcement: it lands at the start of that
+# nation's turn in round n instead (setup keeps it in `pending`).
 # Returns the placed [[nation, card name, hex], ...].
 func place_extras(rules: Array) -> Array:
 	var placed: Array = []
@@ -285,6 +355,7 @@ func _remove(k: String) -> void:
 func begin_turn(nation: String) -> void:
 	(players[nation] as Player).economy_phase() # income from map buildings + draw to 10
 	restock_shop(nation)
+	last_arrivals = arrive_reinforcements(nation) # before the refill: they can move at once
 	refill_moves(nation)
 
 # ------------------------------------------------------------------- movement
@@ -1080,7 +1151,8 @@ func to_data() -> Dictionary:
 		for m2 in shop["mods"]:
 			shop_mods.append((m2 as Modifier).modifier_name)
 		sh[nm] = {"cards": card_names, "mods": shop_mods, "remove_used": shop["remove_used"]}
-	return {"turn": turn, "nations": nat, "units": us, "weights": deck_weights.duplicate(true), "shops": sh}
+	return {"turn": turn, "nations": nat, "units": us, "weights": deck_weights.duplicate(true), "shops": sh,
+		"pending": pending.duplicate(true)}
 
 # Rebuild from saved data; decks come fresh from the factory (make_player).
 static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, human: Player) -> MapWar:
@@ -1091,6 +1163,11 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 	for nm in w.players.keys():
 		(w.players[nm] as Player).Graveyard.clear()
 	w.turn = int(d.get("turn", 1))
+	if d.has("pending"):
+		w.pending = (d["pending"] as Array).duplicate(true)
+	else:
+		# older saves: whatever was due by the saved round has already landed
+		w.pending = w.pending.filter(func(r): return int((r as Dictionary).get("turn", 1)) > w.turn)
 	var nat: Dictionary = d.get("nations", {})
 	for nm in nat.keys():
 		if w.players.has(nm):

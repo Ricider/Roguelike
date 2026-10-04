@@ -173,5 +173,83 @@
  ],
  "story_chapter": 1,
  "story_campaign": "corporate",
- "extras": []
+ "extras": [
+  {
+   "nation": "Corporate Troops",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "border": "Peace Keepers"
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Factory",
+   "count": 1,
+   "at": {
+    "near": [
+     29.76,
+     -95.37
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Corporation",
+   "count": 1,
+   "at": {
+    "near": [
+     40.71,
+     -74.01
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     19.43,
+     -99.13
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "near": [
+     19.43,
+     -99.13
+    ]
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Corporate Troops": {
+   "influence": 120
+  },
+  "Peace Keepers": {
+   "max_hp": 120
+  }
+ },
+ "forces": {
+  "title": "Money Versus Numbers",
+  "lines": [
+   "You have the money: [120 Influence], a [Factory] in Houston and a [Corporation] that makes every card cheaper. Spend it.",
+   "The Peace Keepers have the people: [120 HP], a wall of [Infantry] on the border and [Housing] around Mexico City to recruit more.",
+   "Their Infantry can't dodge, but your [Drones] can: they take half damage from anything without Range. Buy machines, not men."
+  ]
+ }
 }

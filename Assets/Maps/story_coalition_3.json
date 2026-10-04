@@ -161,5 +161,92 @@
  ],
  "story_chapter": 3,
  "story_campaign": "coalition",
- "extras": []
+ "extras": [
+  {
+   "nation": "Corporate Troops",
+   "card": "Factory",
+   "count": 3,
+   "at": {
+    "near": [
+     53.48,
+     -2.24
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Corporation",
+   "count": 1,
+   "at": {
+    "near": [
+     53.48,
+     -2.24
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     53.48,
+     -2.24
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     53.48,
+     -2.24
+    ]
+   },
+   "turn": 4
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     53.48,
+     -2.24
+    ]
+   },
+   "turn": 6
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  }
+ ],
+ "setup": {
+  "Corporate Troops": {
+   "money": 60
+  }
+ },
+ "forces": {
+  "title": "The Clock Is Ticking",
+  "lines": [
+   "The Corporate Troops' north is [factories]: three of them plus a [Corporation], all paying out every single turn.",
+   "Right now they have almost no army. On [turn 4] the jets roll out, on [turn 6] the tanks.",
+   "Every turn you wait, they get richer. Your [Infantry] and [Tanks] are already on the border: [strike now]."
+  ]
+ }
 }

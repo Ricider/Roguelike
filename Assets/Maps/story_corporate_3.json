@@ -173,5 +173,84 @@
  ],
  "story_chapter": 3,
  "story_campaign": "corporate",
- "extras": []
+ "extras": [
+  {
+   "nation": "Mercenaries",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     29.76,
+     -95.37
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     29.76,
+     -95.37
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "near": [
+     29.76,
+     -95.37
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Factory",
+   "count": 2,
+   "at": {
+    "near": [
+     33.75,
+     -84.39
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Howitzer",
+   "count": 2,
+   "at": {
+    "near": [
+     33.75,
+     -84.39
+    ]
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "max_hp": 70,
+   "money": 80
+  }
+ },
+ "forces": {
+  "title": "Hostile Contractors",
+  "lines": [
+   "The Mercenaries walked off with your own kit: [Tanks], [Artilery] and an [Interceptor] in Houston, and [80 Money] in the bank. Their first turns will hurt.",
+   "But nobody pays them any more. They have only [70 HP], and that Interceptor burns 6 Money every time it blocks.",
+   "Your two [Factories] pay out every turn. Hold behind your [Walls], let your [Howitzers] arrive on turn 3, and outlast them."
+  ]
+ }
 }

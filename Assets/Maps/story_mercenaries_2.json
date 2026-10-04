@@ -227,5 +227,77 @@
  ],
  "story_chapter": 2,
  "story_campaign": "mercenaries",
- "extras": []
+ "extras": [
+  {
+   "nation": "Coalition Army",
+   "card": "Factory",
+   "count": 4,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 2,
+   "at": {
+    "near": [
+     36.75,
+     3.06
+    ]
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     32.89,
+     13.19
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     32.89,
+     13.19
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "border": "Coalition Army"
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "influence": 80
+  }
+ },
+ "forces": {
+  "title": "The Atlas Contract",
+  "lines": [
+   "The Coalition's African [depots] are four [Factories] scattered across the Maghreb, each one paying them 15 Money a turn. Burn them and their army starves.",
+   "You have wings: [Fighter Jets] and [Drones] fly straight over the desert. Keep them away from Algiers, where [Interceptors] halve their hits.",
+   "[Special Ops] reach the border on turn 3 to deal with the Infantry."
+  ]
+ }
 }

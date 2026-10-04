@@ -85,6 +85,7 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_go_home()
 	await _story_start_briefing()
+	await _story_forces_briefing()
 
 func _go_home() -> void:
 	var c := _campaign()
@@ -1057,6 +1058,7 @@ func _start_player_turn(round_over: bool = false) -> void:
 		_report_turn = _war.turn - 1
 	_war.reset_round_stats()
 	_war.begin_turn(_me())
+	_announce_arrivals(_me())
 	_busy = false
 	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
 	_status.text = "Your turn. Deploy cards, then End Turn (Space)."
@@ -1088,6 +1090,8 @@ func _on_end_turn() -> void:
 			# fly over the nation whose turn it is, framing its whole territory
 			await _view.glide_to(_view.frame_for(_campaign().tiles_of(n), 0.5), CAM_GLIDE / _speed())
 		_war.begin_turn(n)
+		if _announce_arrivals(n):
+			await _wait(0.35)
 		var bought: Array = _war.ai_shop(n)
 		if not bought.is_empty():
 			_log_line("[color=#%s]%s[/color] shops: %s." % [_nation_hex_color(n), n, ", ".join(bought)])
@@ -1522,6 +1526,56 @@ func _story_start_briefing() -> void:
 		[["Infantry", foe, "mountain", "Dug in: 1 less damage per hit"], ["Wall", _me(), "grassland", "Your shield: soaks up their fire"]])
 	var home := _campaign().capital_site(_me())
 	await _view.glide_to(_view.frame_for([home] + enemy_inf, 1.0), 0.8)
+
+# The chapter's forces (make_story.py "forces"): what makes each side different,
+# plus every reinforcement on its way, so nothing that lands later is a surprise.
+func _story_forces_briefing() -> void:
+	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_forces"):
+		return
+	if WorldMap.FORCES.is_empty():
+		return
+	_war.set_meta("briefed_forces", true)
+	var lines: Array = (WorldMap.FORCES.get("lines", []) as Array).duplicate()
+	var due := _reinforcement_summary()
+	if due != "":
+		lines.append("Reinforcements on the way: " + due + ".")
+	await _show_briefing(str(WorldMap.FORCES.get("title", "Order of Battle")), lines, str(WorldMap.FORCES.get("button", "To work")))
+
+# "[Turn 3] Horde: 2 Tank; [Turn 4] you: 2 Howitzer" (you = the player's nation).
+func _reinforcement_summary() -> String:
+	var groups: Dictionary = {} # "turn|nation" -> [parts]
+	var order: Array = []
+	for r in _war.upcoming_reinforcements():
+		var key := "%d|%s" % [int(r["turn"]), str(r["nation"])]
+		if not groups.has(key):
+			groups[key] = []
+			order.append(key)
+		groups[key].append("%d %s" % [int(r["count"]), str(r["card"])])
+	var out: Array = []
+	for key in order:
+		var bits: PackedStringArray = str(key).split("|")
+		var who := "you" if bits[1] == _me() else bits[1]
+		out.append("[Turn %s] %s: %s" % [bits[0], who, ", ".join(groups[key])])
+	return "; ".join(out)
+
+# Log and flash the reinforcements that just landed for nation `n` (MapWar.last_arrivals).
+func _announce_arrivals(n: String) -> bool:
+	var arr: Array = _war.last_arrivals
+	_war.last_arrivals = []
+	if arr.is_empty():
+		return false
+	var counts: Dictionary = {}
+	for a in arr:
+		counts[str(a[1])] = int(counts.get(str(a[1]), 0)) + 1
+		_view.add_place(a[2] as Vector2i)
+	var parts: Array = []
+	for nm in counts.keys():
+		parts.append("%d %s" % [counts[nm], nm])
+	var who := "Your" if n == _me() else "[color=#%s]%s[/color]" % [_nation_hex_color(n), n]
+	_log_line("%s reinforcements arrive: %s." % [who, ", ".join(parts)])
+	_sfx("card_place", -4.0)
+	_refresh()
+	return true
 
 func _story_combat_briefing() -> void:
 	if WorldMap.STORY_CHAPTER <= 0 or _war == null or _war.turn != 1 or _war.has_meta("briefed_combat"):

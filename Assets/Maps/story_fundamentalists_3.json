@@ -227,5 +227,78 @@
  ],
  "story_chapter": 3,
  "story_campaign": "fundamentalists",
- "extras": []
+ "extras": [
+  {
+   "nation": "Mercenaries",
+   "card": "Howitzer",
+   "count": 2,
+   "at": {
+    "near": [
+     30.04,
+     31.24
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     30.04,
+     31.24
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "near": [
+     30.04,
+     31.24
+    ]
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Mercenaries"
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "max_hp": 80,
+   "money": 60
+  }
+ },
+ "forces": {
+  "title": "Across the Sinai",
+  "lines": [
+   "The Mercenaries hold the Nile with [Howitzers] and [Tanks]: four shots a turn from each Howitzer.",
+   "But Howitzer shots are [light] and land at random. Spread your troops and the guns waste their fire.",
+   "Your [Special Ops] deal double damage to their Tanks. A second wave crosses the Sinai on turn 3. The Mercenaries have only [80 HP]."
+  ]
+ }
 }

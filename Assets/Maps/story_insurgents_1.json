@@ -149,5 +149,84 @@
  ],
  "story_chapter": 1,
  "story_campaign": "insurgents",
- "extras": []
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   },
+   "turn": 2
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   },
+   "turn": 4
+  },
+  {
+   "nation": "State Troops",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Housing",
+   "count": 2,
+   "at": {
+    "near": [
+     37.91,
+     40.23
+    ]
+   }
+  }
+ ],
+ "setup": {
+  "Insurgents": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "The Hills Answer",
+  "lines": [
+   "You start with a handful of hexes and [80 HP]. The State Troops have [180 HP], [Tanks] and [Walls].",
+   "But the hills are yours. Your fighters stand on [Mountains] (1 less damage per hit), and [Special Ops] deal double damage to Tanks.",
+   "Every few turns more volunteers come down from the hills: on turn 2 and turn 4. Survive the first blows, then grow."
+  ]
+ }
 }

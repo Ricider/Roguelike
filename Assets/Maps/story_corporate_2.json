@@ -155,5 +155,70 @@
  ],
  "story_chapter": 2,
  "story_campaign": "corporate",
- "extras": []
+ "extras": [
+  {
+   "nation": "Corporate Troops",
+   "card": "Drone",
+   "count": 3,
+   "at": {
+    "near": [
+     61.22,
+     -149.9
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Fighter Jet",
+   "count": 1,
+   "at": {
+    "near": [
+     61.22,
+     -149.9
+    ]
+   }
+  },
+  {
+   "nation": "Corporate Troops",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "near": [
+     61.22,
+     -149.9
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "border": "Corporate Troops"
+   }
+  }
+ ],
+ "setup": {
+  "Horde": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "Flak Over the Tundra",
+  "lines": [
+   "Your strike force flies: [Drones] and a [Fighter Jet] can cross anything and take half damage from troops without Range.",
+   "But the Horde brought [Anti Aircraft] guns: triple damage to flying units, and no dodging. Fly into them and you will lose your air force on turn one.",
+   "The outpost is small ([80 HP]). Use your planes on the Infantry dug into the mountains, and let the [Special Ops] team landing on turn 3 deal with the flak."
+  ]
+ }
 }

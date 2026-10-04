@@ -185,5 +185,77 @@
  ],
  "story_chapter": 1,
  "story_campaign": "peacekeepers",
- "extras": []
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 2,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "random": true
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "random": true
+   },
+   "turn": 5
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "border": "Insurgents"
+   }
+  }
+ ],
+ "setup": {
+  "Insurgents": {
+   "max_hp": 70
+  }
+ },
+ "forces": {
+  "title": "Cells in the Jungle",
+  "lines": [
+   "The Insurgents are [cells] scattered through the jungle, and new ones keep appearing: on turn 3 and turn 5.",
+   "Units in [forests] take 1 less damage from flying attackers, so planes are a poor tool here. Go in on the ground.",
+   "The Insurgents have only [70 HP]. Take their land fast and the cells have nowhere left to hide."
+  ]
+ }
 }

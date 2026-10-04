@@ -266,6 +266,38 @@
    }
   },
   {
+   "nation": "Horde",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "random_in": [
+     [
+      43.3,
+      46.5,
+      36.6,
+      49.0
+     ]
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Horde",
+   "card": "Rocket Launcher",
+   "count": 1,
+   "at": {
+    "random_in": [
+     [
+      43.3,
+      46.5,
+      36.6,
+      49.0
+     ]
+    ]
+   },
+   "turn": 3
+  },
+  {
    "nation": "Mercenaries",
    "card": "Barracks",
    "count": 1,
@@ -283,6 +315,18 @@
    "at": {
     "next_to": "merc_barracks"
    }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     32.89,
+     13.19
+    ]
+   },
+   "turn": 4
   },
   {
    "nation": "State Troops",
@@ -305,6 +349,40 @@
      39.72
     ]
    }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Horde",
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "State Troops",
+   "card": "Anti Aircraft",
+   "count": 1,
+   "at": {
+    "border": "Mercenaries"
+   },
+   "turn": 4
   }
- ]
+ ],
+ "setup": {
+  "Horde": {
+   "influence": 100
+  },
+  "Mercenaries": {
+   "max_hp": 70
+  }
+ },
+ "forces": {
+  "title": "Two Fronts",
+  "lines": [
+   "The [Horde] is rich: it starts with [100 Influence] to spend and more armour coming through the Caucasus on turn 3. Your [Walls] hold the mountain passes. Make them pay for every hex.",
+   "The [Mercenaries] are dangerous but fragile: only [70 HP], and they fight only while the money lasts. Their paid-up [Fighter Jets] land in Tripoli on turn 4.",
+   "Knock the Mercenaries out first and you fight one war instead of two. An [Anti Aircraft] gun reaches the Libyan border on turn 4, just in time for those jets."
+  ]
+ }
 }

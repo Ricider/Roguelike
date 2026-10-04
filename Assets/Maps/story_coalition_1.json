@@ -185,5 +185,74 @@
  ],
  "story_chapter": 1,
  "story_campaign": "coalition",
- "extras": []
+ "extras": [
+  {
+   "nation": "Horde",
+   "card": "Tank",
+   "count": 4,
+   "at": {
+    "border": "Coalition Army"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Coalition Army"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Wall",
+   "count": 4,
+   "at": {
+    "border": "Horde"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Barracks",
+   "count": 2,
+   "at": {
+    "border": "Horde"
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 1,
+   "at": {
+    "near": [
+     52.52,
+     13.4
+    ]
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     52.52,
+     13.4
+    ]
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Horde": {
+   "influence": 90
+  }
+ },
+ "forces": {
+  "title": "Hold the Vistula",
+  "lines": [
+   "The Horde opens with [Tanks] and [Infantry] massed on the border and [90 Influence] for more. Everything they have shoots the [closest target].",
+   "So give them something to shoot: your [Walls] stand in front, your [Barracks] behind them make every shot of yours +2.",
+   "Hold for two turns. On [turn 3] the air wing reaches Berlin, and then you go east."
+  ]
+ }
 }

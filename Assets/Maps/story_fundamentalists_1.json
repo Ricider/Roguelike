@@ -149,5 +149,62 @@
  ],
  "story_chapter": 1,
  "story_campaign": "fundamentalists",
- "extras": []
+ "extras": [
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Barracks",
+   "count": 2,
+   "at": {
+    "border": "Insurgents"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Special Ops",
+   "count": 1,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   },
+   "turn": 3
+  }
+ ],
+ "setup": {
+  "Insurgents": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "The Flood",
+  "lines": [
+   "You have [numbers]: a crowd of Infantry on the border, with [Barracks] behind them for +2 damage a shot.",
+   "The Insurgents have [the hills]: Infantry on mountains take 1 less damage per hit, and [Walls] soak up your first volleys.",
+   "Weight of fire beats cover. Pile shots onto one dug-in fighter at a time. They have only [80 HP]."
+  ]
+ }
 }

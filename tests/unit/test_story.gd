@@ -120,12 +120,12 @@ func _touches(w: MapWar, k: String, pred: Callable) -> bool:
 func test_chapter_extras_come_on_top_of_the_defaults():
 	var expect := {
 		1: {"Insurgents|Infantry": 8, "State Troops|Housing": 4},
-		2: {"Fundamentalists|Barracks": 4, "State Troops|Infantry": 2},
+		2: {"Fundamentalists|Barracks": 4, "Fundamentalists|Infantry": 6,
+			"State Troops|Infantry": 2, "State Troops|Wall": 3, "State Troops|Artilery": 2},
 		3: {"Horde|Tank": 2, "Horde|Special Ops": 2, "Mercenaries|Artilery": 2, "Mercenaries|Barracks": 1,
-			"State Troops|Housing": 3, "State Troops|Factory": 2},
+			"State Troops|Housing": 3, "State Troops|Factory": 2, "State Troops|Wall": 2},
 		4: {"Coalition Army|Corporation": 3, "Coalition Army|Interceptor": 3, "Coalition Army|Fighter Jet": 3,
-			"State Troops|Tank": 2, "State Troops|Artilery": 2, "State Troops|Housing": 2},
-		5: {},
+			"State Troops|Tank": 2, "State Troops|Artilery": 2, "State Troops|Housing": 2, "State Troops|Special Ops": 2},
 	}
 	for n in expect.keys():
 		var a := _counts(_war_for(n, true))
@@ -165,7 +165,7 @@ func test_chapter_three_set_pieces():
 	# (their default cards include Barracks too: find the one flanked by the two Artilery)
 	var flanked: Array = frontline.filter(func(bk):
 		return _cards(w, "Mercenaries", "Artilery").filter(func(k): return MapCampaign.hex_distance(MapWar.key_to_hex(k), MapWar.key_to_hex(bk)) == 1).size() >= 2)
-	assert_eq(flanked.size(), 1, "an Artilery either side of it")
+	assert_true(flanked.size() >= 1, "an Artilery either side of it") # (a default Barracks can land between them too)
 	for card in ["Tank", "Special Ops"]:
 		var in_caucasus: Array = _cards(w, "Horde", card).filter(func(k):
 			var ll := WorldMap.hex_latlon(MapWar.key_to_hex(k).x, MapWar.key_to_hex(k).y)
@@ -263,3 +263,112 @@ func test_campaign_handoffs_line_up():
 	var ins3 := MapCampaign.new("Insurgents")
 	var paris := WorldMap.hex_for_latlon(48.86, 2.35)
 	assert_eq(ins3.owner_of(paris.x, paris.y), "State Troops", "Insurgents chapter 3: northern France is the State Troops' to lose")
+
+# --- chapter forces: asymmetric extras, reinforcements, setup, briefing -----------
+func _faction_war(map_id: String, with_extras: bool = true) -> MapWar:
+	WorldMap.use_map(map_id)
+	var faction := str(StoryText.campaign(WorldMap.STORY_CAMPAIGN).get("faction", "State Troops"))
+	var saved: Array = WorldMap.EXTRAS
+	if not with_extras:
+		WorldMap.EXTRAS = []
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	var w := MapWar.new()
+	w.setup(MapCampaign.new(faction), func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name(faction, true))
+	WorldMap.EXTRAS = saved
+	gs.free()
+	return w
+
+func test_every_chapter_has_forces_for_both_sides():
+	for cid in StoryText.ORDER:
+		var faction := str(StoryText.campaign(cid)["faction"])
+		for n in range(1, StoryText.count(cid) + 1):
+			var map_id := StoryText.map_id(cid, n)
+			WorldMap.use_map(map_id)
+			var mine := 0
+			var theirs := 0
+			for r in WorldMap.EXTRAS:
+				if str(r["nation"]) == faction:
+					mine += int(r["count"])
+				else:
+					theirs += int(r["count"])
+			assert_gt(mine, 0, "%s: the player gets extra forces" % map_id)
+			assert_gt(theirs, 0, "%s: so does the enemy" % map_id)
+			if map_id == "story_1":
+				continue # the tutorial briefs the player itself
+			assert_ne(str(WorldMap.FORCES.get("title", "")), "", "%s: has a forces briefing" % map_id)
+			assert_gt((WorldMap.FORCES.get("lines", []) as Array).size(), 1, "%s: that explains the asymmetry" % map_id)
+
+func test_every_starting_extra_lands():
+	for cid in StoryText.ORDER:
+		for n in range(1, StoryText.count(cid) + 1):
+			var map_id := StoryText.map_id(cid, n)
+			var a := _counts(_faction_war(map_id, true))
+			var b := _counts(_faction_war(map_id, false))
+			var want := {}
+			for r in WorldMap.EXTRAS:
+				if int(r.get("turn", 1)) <= 1:
+					var key := "%s|%s" % [r["nation"], r["card"]]
+					want[key] = int(want.get(key, 0)) + int(r["count"])
+			for key in want.keys():
+				assert_eq(int(a.get(key, 0)) - int(b.get(key, 0)), int(want[key]), "%s: all of %s land" % [map_id, key])
+
+func test_setup_tweaks_nations():
+	var w := _faction_war("story_2")
+	var fu: Player = w.players["Fundamentalists"]
+	assert_eq(fu.MaxHitPoints, 80, "the zealots are brittle")
+	assert_eq(fu.HitPoints, 80, "and start at that")
+	var w3 := _faction_war("story_3")
+	assert_eq((w3.players["Horde"] as Player).Influence, 100, "the Horde starts rich")
+
+func test_reinforcements_land_on_their_turn():
+	var w := _faction_war("story_2")
+	var fu_inf := func() -> int: return _cards(w, "Fundamentalists", "Infantry").size()
+	var st_tank := func() -> int: return _cards(w, "State Troops", "Tank").size()
+	assert_eq(w.upcoming_reinforcements().size(), 2, "two reinforcements on the way")
+	var inf0: int = fu_inf.call()
+	var tank0: int = st_tank.call()
+	for t in [1, 2]:
+		w.turn = t
+		w.begin_turn("Fundamentalists")
+		w.begin_turn("State Troops")
+		assert_true(w.last_arrivals.is_empty(), "nothing lands on turn %d" % t)
+	assert_eq(fu_inf.call(), inf0, "the second wave is not here yet")
+	w.turn = 3
+	w.begin_turn("Fundamentalists")
+	assert_eq(w.last_arrivals.size(), 4, "four Infantry land on turn 3")
+	assert_eq(fu_inf.call(), inf0 + 4, "on the map")
+	var cairo := WorldMap.hex_for_latlon(30.04, 31.24)
+	for a in w.last_arrivals:
+		assert_eq(str(a[0]), "Fundamentalists", "theirs")
+		assert_lt(MapCampaign.hex_distance(a[2] as Vector2i, cairo), 6, "near Cairo")
+	w.begin_turn("State Troops")
+	assert_eq(st_tank.call(), tank0, "your Tanks are due on turn 4")
+	w.turn = 4
+	w.begin_turn("State Troops")
+	assert_eq(st_tank.call(), tank0 + 2, "and arrive then")
+	assert_true(w.pending.is_empty(), "nothing left on the way")
+
+func test_reinforcements_wait_for_room_and_survive_a_save():
+	var w := _faction_war("story_2")
+	# fill every free Fundamentalist hex: the wave has nowhere to land
+	var filler: Array = []
+	for t in w.campaign.tiles_of("Fundamentalists"):
+		if w._extra_free("Fundamentalists", t):
+			w._put("Fundamentalists", Wall.new(), t)
+			filler.append(t)
+	w.turn = 3
+	w.begin_turn("Fundamentalists")
+	assert_true(w.last_arrivals.is_empty(), "no room, no landing")
+	assert_eq(w.upcoming_reinforcements().filter(func(r): return r["nation"] == "Fundamentalists").size(), 1, "still waiting")
+	# a save keeps what is still on its way
+	var d := w.to_data()
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	var w2 := MapWar.from_data(d, w.campaign, func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name("State Troops", true))
+	gs.free()
+	assert_eq(w2.pending.size(), w.pending.size(), "the save keeps the reinforcements on their way")
+	for i in range(2):
+		w2._remove(MapCampaign.key_of(filler[i].x, filler[i].y))
+	w2.turn = 4
+	w2.begin_turn("Fundamentalists")
+	assert_eq(w2.last_arrivals.size(), 2, "as hexes free up, they land")
+	assert_eq(int(w2.upcoming_reinforcements().filter(func(r): return r["nation"] == "Fundamentalists")[0]["count"]), 2, "the rest still wait")

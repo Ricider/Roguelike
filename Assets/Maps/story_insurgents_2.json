@@ -161,5 +161,84 @@
  ],
  "story_chapter": 2,
  "story_campaign": "insurgents",
- "extras": []
+ "extras": [
+  {
+   "nation": "Insurgents",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "random": true,
+    "terrain": "mountain"
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Barracks",
+   "count": 1,
+   "at": {
+    "near": [
+     57.48,
+     -4.22
+    ]
+   }
+  },
+  {
+   "nation": "Insurgents",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "near": [
+     57.48,
+     -4.22
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Interceptor",
+   "count": 2,
+   "at": {
+    "near": [
+     51.51,
+     -0.13
+    ]
+   }
+  },
+  {
+   "nation": "Coalition Army",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "near": [
+     55.95,
+     -3.19
+    ]
+   }
+  }
+ ],
+ "setup": {
+  "Coalition Army": {
+   "max_hp": 80
+  }
+ },
+ "forces": {
+  "title": "Highlands",
+  "lines": [
+   "The Coalition loyalists still have their [Fighter Jets] and [Interceptors] around London, and Walls at Edinburgh.",
+   "They have only [80 HP] and no reinforcements coming. You have the Highlands, a [Barracks] and, from turn 3, captured [Anti Aircraft] guns.",
+   "Let the jets come north into the flak, then march south."
+  ]
+ }
 }

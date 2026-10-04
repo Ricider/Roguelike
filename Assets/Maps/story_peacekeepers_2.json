@@ -140,5 +140,74 @@
  ],
  "story_chapter": 2,
  "story_campaign": "peacekeepers",
- "extras": []
+ "extras": [
+  {
+   "nation": "Fundamentalists",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Barracks",
+   "count": 2,
+   "at": {
+    "random": true
+   }
+  },
+  {
+   "nation": "Fundamentalists",
+   "card": "Anti Aircraft",
+   "count": 2,
+   "at": {
+    "border": "Peace Keepers"
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     9.03,
+     38.74
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     9.03,
+     38.74
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 2,
+   "at": {
+    "border": "Fundamentalists"
+   }
+  }
+ ],
+ "setup": {
+  "Fundamentalists": {
+   "max_hp": 70
+  }
+ },
+ "forces": {
+  "title": "Air Superiority, For Now",
+  "lines": [
+   "You own the sky: [Fighter Jets] and [Drones] fly over the desert, and the Fundamentalists have nothing that can shoot them down.",
+   "Yet. Captured [Anti Aircraft] guns reach their border on [turn 3], and then your planes are in trouble.",
+   "Use the first two turns. They have only [70 HP]: smash their [Barracks] while you can."
+  ]
+ }
 }

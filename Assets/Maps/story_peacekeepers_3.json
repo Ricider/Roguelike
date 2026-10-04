@@ -140,5 +140,105 @@
  ],
  "story_chapter": 3,
  "story_campaign": "peacekeepers",
- "extras": []
+ "extras": [
+  {
+   "nation": "Mercenaries",
+   "card": "Howitzer",
+   "count": 2,
+   "at": {
+    "near": [
+     16.97,
+     7.99
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Tank",
+   "count": 2,
+   "at": {
+    "near": [
+     16.97,
+     7.99
+    ]
+   }
+  },
+  {
+   "nation": "Mercenaries",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     16.97,
+     7.99
+    ]
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Wall",
+   "count": 2,
+   "at": {
+    "border": "Mercenaries"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Fighter Jet",
+   "count": 2,
+   "at": {
+    "near": [
+     9.08,
+     7.4
+    ]
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Infantry",
+   "count": 3,
+   "at": {
+    "near": [
+     9.08,
+     7.4
+    ]
+   },
+   "turn": 5
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Tank",
+   "count": 1,
+   "at": {
+    "near": [
+     9.08,
+     7.4
+    ]
+   },
+   "turn": 5
+  }
+ ],
+ "setup": {
+  "Mercenaries": {
+   "max_hp": 70,
+   "money": 0
+  }
+ },
+ "forces": {
+  "title": "The World Sends Help",
+  "lines": [
+   "The Mercenaries have the [better guns]: Howitzers, Tanks and jets. But they are [unpaid]: no Money in the bank and only [70 HP].",
+   "You are outgunned at first, but help is coming from every corner of the world: [jets] on turn 3, more [troops] and a Tank on turn 5.",
+   "Hold the border behind your [Walls] and let time fight for you."
+  ]
+ }
 }

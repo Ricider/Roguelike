@@ -185,5 +185,66 @@
  ],
  "story_chapter": 1,
  "story_campaign": "horde",
- "extras": []
+ "extras": [
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 6,
+   "at": {
+    "border": "Peace Keepers"
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Drone",
+   "count": 2,
+   "at": {
+    "near": [
+     47.92,
+     106.92
+    ]
+   }
+  },
+  {
+   "nation": "Horde",
+   "card": "Infantry",
+   "count": 4,
+   "at": {
+    "border": "Peace Keepers"
+   },
+   "turn": 3
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Wall",
+   "count": 5,
+   "at": {
+    "border": "Horde"
+   }
+  },
+  {
+   "nation": "Peace Keepers",
+   "card": "Artilery",
+   "count": 2,
+   "at": {
+    "near": [
+     39.9,
+     116.4
+    ]
+   }
+  }
+ ],
+ "setup": {
+  "Peace Keepers": {
+   "max_hp": 120
+  }
+ },
+ "forces": {
+  "title": "The Great Wall",
+  "lines": [
+   "The Peace Keepers have rebuilt the Great Wall: [Walls] along the whole border, [Artilery] behind them in Beijing, and [120 HP].",
+   "Your Infantry shoot the [closest target], and that will be a Wall. Hammering Walls wins nothing.",
+   "Fly over them instead. [Drones] cross anything and hit the guns behind. Then walk round the Wall's ends with the second wave on turn 3."
+  ]
+ }
 }

@@ -86,12 +86,16 @@ TRABZON = (41.00, 39.72)
 #   {"next_to": id}                  free hexes beside an earlier placement
 #   ...any of them + "terrain": "mountain"  only on hexes of that terrain
 # Placement happens in the game (MapWar.place_extras), so "random" differs per play.
-def ex(nation, card, count, at, hp=None, id=None):
+#   turn=n (n > 1): a reinforcement, landing at the start of that nation's turn in round n
+#   (MapWar.arrive_reinforcements; the Forces briefing lists every one in advance).
+def ex(nation, card, count, at, hp=None, id=None, turn=None):
     d = {"nation": nation, "card": card, "count": count, "at": at}
     if hp is not None:
         d["hp"] = hp
     if id is not None:
         d["id"] = id
+    if turn is not None:
+        d["turn"] = turn
     return d
 
 
@@ -120,10 +124,6 @@ CHAPTERS = {
             {"nation": ST, "boxes": BALKANS + ANATOLIA},
             {"nation": "Fundamentalists", "boxes": LEVANT_ARABIA + EGYPT},
         ],
-        "extras": [
-            ex("Fundamentalists", "Barracks", 4, {"random": True}),
-            ex(ST, "Infantry", 2, {"border": "Fundamentalists"}),
-        ],
     },
     3: {
         "base": "story_med", "name": "Ch. 3: The Puppet Masters",
@@ -136,15 +136,6 @@ CHAPTERS = {
             {"nation": "Horde", "boxes": RUSSIA_EUROPE},
             {"nation": "Mercenaries", "boxes": LIBYA},
         ],
-        "extras": [
-            ex("Horde", "Tank", 2, {"random_in": CAUCASUS_RU}),
-            ex("Horde", "Special Ops", 2, {"random_in": CAUCASUS_RU}),
-            # a Barracks in the middle of Libya's eastern border, an Artilery either side of it
-            ex("Mercenaries", "Barracks", 1, {"border": ST, "middle": True, "room": 2}, id="merc_barracks"),
-            ex("Mercenaries", "Artilery", 2, {"next_to": "merc_barracks"}),
-            ex(ST, "Housing", 3, {"near": ISTANBUL}),
-            ex(ST, "Factory", 2, {"near": TRABZON}),
-        ],
     },
     4: {
         "base": "story_med", "name": "Ch. 4: Appetite",
@@ -155,22 +146,6 @@ CHAPTERS = {
         "claims": [
             {"nation": ST, "boxes": BALKANS + ANATOLIA + LEVANT_ARABIA + EGYPT + LIBYA + TRANSCAUCASUS + CAUCASUS_RU},
             {"nation": "Coalition Army", "boxes": EU, "minus": UK + SWITZERLAND},
-        ],
-        # Britain is outside the EU war, so the "London" Corporation stands on the
-        # Coalition hex nearest London, across the Channel.
-        "extras": [
-            ex("Coalition Army", "Corporation", 1, {"near": (51.51, -0.13)}, id="corp_london"),
-            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_london"}, id="icp_london"),
-            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_london"}),
-            ex("Coalition Army", "Corporation", 1, {"near": (52.52, 13.40)}, id="corp_berlin"),
-            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_berlin"}, id="icp_berlin"),
-            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_berlin"}),
-            ex("Coalition Army", "Corporation", 1, {"near": (48.86, 2.35)}, id="corp_paris"),
-            ex("Coalition Army", "Interceptor", 1, {"next_to": "corp_paris"}, id="icp_paris"),
-            ex("Coalition Army", "Fighter Jet", 1, {"next_to": "icp_paris"}),
-            ex(ST, "Tank", 2, {"near": ISTANBUL}),
-            ex(ST, "Artilery", 2, {"near": ISTANBUL}),
-            ex(ST, "Housing", 2, {"near": ISTANBUL}),
         ],
     },
     5: {
@@ -373,6 +348,468 @@ CAMPAIGN_CHAPTERS = {
     ],
 }
 
+# ------------------------------------------------------------ chapter forces
+# Every chapter after the tutorial is built around an asymmetry: the two sides
+# start with different extra cards, different reinforcements on the way ("turn"),
+# and sometimes different nation HP / Influence / Money ("setup", MapWar.apply_setup).
+# "forces" is the briefing shown on the map when the chapter starts ([brackets]
+# are highlighted); the map screen adds the list of reinforcements on the way.
+#   setup: {nation: {"max_hp", "influence", "money", "bio"}}, absolute values; factions start
+#   differently (State Troops 180 HP / 30 Influence, Horde 200 / 50, Corporate 70 / 60,
+#   Peace Keepers 90 / 60, Insurgents 120 / 20, Coalition 120 / 80, Fundamentalists 150 / 40,
+#   Mercenaries 130 / 40), so a "bonus" must beat those.
+CAIRO, DAMASCUS, ADANA, KARS = (30.04, 31.24), (33.51, 36.29), (37.00, 35.32), (40.60, 43.10)
+TRIPOLI, BENGHAZI, MOSCOW = (32.89, 13.19), (32.12, 20.07), (55.76, 37.62)
+BRUSSELS, BERLIN, PARIS, LONDON = (50.85, 4.35), (52.52, 13.40), (48.86, 2.35), (51.51, -0.13)
+NEW_YORK, HOUSTON, MEXICO_CITY, ATLANTA = (40.71, -74.01), (29.76, -95.37), (19.43, -99.13), (33.75, -84.39)
+SAN_FRANCISCO = (37.77, -122.42)
+ANCHORAGE, NOME, MAGADAN, PROVIDENIYA = (61.22, -149.90), (64.50, -165.41), (59.56, 150.80), (64.42, -173.23)
+BEIJING, ULAANBAATAR, ASTANA, KABUL = (39.90, 116.40), (47.92, 106.92), (51.17, 71.43), (34.53, 69.17)
+ROME, NAPLES, PALERMO, MANCHESTER = (41.90, 12.50), (40.85, 14.27), (38.12, 13.36), (53.48, -2.24)
+BAGHDAD, ERBIL, TABUK, ALGIERS, SABHA = (33.31, 44.37), (36.19, 44.01), (28.38, 36.57), (36.75, 3.06), (27.04, 14.43)
+DIYARBAKIR, INVERNESS, EDINBURGH, DOVER, CALAIS = (37.91, 40.23), (57.48, -4.22), (55.95, -3.19), (51.13, 1.31), (50.95, 1.86)
+BANGKOK, HANOI, ADDIS_ABABA, KHARTOUM, ABUJA, AGADEZ = (13.75, 100.50), (21.03, 105.85), (9.03, 38.74), (15.50, 32.56), (9.08, 7.40), (16.97, 7.99)
+RANDOM, MOUNTAIN = {"random": True}, {"random": True, "terrain": "mountain"}
+
+FORCES = {
+    # ---------------------------------------------------------------- State Troops
+    "story_2": {   # many brittle zealots in waves vs. a dug-in line that is slow to get going
+        "setup": {FU: {"max_hp": 80}},
+        "extras": [
+            ex(FU, "Barracks", 4, RANDOM),
+            ex(FU, "Infantry", 6, {"border": ST}),
+            ex(FU, "Infantry", 4, {"near": CAIRO}, turn=3),
+            ex(ST, "Infantry", 2, {"border": FU}),
+            ex(ST, "Wall", 3, {"border": FU}),
+            ex(ST, "Artilery", 2, {"near": ADANA}),
+            ex(ST, "Tank", 2, {"near": ADANA}, turn=4),
+        ],
+        "forces": {"title": "Zeal Against Discipline", "lines": [
+            "The Fundamentalists come in [waves]: a crowd of Infantry on the border now, more marching up the Nile on turn 3. Their [Barracks] make every one of them hit harder.",
+            "But zeal is brittle: their nation has only [80 HP]. Every Infantry you destroy costs them its BioCost, so a good killing ground breaks them fast.",
+            "Your [Walls] are already on the border and your [Artilery] is in the hills above Adana. Hold the line, and when the [Tanks] arrive on turn 4, go south.",
+        ]},
+    },
+    "story_3": {   # two fronts: a rich, patient Horde and fragile, well-equipped Mercenaries
+        "setup": {HO: {"influence": 100}, ME: {"max_hp": 70}},
+        "extras": [
+            ex(HO, "Tank", 2, {"random_in": CAUCASUS_RU}),
+            ex(HO, "Special Ops", 2, {"random_in": CAUCASUS_RU}),
+            ex(HO, "Tank", 2, {"random_in": CAUCASUS_RU}, turn=3),
+            ex(HO, "Rocket Launcher", 1, {"random_in": CAUCASUS_RU}, turn=3),
+            # a Barracks in the middle of Libya's eastern border, an Artilery either side of it
+            ex(ME, "Barracks", 1, {"border": ST, "middle": True, "room": 2}, id="merc_barracks"),
+            ex(ME, "Artilery", 2, {"next_to": "merc_barracks"}),
+            ex(ME, "Fighter Jet", 2, {"near": TRIPOLI}, turn=4),
+            ex(ST, "Housing", 3, {"near": ISTANBUL}),
+            ex(ST, "Factory", 2, {"near": TRABZON}),
+            ex(ST, "Wall", 2, {"border": HO, "terrain": "mountain"}),
+            ex(ST, "Anti Aircraft", 1, {"border": ME}, turn=4),
+        ],
+        "forces": {"title": "Two Fronts", "lines": [
+            "The [Horde] is rich: it starts with [100 Influence] to spend and more armour coming through the Caucasus on turn 3. Your [Walls] hold the mountain passes. Make them pay for every hex.",
+            "The [Mercenaries] are dangerous but fragile: only [70 HP], and they fight only while the money lasts. Their paid-up [Fighter Jets] land in Tripoli on turn 4.",
+            "Knock the Mercenaries out first and you fight one war instead of two. An [Anti Aircraft] gun reaches the Libyan border on turn 4, just in time for those jets.",
+        ]},
+    },
+    "story_4": {   # a fat, air-defended Coalition that mobilises late vs. a ground blitz
+        "setup": {ST: {"influence": 70}},
+        "extras": [
+            # Britain is outside the EU war, so the "London" Corporation stands on the
+            # Coalition hex nearest London, across the Channel.
+            ex(CA, "Corporation", 1, {"near": LONDON}, id="corp_london"),
+            ex(CA, "Interceptor", 1, {"next_to": "corp_london"}, id="icp_london"),
+            ex(CA, "Fighter Jet", 1, {"next_to": "icp_london"}),
+            ex(CA, "Corporation", 1, {"near": BERLIN}, id="corp_berlin"),
+            ex(CA, "Interceptor", 1, {"next_to": "corp_berlin"}, id="icp_berlin"),
+            ex(CA, "Fighter Jet", 1, {"next_to": "icp_berlin"}),
+            ex(CA, "Corporation", 1, {"near": PARIS}, id="corp_paris"),
+            ex(CA, "Interceptor", 1, {"next_to": "corp_paris"}, id="icp_paris"),
+            ex(CA, "Fighter Jet", 1, {"next_to": "icp_paris"}),
+            ex(CA, "Infantry", 3, {"near": BRUSSELS}, turn=4),
+            ex(CA, "Anti Aircraft", 2, {"near": BRUSSELS}, turn=4),
+            ex(CA, "Tank", 2, {"near": BERLIN}, turn=6),
+            ex(ST, "Tank", 2, {"near": ISTANBUL}),
+            ex(ST, "Artilery", 2, {"near": ISTANBUL}),
+            ex(ST, "Housing", 2, {"near": ISTANBUL}),
+            ex(ST, "Special Ops", 2, {"border": CA}),
+        ],
+        "forces": {"title": "Blitz", "lines": [
+            "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] halves hits from anything with Range or wings. Your ground troops ignore that shield entirely.",
+            "But the Coalition is slow to mobilise. Its army only turns up on [turn 4] and [turn 6]. Every hex you take before then is a hex they have to win back.",
+            "You start with [70 Influence] and [Special Ops] on the border, who deal double damage to ground units. Strike before Brussels wakes up.",
+        ]},
+    },
+    "story_5": {   # one empire against everyone: a big HP pool against waves from every side
+        "setup": {ST: {"max_hp": 250, "influence": 80}},
+        "extras": [
+            ex(ST, "Factory", 2, {"near": ISTANBUL}),
+            ex(ST, "Howitzer", 2, {"near": ISTANBUL}),
+            ex(ST, "Wall", 3, {"border": IN}),
+            ex(ST, "Anti Aircraft", 2, {"near": PARIS}),
+            ex(IN, "Special Ops", 2, {"near": LONDON}),
+            ex(IN, "Infantry", 2, {"near": LONDON}, turn=3),
+            ex(HO, "Tank", 3, {"border": ST}),
+            ex(HO, "Infantry", 4, {"border": ST}, turn=4),
+            ex(CO, "Corporation", 2, {"near": NEW_YORK}),
+            ex(CO, "Fighter Jet", 2, {"near": SAN_FRANCISCO}),
+            ex(CO, "Drone", 3, {"near": NEW_YORK}, turn=3),
+            ex(PK, "Infantry", 4, {"border": ST}),
+            ex(PK, "Barracks", 2, {"border": ST}),
+            ex(PK, "Infantry", 3, {"border": ST}, turn=5),
+            ex(PK, "Rocket Launcher", 1, {"border": ST}, turn=5),
+        ],
+        "forces": {"title": "The World Against Us", "lines": [
+            "An empire is hard to kill: you have [250 HP] and [80 Influence]. But every other army on Earth is coming, and each one keeps sending more.",
+            "[Insurgent] saboteurs strike from Britain, [Horde] armour from the east, [Peace Keeper] waves from the south, and the [Corporate Troops'] jets and drones from across the Atlantic.",
+            "You cannot hold everywhere. Pick the front that is closest to breaking and finish it, and every enemy you eliminate is one less wave.",
+        ]},
+    },
+    # ---------------------------------------------------------------- Corporate Troops
+    "story_corporate_1": {   # money and machines vs. a people's army
+        "setup": {CO: {"influence": 120}, PK: {"max_hp": 120}},
+        "extras": [
+            ex(CO, "Drone", 2, {"border": PK}),
+            ex(CO, "Factory", 1, {"near": HOUSTON}),
+            ex(CO, "Corporation", 1, {"near": NEW_YORK}),
+            ex(PK, "Infantry", 6, {"border": CO}),
+            ex(PK, "Housing", 2, {"near": MEXICO_CITY}),
+            ex(PK, "Barracks", 1, {"near": MEXICO_CITY}, turn=3),
+        ],
+        "forces": {"title": "Money Versus Numbers", "lines": [
+            "You have the money: [120 Influence], a [Factory] in Houston and a [Corporation] that makes every card cheaper. Spend it.",
+            "The Peace Keepers have the people: [120 HP], a wall of [Infantry] on the border and [Housing] around Mexico City to recruit more.",
+            "Their Infantry can't dodge, but your [Drones] can: they take half damage from anything without Range. Buy machines, not men.",
+        ]},
+    },
+    "story_corporate_2": {   # air power vs. a dug-in outpost with flak
+        "setup": {HO: {"max_hp": 80}},
+        "extras": [
+            ex(CO, "Drone", 3, {"near": ANCHORAGE}),
+            ex(CO, "Fighter Jet", 1, {"near": ANCHORAGE}),
+            ex(CO, "Special Ops", 2, {"near": ANCHORAGE}, turn=3),
+            ex(HO, "Infantry", 4, MOUNTAIN),
+            ex(HO, "Anti Aircraft", 2, {"border": CO}),
+        ],
+        "forces": {"title": "Flak Over the Tundra", "lines": [
+            "Your strike force flies: [Drones] and a [Fighter Jet] can cross anything and take half damage from troops without Range.",
+            "But the Horde brought [Anti Aircraft] guns: triple damage to flying units, and no dodging. Fly into them and you will lose your air force on turn one.",
+            "The outpost is small ([80 HP]). Use your planes on the Infantry dug into the mountains, and let the [Special Ops] team landing on turn 3 deal with the flak.",
+        ]},
+    },
+    "story_corporate_3": {   # a strong early mutiny vs. an economy that wins the long game
+        "setup": {ME: {"max_hp": 70, "money": 80}},
+        "extras": [
+            ex(ME, "Tank", 2, {"near": HOUSTON}),
+            ex(ME, "Artilery", 2, {"near": HOUSTON}),
+            ex(ME, "Interceptor", 1, {"near": HOUSTON}),
+            ex(CO, "Factory", 2, {"near": ATLANTA}),
+            ex(CO, "Wall", 2, {"border": ME}),
+            ex(CO, "Howitzer", 2, {"near": ATLANTA}, turn=3),
+        ],
+        "forces": {"title": "Hostile Contractors", "lines": [
+            "The Mercenaries walked off with your own kit: [Tanks], [Artilery] and an [Interceptor] in Houston, and [80 Money] in the bank. Their first turns will hurt.",
+            "But nobody pays them any more. They have only [70 HP], and that Interceptor burns 6 Money every time it blocks.",
+            "Your two [Factories] pay out every turn. Hold behind your [Walls], let your [Howitzers] arrive on turn 3, and outlast them.",
+        ]},
+    },
+    # ---------------------------------------------------------------- Horde
+    "story_horde_1": {   # a fast raiding horde vs. a Great Wall
+        "setup": {PK: {"max_hp": 120}},
+        "extras": [
+            ex(HO, "Infantry", 6, {"border": PK}),
+            ex(HO, "Drone", 2, {"near": ULAANBAATAR}),
+            ex(HO, "Infantry", 4, {"border": PK}, turn=3),
+            ex(PK, "Wall", 5, {"border": HO}),
+            ex(PK, "Artilery", 2, {"near": BEIJING}),
+        ],
+        "forces": {"title": "The Great Wall", "lines": [
+            "The Peace Keepers have rebuilt the Great Wall: [Walls] along the whole border, [Artilery] behind them in Beijing, and [120 HP].",
+            "Your Infantry shoot the [closest target], and that will be a Wall. Hammering Walls wins nothing.",
+            "Fly over them instead. [Drones] cross anything and hit the guns behind. Then walk round the Wall's ends with the second wave on turn 3.",
+        ]},
+    },
+    "story_horde_2": {   # siege guns vs. mountain guerrillas who keep coming back
+        "setup": {IN: {"max_hp": 70}},
+        "extras": [
+            ex(IN, "Infantry", 6, MOUNTAIN),
+            ex(IN, "Special Ops", 2, MOUNTAIN),
+            ex(IN, "Infantry", 3, MOUNTAIN, turn=4),
+            ex(HO, "Artilery", 3, {"border": IN}),
+            ex(HO, "Tank", 2, {"border": IN}),
+            ex(HO, "Barracks", 1, {"border": IN}),
+        ],
+        "forces": {"title": "Siege in the Mountains", "lines": [
+            "Every Insurgent stands on a [Mountain]: [1 less damage] from every hit. That ruins weapons that fire many small shots, like Rocket Launchers and Howitzers.",
+            "Your big guns don't care as much: [Artilery] hits hard once. Line it up behind the [Barracks] for +2 damage a shot.",
+            "Their [Special Ops] deal double damage to ground units, so keep your Tanks out of their reach. The Insurgents have only [70 HP], but more fighters come down from the valleys on turn 4.",
+        ]},
+    },
+    "story_horde_3": {   # a tiny high-tech beachhead vs. the home army
+        "setup": {CO: {"influence": 100}},
+        "extras": [
+            ex(CO, "Fighter Jet", 2, {"near": PROVIDENIYA}),
+            ex(CO, "Interceptor", 1, {"near": PROVIDENIYA}),
+            ex(CO, "Tank", 2, {"near": PROVIDENIYA}, turn=3),
+            ex(CO, "Drone", 2, {"near": PROVIDENIYA}, turn=5),
+            ex(HO, "Anti Aircraft", 3, {"border": CO}),
+            ex(HO, "Housing", 2, {"near": MAGADAN}),
+            ex(HO, "Infantry", 4, {"border": CO}),
+        ],
+        "forces": {"title": "The Beachhead", "lines": [
+            "The Corporate Troops hold only a sliver of Chukotka, but they keep [landing more]: Tanks on turn 3, Drones on turn 5, and [100 Influence] to spend.",
+            "Their beachhead is guarded by [Fighter Jets] and an [Interceptor]. Your [Anti Aircraft] guns are on the border: triple damage to anything that flies.",
+            "Throw them back into the sea [before] the landings pile up.",
+        ]},
+    },
+    # ---------------------------------------------------------------- Coalition Army
+    "story_coalition_1": {   # hold the line, then counter-attack with air power
+        "setup": {HO: {"influence": 90}},
+        "extras": [
+            ex(HO, "Tank", 4, {"border": CA}),
+            ex(HO, "Infantry", 4, {"border": CA}),
+            ex(CA, "Wall", 4, {"border": HO}),
+            ex(CA, "Barracks", 2, {"border": HO}),
+            ex(CA, "Interceptor", 1, {"near": BERLIN}),
+            ex(CA, "Fighter Jet", 2, {"near": BERLIN}, turn=3),
+        ],
+        "forces": {"title": "Hold the Vistula", "lines": [
+            "The Horde opens with [Tanks] and [Infantry] massed on the border and [90 Influence] for more. Everything they have shoots the [closest target].",
+            "So give them something to shoot: your [Walls] stand in front, your [Barracks] behind them make every shot of yours +2.",
+            "Hold for two turns. On [turn 3] the air wing reaches Berlin, and then you go east.",
+        ]},
+    },
+    "story_coalition_2": {   # hit-and-run raiders vs. flak and garrisons
+        "setup": {ME: {"max_hp": 80}},
+        "extras": [
+            ex(ME, "Special Ops", 3, RANDOM),
+            ex(ME, "Drone", 2, {"near": PALERMO}),
+            ex(ME, "Infantry", 2, {"near": PALERMO}, turn=3),
+            ex(CA, "Anti Aircraft", 2, {"near": NAPLES}),
+            ex(CA, "Infantry", 2, {"near": NAPLES}),
+        ],
+        "forces": {"title": "Raiders", "lines": [
+            "The Mercenary raiders are [Special Ops], who deal double damage to ground units, and [Drones] that half-dodge your Infantry's shots.",
+            "Your [Anti Aircraft] guns around Naples shred anything that flies. Let the Drones come to them.",
+            "The raiders have only [80 HP], but more boats arrive from Tunis on turn 3. Use Walls and Tanks against the Special Ops, not Infantry.",
+        ]},
+    },
+    "story_coalition_3": {   # a rich, growing economy vs. a strike-now army
+        "setup": {CO: {"money": 60}},
+        "extras": [
+            ex(CO, "Factory", 3, {"near": MANCHESTER}),
+            ex(CO, "Corporation", 1, {"near": MANCHESTER}),
+            ex(CO, "Drone", 2, {"near": MANCHESTER}),
+            ex(CO, "Fighter Jet", 2, {"near": MANCHESTER}, turn=4),
+            ex(CO, "Tank", 2, {"near": MANCHESTER}, turn=6),
+            ex(CA, "Infantry", 3, {"border": CO}),
+            ex(CA, "Tank", 2, {"border": CO}),
+        ],
+        "forces": {"title": "The Clock Is Ticking", "lines": [
+            "The Corporate Troops' north is [factories]: three of them plus a [Corporation], all paying out every single turn.",
+            "Right now they have almost no army. On [turn 4] the jets roll out, on [turn 6] the tanks.",
+            "Every turn you wait, they get richer. Your [Infantry] and [Tanks] are already on the border: [strike now].",
+        ]},
+    },
+    # ---------------------------------------------------------------- Fundamentalists
+    "story_fundamentalists_1": {   # a flood of zealots vs. a few hill fighters
+        "setup": {IN: {"max_hp": 80}},
+        "extras": [
+            ex(FU, "Infantry", 6, {"border": IN}),
+            ex(FU, "Barracks", 2, {"border": IN}),
+            ex(IN, "Infantry", 4, MOUNTAIN),
+            ex(IN, "Wall", 2, {"border": FU}),
+            ex(IN, "Special Ops", 1, MOUNTAIN, turn=3),
+        ],
+        "forces": {"title": "The Flood", "lines": [
+            "You have [numbers]: a crowd of Infantry on the border, with [Barracks] behind them for +2 damage a shot.",
+            "The Insurgents have [the hills]: Infantry on mountains take 1 less damage per hit, and [Walls] soak up your first volleys.",
+            "Weight of fire beats cover. Pile shots onto one dug-in fighter at a time. They have only [80 HP].",
+        ]},
+    },
+    "story_fundamentalists_2": {   # a ground army with flak vs. air-backed peacekeepers
+        "setup": {PK: {"influence": 100}},
+        "extras": [
+            ex(PK, "Interceptor", 2, {"near": DAMASCUS}),
+            ex(PK, "Fighter Jet", 2, {"near": DAMASCUS}),
+            ex(PK, "Wall", 2, {"border": FU}),
+            ex(FU, "Anti Aircraft", 3, {"border": PK}),
+            ex(FU, "Infantry", 4, {"border": PK}),
+            ex(FU, "Rocket Launcher", 2, {"near": BAGHDAD}, turn=3),
+        ],
+        "forces": {"title": "Guns Against Wings", "lines": [
+            "The Peace Keepers fight from the air: [Fighter Jets] over Damascus, and [Interceptors] that halve hits from Range or wings.",
+            "You fight on the ground. Your [Anti Aircraft] guns deal triple damage to their jets, and your [Infantry] have no Range, so the Interceptors can't stop them.",
+            "Your [Rocket Launchers] arrive on turn 3, but they have Range, so aim them away from the Interceptors.",
+        ]},
+    },
+    "story_fundamentalists_3": {   # a wave assault vs. heavy guns that cost a fortune
+        "setup": {ME: {"max_hp": 80, "money": 60}},
+        "extras": [
+            ex(ME, "Howitzer", 2, {"near": CAIRO}),
+            ex(ME, "Tank", 2, {"near": CAIRO}),
+            ex(ME, "Barracks", 1, {"near": CAIRO}),
+            ex(FU, "Infantry", 4, {"border": ME}),
+            ex(FU, "Special Ops", 2, {"border": ME}),
+            ex(FU, "Infantry", 4, {"border": ME}, turn=3),
+        ],
+        "forces": {"title": "Across the Sinai", "lines": [
+            "The Mercenaries hold the Nile with [Howitzers] and [Tanks]: four shots a turn from each Howitzer.",
+            "But Howitzer shots are [light] and land at random. Spread your troops and the guns waste their fire.",
+            "Your [Special Ops] deal double damage to their Tanks. A second wave crosses the Sinai on turn 3. The Mercenaries have only [80 HP].",
+        ]},
+    },
+    # ---------------------------------------------------------------- Mercenaries
+    "story_mercenaries_1": {   # a small, rich landing force vs. a big, poor defender
+        "setup": {ME: {"influence": 100}, PK: {"max_hp": 120}},
+        "extras": [
+            ex(ME, "Tank", 2, {"near": BENGHAZI}),
+            ex(ME, "Infantry", 2, {"near": BENGHAZI}),
+            ex(PK, "Infantry", 4, RANDOM),
+            ex(PK, "Housing", 2, {"near": TRIPOLI}),
+            ex(PK, "Artilery", 2, {"near": TRIPOLI}, turn=4),
+        ],
+        "forces": {"title": "The War Chest", "lines": [
+            "You landed with little land but a fat [war chest]: [100 Influence] to spend in the Shop from turn one.",
+            "The Peace Keepers hold the rest of Libya with [120 HP] and Infantry scattered across the desert. [Artilery] reaches Tripoli on turn 4.",
+            "Buy hard, hit fast. Every hex you take pays more Influence.",
+        ]},
+    },
+    "story_mercenaries_2": {   # a raid on depots: targets that pay vs. an air-defended coast
+        "setup": {ME: {"influence": 80}},
+        "extras": [
+            ex(CA, "Factory", 4, RANDOM),
+            ex(CA, "Interceptor", 2, {"near": ALGIERS}),
+            ex(CA, "Infantry", 3, {"border": ME}),
+            ex(ME, "Fighter Jet", 2, {"near": TRIPOLI}),
+            ex(ME, "Drone", 2, {"near": TRIPOLI}),
+            ex(ME, "Special Ops", 2, {"border": CA}, turn=3),
+        ],
+        "forces": {"title": "The Atlas Contract", "lines": [
+            "The Coalition's African [depots] are four [Factories] scattered across the Maghreb, each one paying them 15 Money a turn. Burn them and their army starves.",
+            "You have wings: [Fighter Jets] and [Drones] fly straight over the desert. Keep them away from Algiers, where [Interceptors] halve their hits.",
+            "[Special Ops] reach the border on turn 3 to deal with the Infantry.",
+        ]},
+    },
+    "story_mercenaries_3": {   # firepower vs. stragglers who keep coming back
+        "setup": {FU: {"max_hp": 70}},
+        "extras": [
+            ex(FU, "Infantry", 5, RANDOM),
+            ex(FU, "Wall", 2, {"near": SABHA}),
+            ex(FU, "Infantry", 3, RANDOM, turn=3),
+            ex(FU, "Infantry", 3, RANDOM, turn=5),
+            ex(ME, "Tank", 2, {"border": FU}),
+            ex(ME, "Rocket Launcher", 2, {"border": FU}),
+        ],
+        "forces": {"title": "Desert Recruiting", "lines": [
+            "The Fundamentalist stragglers are [scattered] across the dunes, and more keep wandering in: on turn 3 and turn 5.",
+            "Your [Rocket Launchers] fire four shots a turn at random targets of the nearest enemy: perfect for picking off scattered Infantry.",
+            "They have only [70 HP]. Finish them before the stragglers regroup.",
+        ]},
+    },
+    # ---------------------------------------------------------------- Insurgents
+    "story_insurgents_1": {   # a tiny guerrilla force that grows vs. a big army
+        "setup": {IN: {"max_hp": 80}},
+        "extras": [
+            ex(IN, "Special Ops", 2, MOUNTAIN),
+            ex(IN, "Infantry", 3, MOUNTAIN),
+            ex(IN, "Infantry", 3, MOUNTAIN, turn=2),
+            ex(IN, "Special Ops", 2, MOUNTAIN, turn=4),
+            ex(ST, "Tank", 2, {"border": IN}),
+            ex(ST, "Wall", 2, {"border": IN}),
+            ex(ST, "Housing", 2, {"near": DIYARBAKIR}),
+        ],
+        "forces": {"title": "The Hills Answer", "lines": [
+            "You start with a handful of hexes and [80 HP]. The State Troops have [180 HP], [Tanks] and [Walls].",
+            "But the hills are yours. Your fighters stand on [Mountains] (1 less damage per hit), and [Special Ops] deal double damage to Tanks.",
+            "Every few turns more volunteers come down from the hills: on turn 2 and turn 4. Survive the first blows, then grow.",
+        ]},
+    },
+    "story_insurgents_2": {   # captured flak vs. the loyalists' air force
+        "setup": {CA: {"max_hp": 80}},
+        "extras": [
+            ex(IN, "Infantry", 3, MOUNTAIN),
+            ex(IN, "Barracks", 1, {"near": INVERNESS}),
+            ex(IN, "Anti Aircraft", 2, {"near": INVERNESS}, turn=3),
+            ex(CA, "Fighter Jet", 2, {"near": LONDON}),
+            ex(CA, "Interceptor", 2, {"near": LONDON}),
+            ex(CA, "Wall", 2, {"near": EDINBURGH}),
+        ],
+        "forces": {"title": "Highlands", "lines": [
+            "The Coalition loyalists still have their [Fighter Jets] and [Interceptors] around London, and Walls at Edinburgh.",
+            "They have only [80 HP] and no reinforcements coming. You have the Highlands, a [Barracks] and, from turn 3, captured [Anti Aircraft] guns.",
+            "Let the jets come north into the flak, then march south.",
+        ]},
+    },
+    "story_insurgents_3": {   # an assault across the sea vs. coastal forts
+        "extras": [
+            ex(IN, "Artilery", 2, {"near": DOVER}),
+            ex(IN, "Rocket Launcher", 2, {"near": DOVER}),
+            ex(IN, "Drone", 2, {"near": LONDON}),
+            ex(IN, "Fighter Jet", 2, {"near": LONDON}, turn=3),
+            ex(ST, "Wall", 3, {"near": CALAIS}),
+            ex(ST, "Howitzer", 2, {"near": PARIS}),
+        ],
+        "forces": {"title": "Across the Channel", "lines": [
+            "The Channel is between you. Ground troops can't walk across it, so this fight is won by [guns] and [wings].",
+            "Your [Artilery] and [Rocket Launchers] at Dover hit anything in France. Their [Howitzers] in Paris answer the same way.",
+            "The forts at Calais soak up shots, so let the guns pick targets at random and [fly] over the Walls with Drones, then the [Fighter Jets] arriving on turn 3.",
+        ]},
+    },
+    # ---------------------------------------------------------------- Peace Keepers
+    "story_peacekeepers_1": {   # an army vs. insurgent cells that keep reappearing
+        "setup": {IN: {"max_hp": 70}},
+        "extras": [
+            ex(IN, "Infantry", 6, RANDOM),
+            ex(IN, "Special Ops", 2, RANDOM),
+            ex(IN, "Infantry", 2, RANDOM, turn=3),
+            ex(IN, "Infantry", 2, RANDOM, turn=5),
+            ex(PK, "Tank", 2, {"border": IN}),
+            ex(PK, "Infantry", 2, {"border": IN}),
+            ex(PK, "Barracks", 1, {"border": IN}),
+        ],
+        "forces": {"title": "Cells in the Jungle", "lines": [
+            "The Insurgents are [cells] scattered through the jungle, and new ones keep appearing: on turn 3 and turn 5.",
+            "Units in [forests] take 1 less damage from flying attackers, so planes are a poor tool here. Go in on the ground.",
+            "The Insurgents have only [70 HP]. Take their land fast and the cells have nowhere left to hide.",
+        ]},
+    },
+    "story_peacekeepers_2": {   # air superiority vs. flak that arrives later
+        "setup": {FU: {"max_hp": 70}},
+        "extras": [
+            ex(FU, "Infantry", 4, RANDOM),
+            ex(FU, "Barracks", 2, RANDOM),
+            ex(FU, "Anti Aircraft", 2, {"border": PK}, turn=3),
+            ex(PK, "Fighter Jet", 2, {"near": ADDIS_ABABA}),
+            ex(PK, "Drone", 2, {"near": ADDIS_ABABA}),
+            ex(PK, "Infantry", 2, {"border": FU}),
+        ],
+        "forces": {"title": "Air Superiority, For Now", "lines": [
+            "You own the sky: [Fighter Jets] and [Drones] fly over the desert, and the Fundamentalists have nothing that can shoot them down.",
+            "Yet. Captured [Anti Aircraft] guns reach their border on [turn 3], and then your planes are in trouble.",
+            "Use the first two turns. They have only [70 HP]: smash their [Barracks] while you can.",
+        ]},
+    },
+    "story_peacekeepers_3": {   # outgunned but backed by the world vs. an unpaid army
+        "setup": {ME: {"max_hp": 70, "money": 0}},
+        "extras": [
+            ex(ME, "Howitzer", 2, {"near": AGADEZ}),
+            ex(ME, "Tank", 2, {"near": AGADEZ}),
+            ex(ME, "Fighter Jet", 2, {"near": AGADEZ}),
+            ex(PK, "Infantry", 4, {"border": ME}),
+            ex(PK, "Wall", 2, {"border": ME}),
+            ex(PK, "Fighter Jet", 2, {"near": ABUJA}, turn=3),
+            ex(PK, "Infantry", 3, {"near": ABUJA}, turn=5),
+            ex(PK, "Tank", 1, {"near": ABUJA}, turn=5),
+        ],
+        "forces": {"title": "The World Sends Help", "lines": [
+            "The Mercenaries have the [better guns]: Howitzers, Tanks and jets. But they are [unpaid]: no Money in the bank and only [70 HP].",
+            "You are outgunned at first, but help is coming from every corner of the world: [jets] on turn 3, more [troops] and a Tank on turn 5.",
+            "Hold the border behind your [Walls] and let time fight for you.",
+        ]},
+    },
+}
+
 # The State Troops' chapters keep their original ids (story_1..5).
 ALL_CHAPTERS = {}
 for _n, _ch in CHAPTERS.items():
@@ -380,6 +817,8 @@ for _n, _ch in CHAPTERS.items():
 for _cid, _chs in CAMPAIGN_CHAPTERS.items():
     for _i, _ch in enumerate(_chs):
         ALL_CHAPTERS["story_%s_%d" % (_cid, _i + 1)] = dict(_ch, campaign=_cid, chapter=_i + 1)
+for _mid, _f in FORCES.items():
+    ALL_CHAPTERS[_mid].update(_f)
 
 def in_boxes(boxes, lat, lon):
     lon = MW.norm_lon(lon)
@@ -494,6 +933,8 @@ def build_chapter(map_id, polys):
     data["story_chapter"] = n
     data["story_campaign"] = ch["campaign"]
     data["extras"] = ch.get("extras", [])
+    data["setup"] = ch.get("setup", {})
+    data["forces"] = ch.get("forces", {})
     with open(os.path.join(MW.OUT_DIR, map_id + ".json"), "w") as f:
         json.dump(data, f, indent=1)
     counts = {nm: sum(1 for o in owner.values() if o == nm) for nm in names}
