@@ -374,7 +374,7 @@ func start_story_chapter(cid: String, n: int) -> void:
 # Sharp text at any window size: render the UI fonts as MSDF (signed distance
 # fields) with mipmaps. Done here rather than in the .import files because those
 # are gitignored, so the setting would not survive a fresh checkout.
-const UI_FONTS := ["res://Assets/Fonts/PixelifySans.ttf", "res://Assets/Fonts/PressStart2P.ttf"]
+const UI_FONTS := ["res://Assets/Fonts/AtkinsonHyperlegible-Regular.ttf", "res://Assets/Fonts/AtkinsonHyperlegible-Bold.ttf"]
 
 func _ready() -> void:
 	for path in UI_FONTS:

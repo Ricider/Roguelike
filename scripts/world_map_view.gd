@@ -185,6 +185,8 @@ func _redraw_all() -> void:
 		_terrain.queue_redraw()
 	if _overlay != null:
 		_overlay.queue_redraw()
+	if _text_layer != null:
+		_text_layer.queue_redraw()
 
 func set_campaign(campaign: MapCampaign) -> void:
 	_campaign = campaign
@@ -253,6 +255,7 @@ func _process(delta: float) -> void:
 	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
 		_overlay.queue_redraw()
+		_text_layer.queue_redraw() # the HP / attack chips under the units
 	if not effects.is_empty() or not walks.is_empty():
 		_fx_clock += delta
 		if _fx_clock >= 1.0 / 40.0:
@@ -1344,6 +1347,8 @@ func _draw_text_fx() -> void:
 	if s < 2.0:
 		return
 	var font := get_theme_default_font()
+	if war != null and s >= STAT_CHIP_MIN_HEX:
+		_draw_stat_chips(m, font)
 	for e in effects:
 		if str(e["kind"]) != "num":
 			continue
@@ -1364,6 +1369,73 @@ func _draw_text_fx() -> void:
 		_text_layer.draw_string_outline(font, Vector2(-tw * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0.05, 0.04, 0.08, a))
 		_text_layer.draw_string(font, Vector2(-tw * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col2.r, col2.g, col2.b, a))
 		_text_layer.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# Stat chips under every card on the map: a heart and its HP (as shown, so they tick
+# down with each hit during an attack replay) and, for units, a sword and the damage
+# each shot deals from where it stands (Barracks, home ground and modifiers included;
+# "2x4" for guns that fire 4 times). Hidden when zoomed far out.
+const STAT_CHIP_MIN_HEX := 15.0 # hex radius in pixels below which the chips are hidden
+
+func _draw_stat_chips(m: Array, font: Font) -> void:
+	var s: float = m[0]
+	var margin: float = s * 2.0
+	var fs := int(clampf(s * 0.44, 10.0, 18.0))
+	var pad: float = maxf(2.0, s * 0.06)
+	var icon: float = fs * 0.7
+	for k in war.units.keys():
+		var info: Dictionary = war.units[k]
+		var card: Card = info["card"]
+		var t := MapWar.key_to_hex(str(k))
+		var hp: int = int(hp_shown.get(k, war.card_hp(card)))
+		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
+		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
+		var chips: Array = [["hp", str(hp), Color(1.0 - 0.6 * frac, 0.55 + 0.4 * frac, 0.45)]]
+		if card is Unit:
+			var u := card as Unit
+			var dmg: int = war.effective_damage(str(info["owner"]), u, t)
+			var txt := str(dmg) + ("x4" if (card is RocketLauncher or card is Howitzer) else "")
+			chips.append(["atk", txt, Color(1.0, 0.72, 0.35)])
+		var shift := unit_offset(str(k), m)
+		for cp in _visible_copies(t, m, margin):
+			var c := (cp as Vector2) + shift
+			# lay the chips out side by side, centred under the HP bar
+			var widths: Array = []
+			var total: float = 0.0
+			for ch in chips:
+				var w: float = icon + pad * 3.0 + font.get_string_size(str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+				widths.append(w)
+				total += w
+			total += pad * 2.0 * (chips.size() - 1)
+			var x: float = c.x - total * 0.5
+			var y: float = c.y + s * 0.92
+			var h: float = fs + pad * 1.2
+			for i in range(chips.size()):
+				var ch: Array = chips[i]
+				var w2: float = widths[i]
+				var r := Rect2(x, y, w2, h)
+				_text_layer.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.92), true)
+				_text_layer.draw_rect(r, Color(0.13, 0.12, 0.2, 0.92), true)
+				var ic := Vector2(x + pad + icon * 0.5, y + h * 0.5)
+				if str(ch[0]) == "hp":
+					_draw_heart(ic, icon * 0.5, Color(1.0, 0.32, 0.36))
+				else:
+					_draw_sword(ic, icon * 0.5, Color(0.92, 0.92, 1.0))
+				var tx := Vector2(x + pad * 2.0 + icon, y + h * 0.5 + fs * 0.36)
+				_text_layer.draw_string_outline(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.05, 0.04, 0.08))
+				_text_layer.draw_string(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ch[2])
+				x += w2 + pad * 2.0
+
+func _draw_heart(c: Vector2, r: float, col: Color) -> void:
+	_text_layer.draw_circle(c + Vector2(-r * 0.45, -r * 0.25), r * 0.52, col)
+	_text_layer.draw_circle(c + Vector2(r * 0.45, -r * 0.25), r * 0.52, col)
+	_text_layer.draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.95, -r * 0.05), c + Vector2(r * 0.95, -r * 0.05), c + Vector2(0, r * 0.95)]), col)
+
+func _draw_sword(c: Vector2, r: float, col: Color) -> void:
+	var a := c + Vector2(-r * 0.8, r * 0.8)
+	var b := c + Vector2(r * 0.85, -r * 0.85)
+	_text_layer.draw_line(a, b, col, maxf(1.5, r * 0.32))
+	var g := c + Vector2(-r * 0.35, r * 0.35) # crossguard
+	_text_layer.draw_line(g + Vector2(-r * 0.45, -r * 0.45), g + Vector2(r * 0.45, r * 0.45), Color(1.0, 0.8, 0.35), maxf(1.5, r * 0.3))
 
 func _draw_overlay() -> void:
 	var m := metrics()

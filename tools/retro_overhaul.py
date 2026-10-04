@@ -2005,8 +2005,8 @@ def panel_tex(rim, alpha=236):
 
 THEME_TRES = """[gd_resource type="Theme" load_steps={steps} format=3]
 
-[ext_resource type="FontFile" path="res://Assets/Fonts/PixelifySans.ttf" id="1_body"]
-[ext_resource type="FontFile" path="res://Assets/Fonts/PressStart2P.ttf" id="2_title"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/AtkinsonHyperlegible-Regular.ttf" id="1_body"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/AtkinsonHyperlegible-Bold.ttf" id="2_title"]
 {ext}
 [sub_resource type="StyleBoxEmpty" id="focus_empty"]
 
