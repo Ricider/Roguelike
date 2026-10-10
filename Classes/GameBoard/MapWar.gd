@@ -8,7 +8,7 @@
 #     damage to a flag goes straight to that nation's HP.
 # Card rules carry over from the 4x10 battles: Rocket Launcher/Howitzer fire 4
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
-# from non-ranged, Barracks +2 to adjacent units, Interceptors halve ranged/flying
+# from non-ranged, Barracks +2 to adjacent units, Interceptors block 75% of ranged/flying
 # hits on adjacent friends, Fighter Jets splash the target's neighbors.
 # Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1);
 # units in a forest (jungle hex) take 1 less from flying attackers (minimum 1).
@@ -18,12 +18,18 @@
 # than 3 units, x4 with none) to whoever damaged it most, loses the cards on those
 # hexes, then rebuilds to full HP. A fallen flag moves to the free hex nearest
 # the centre of the remaining territory; flags always keep a hex to themselves.
-# The winner earns INFLUENCE_PER_HEX Influence per hex taken (spent in the shop).
+# The winner earns INFLUENCE_PER_HEX Influence per hex taken (spent in the shop), and
+# destroying an enemy building pays its attacker BUILDING_BOUNTY of its Influence cost.
 extends RefCounted
 class_name MapWar
 
 # Influence (the shop currency) a nation earns per hex it takes.
-const INFLUENCE_PER_HEX: int = 5
+const INFLUENCE_PER_HEX: float = 2.5 # rounded on each collapse's total
+# Influence for destroying an enemy building: this share of its Influence cost, rounded.
+const BUILDING_BOUNTY := 1.0 / 3.0
+# Every nation earns at least this much Influence a turn: at the start of its turn,
+# whatever it earned since its last turn (hexes, buildings) is topped up to this.
+const MIN_INFLUENCE_PER_TURN := 5
 # A nation fielding fewer than this many units loses territory twice as fast;
 # with no units on the map at all it loses territory four times as fast.
 const WEAK_UNIT_COUNT: int = 3
@@ -39,13 +45,23 @@ var turn: int = 1
 var rng := RandomNumberGenerator.new()
 var deck_weights: Dictionary = {} # nation -> {card name: copies in its starting deck}
 var shops: Dictionary = {} # nation -> {"cards": Array[Card], "mods": Array[Modifier], "remove_used": bool}
-var _last_intercept_from := Vector2i(-1, -1) # hex of the Interceptor that halved the latest hit
+var _last_intercept_from := Vector2i(-1, -1) # hex of the Interceptor that blocked part of the latest hit
+# Influence earned from destroyed enemy buildings, per nation, until the map screen
+# collects it with take_bounty() (to show and log it).
+var bounties: Dictionary = {}
 # Story reinforcements: extras rules with "turn" > 1, waiting to land at the start of
 # their nation's turn that round (see arrive_reinforcements). last_arrivals holds the
 # [[nation, card name, hex], ...] that landed in the latest begin_turn, for the map screen.
 var pending: Array = []
 var last_arrivals: Array = []
 var last_upkeep: Dictionary = {} # {"money", "bio"} paid in the latest begin_turn
+# Each nation's latest turn of income, line by line, for the round report:
+# {"money": [[label, amount], ...], "bio": [...], "money_from", "money_to", "bio_from", "bio_to"}
+var last_economy: Dictionary = {}
+# Influence earned since reset_round_stats: nation -> {"hexes": n, "buildings": n}
+var influence_log: Dictionary = {}
+# Influence each nation earned since the start of its last turn (for the minimum top-up)
+var earned_since_turn: Dictionary = {}
 
 # make_player: Callable(nation: String) -> Player for the AI nations.
 func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
@@ -311,61 +327,88 @@ func shortfall(nation: String, card: Card) -> String:
 
 # "" when the card can go on hex t, else a human-readable reason.
 # ------------------------------------------------------------- deploy zones
-# Units are summoned near what raises them; buildings go anywhere on your land.
-# Within DEPLOY_RADIUS hexes of your flag or one of your standing buildings:
-#   BioCost >= MoneyCost (people: Infantry, Special Ops)       -> Housing
+# Cards go only on free hexes of your own land, and only near what raises them.
+# Units: within DEPLOY_RADIUS hexes of your flag or one of your standing buildings:
+#   BioCost >= MoneyCost (people: Infantry, Special Ops)       -> Housing or Barracks
 #   MoneyCost > BioCost, Flying (Drone, Fighter Jet)            -> Corporation or Factory
-#   MoneyCost > BioCost, on the ground (Tank, Artilery, AA...)  -> Factory or Barracks
+#   MoneyCost > BioCost, on the ground (Tank, Artilery, AA...)  -> Factory
+# Buildings (Walls included): within BUILD_RADIUS hexes of your flag or any of your
+# standing buildings, or within BUILD_INFANTRY_RADIUS hexes of one of your Infantry
+# (the builders): settlements grow out from what you hold, or follow your troops.
 const DEPLOY_RADIUS := 2
+const BUILD_RADIUS := 5
+const BUILD_INFANTRY_RADIUS := 2
 
-# Names of the buildings (besides the flag) a card can be deployed near; [] = anywhere.
+# Names of the buildings (besides the flag) a unit can be deployed near; [] for buildings.
 static func deploy_anchors(card: Card) -> Array:
 	if not (card is Unit):
 		return []
 	if card.BioCost >= card.MoneyCost:
-		return ["Housing"]
+		return ["Housing", "Barracks"]
 	if (card as Unit).Flying:
 		return ["Corporation", "Factory"]
-	return ["Factory", "Barracks"]
+	return ["Factory"]
 
-# "your flag or a Housing", "your flag, a Corporation or a Factory", ...
+# "your flag or a Housing", "your flag, a Corporation or a Factory", ... (units)
 static func deploy_anchor_text(card: Card) -> String:
 	var names: Array = deploy_anchors(card).map(func(n): return "a " + str(n))
+	if names.is_empty():
+		return "your flag or one of your buildings"
 	if names.size() == 1:
 		return "your flag or %s" % names[0]
 	return "your flag, %s or %s" % [", ".join(names.slice(0, names.size() - 1)), names[-1]]
 
-# Hexes a card of `nation` may be deployed from: its flag and its standing anchor buildings.
-func deploy_sources(nation: String, card: Card) -> Array:
-	var anchors := deploy_anchors(card)
-	var out: Array = [campaign.capital_site(nation)]
-	for k in cards_of(nation):
-		var c: Card = units[k]["card"]
-		if anchors.has(c.card_name) and card_hp(c) > 0:
-			out.append(key_to_hex(k))
-	return out
+# Where a card may go, in words: "within 2 hexes of your flag or a Housing", ...
+static func deploy_rule_text(card: Card) -> String:
+	if card is Unit:
+		return "within %d hexes of %s" % [DEPLOY_RADIUS, deploy_anchor_text(card)]
+	return "within %d hexes of your flag or one of your buildings, or %d hexes of one of your Infantry" % [BUILD_RADIUS, BUILD_INFANTRY_RADIUS]
 
-func in_deploy_zone(nation: String, card: Card, t: Vector2i, sources: Array = []) -> bool:
-	if not (card is Unit):
-		return true
-	if sources.is_empty():
-		sources = deploy_sources(nation, card)
-	for src in sources:
-		if hex_distance(t, src as Vector2i) <= DEPLOY_RADIUS:
+# What a card of `nation` may be placed near: [[hex, radius], ...] (its flag first).
+func deploy_zone(nation: String, card: Card) -> Array:
+	var flag := campaign.capital_site(nation)
+	if card is Unit:
+		var anchors := deploy_anchors(card)
+		var out: Array = [[flag, DEPLOY_RADIUS]]
+		for k in cards_of(nation):
+			var c: Card = units[k]["card"]
+			if anchors.has(c.card_name) and card_hp(c) > 0:
+				out.append([key_to_hex(k), DEPLOY_RADIUS])
+		return out
+	var zone: Array = [[flag, BUILD_RADIUS]]
+	for k in cards_of(nation):
+		var c2: Card = units[k]["card"]
+		if card_hp(c2) <= 0:
+			continue
+		if c2 is Building:
+			zone.append([key_to_hex(k), BUILD_RADIUS])
+		elif c2 is Infantry:
+			zone.append([key_to_hex(k), BUILD_INFANTRY_RADIUS])
+	return zone
+
+# Just the hexes of deploy_zone (the flag and the cards a card can be placed near).
+func deploy_sources(nation: String, card: Card) -> Array:
+	return deploy_zone(nation, card).map(func(z): return z[0])
+
+func in_deploy_zone(nation: String, card: Card, t: Vector2i, zone: Array = []) -> bool:
+	if zone.is_empty():
+		zone = deploy_zone(nation, card)
+	for z in zone:
+		if hex_distance(t, z[0] as Vector2i) <= int(z[1]):
 			return true
 	return false
 
-# Every hex `card` could be deployed on now (own, free, not the flag, terrain allows,
+# Every hex `card` could be placed on now (own, free, not the flag, terrain allows,
 # within its deploy zone), ignoring whether it is in hand or affordable.
 func deploy_hexes(nation: String, card: Card) -> Array:
 	var out: Array = []
 	var flag := campaign.capital_site(nation)
-	var sources := deploy_sources(nation, card) if card is Unit else []
+	var zone := deploy_zone(nation, card)
 	for t in campaign.tiles_of(nation):
 		var tv := t as Vector2i
 		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag or not can_build_on(card, tv):
 			continue
-		if card is Unit and not in_deploy_zone(nation, card, tv, sources):
+		if not in_deploy_zone(nation, card, tv, zone):
 			continue
 		out.append(tv)
 	return out
@@ -380,7 +423,7 @@ func can_place(nation: String, card: Card, t: Vector2i) -> String:
 	if not can_build_on(card, t):
 		return "Buildings can't be placed on mountains"
 	if not in_deploy_zone(nation, card, t):
-		return "%s must be deployed within %d hexes of %s" % [card.card_name, DEPLOY_RADIUS, deploy_anchor_text(card)]
+		return "%s must be %s %s" % [card.card_name, "deployed" if card is Unit else "built", deploy_rule_text(card)]
 	var p: Player = players[nation]
 	if not p.Hand.has(card):
 		return "That card is not in your hand"
@@ -442,9 +485,63 @@ func pay_upkeep(nation: String) -> Dictionary:
 	p.BioSupply = maxi(p.BioSupply - int(up["bio"]), 0)
 	return up
 
+# What `nation`'s income this turn is made of, before the 200 cap and upkeep:
+# {"money": [[label, amount], ...], "bio": [...]} (mirrors Player.economy_phase).
+func income_breakdown(nation: String) -> Dictionary:
+	var p: Player = players[nation]
+	var money: Array = [["Base income", 10]]
+	var counts: Dictionary = {} # building name -> [count, income]
+	for c in p.MapCards:
+		if c is Building and (c as Building).Income != 0:
+			var e: Array = counts.get(c.card_name, [0, 0])
+			counts[c.card_name] = [int(e[0]) + 1, int(e[1]) + (c as Building).Income]
+	var names: Array = counts.keys()
+	names.sort()
+	for nm in names:
+		var e2: Array = counts[nm]
+		money.append(["%s x%d" % [nm, int(e2[0])], int(e2[1])])
+	if p.has_modifier("Conscription"):
+		var gross := 10 + p.total_money_income()
+		money.append(["Conscription (halves Money)", int(gross * 0.5) - gross])
+	if p.has_modifier("Corruption"):
+		money.append(["Corruption", 10])
+	var grown: int = int(p.BioSupply * Housing.bio_rate(p) + 5 + 0.0001)
+	var bio: Array = [["Growth (10% + 5)", grown - p.BioSupply]]
+	var houses := Housing.count_housing(p)
+	if houses > 0:
+		bio.append(["Housing x%d" % houses, Housing.extra_bio(p)])
+	if p.has_modifier("Conscription"):
+		bio.append(["Conscription", 15])
+	return {"money": money, "bio": bio}
+
 func begin_turn(nation: String) -> void:
-	(players[nation] as Player).economy_phase() # income from map buildings + draw to 10
+	var p: Player = players[nation]
+	var econ := income_breakdown(nation)
+	var money0 := p.MoneySupply
+	var bio0 := p.BioSupply
+	p.economy_phase() # income from map buildings + draw to 10
+	var money1 := p.MoneySupply
+	var bio1 := p.BioSupply
 	last_upkeep = pay_upkeep(nation) # then the army's upkeep comes out of it
+	# what really happened, line by line (cap and upkeep included)
+	for key in ["money", "bio"]:
+		var lines: Array = econ[key]
+		var gross := 0
+		for l in lines:
+			gross += int(l[1])
+		var before: int = money0 if key == "money" else bio0
+		var after_income: int = money1 if key == "money" else bio1
+		var capped: int = before + gross - after_income
+		if capped > 0:
+			lines.append(["Over the 200 cap", -capped])
+		var after: int = p.MoneySupply if key == "money" else p.BioSupply
+		lines.append(["Upkeep (5%% of your units' %s)" % ("MoneyCost" if key == "money" else "BioCost"), after - after_income]) # shown even at 0
+	econ["money_from"] = money0
+	econ["money_to"] = p.MoneySupply
+	econ["bio_from"] = bio0
+	econ["bio_to"] = p.BioSupply
+	econ["influence_topup"] = influence_topup(nation)
+	last_economy[nation] = econ
 	restock_shop(nation)
 	last_arrivals = arrive_reinforcements(nation) # before the refill: they can move at once
 	refill_moves(nation)
@@ -677,7 +774,7 @@ func targets_in_range(nation: String, from: Vector2i, r: int) -> Array:
 # reach (staying put included) and takes the best one:
 #   + something to shoot within its attack range (else: closer to the nearest target)
 #   + tucked behind one of its own Walls (the wall sits between it and the nearest enemy)
-#   + beside its own Barracks (+2 damage) or Interceptor (halves ranged/flying hits)
+#   + beside its own Barracks (+2 damage) or Interceptor (blocks part of ranged/flying hits)
 #   - flanked, surrounded or encircled by enemy units there (takes more per hit)
 #   - in a boat there (shorter reach, takes more per hit)
 #   + closing in on weakened enemy cards (to finish them off)
@@ -1244,8 +1341,40 @@ func _reap(attacker: String) -> Array:
 		_stat(attacker, str(info["owner"]), "kills", 1)
 		_stat(attacker, str(info["owner"]), "kill_hp", (info["card"] as Card).BioCost)
 		_hurt_nation(str(info["owner"]), attacker, (info["card"] as Card).BioCost)
+		var bounty := building_bounty(info["card"]) if str(info["owner"]) != attacker else 0
+		if bounty > 0 and players.has(attacker):
+			(players[attacker] as Player).Influence += bounty
+			bounties[attacker] = int(bounties.get(attacker, 0)) + bounty
+			_log_influence(attacker, "buildings", bounty)
+			out[-1]["bounty"] = bounty
 		_remove(k)
 	return out
+
+# Influence for destroying `card` if it is a building: BUILDING_BOUNTY of its Influence cost.
+static func building_bounty(card: Card) -> int:
+	if not (card is Building):
+		return 0
+	return roundi(card.InfluenceCost * BUILDING_BOUNTY)
+
+# Influence `nation` has earned from destroyed buildings since the last call (then cleared).
+func take_bounty(nation: String) -> int:
+	var n := int(bounties.get(nation, 0))
+	bounties.erase(nation)
+	return n
+
+# Interceptors block INTERCEPT_SHARE of a hit from an attacker with Range or Flying.
+# Hits are whole numbers, so the fraction is rounded at random in proportion (a
+# 5-damage hit has 3.75 to block: 4 points 75% of the time, else 3), which blocks
+# 75% on average. A hit is never cut below 1. Only an actual block costs the
+# Interceptor 2 HP and its owner 6 Money.
+const INTERCEPT_SHARE := 0.75
+
+func intercept_block(dmg: int) -> int:
+	var exact: float = dmg * INTERCEPT_SHARE
+	var blocked := int(floor(exact))
+	if rng.randf() < exact - floor(exact):
+		blocked += 1
+	return clampi(blocked, 0, maxi(dmg - 1, 0))
 
 func _intercept(victim: String, t: Vector2i, unit: Unit, attacker: String, dmg: int) -> int:
 	_last_intercept_from = Vector2i(-1, -1)
@@ -1256,10 +1385,13 @@ func _intercept(victim: String, t: Vector2i, unit: Unit, attacker: String, dmg: 
 	for nb in MapCampaign.wrapped_neighbors(t):
 		var info := unit_at(nb as Vector2i)
 		if not info.is_empty() and str(info["owner"]) == victim and info["card"] is Interceptor and card_hp(info["card"]) > 0:
+			var blocked := intercept_block(dmg)
+			if blocked <= 0:
+				return dmg # nothing stopped this time: no cost
 			(info["card"] as Building).HitPoints -= 2
 			vp.MoneySupply = maxi(0, vp.MoneySupply - 6)
 			_last_intercept_from = nb as Vector2i
-			return maxi(1, dmg / 2)
+			return dmg - blocked
 	return dmg
 
 # One unit fires (1 or 4 shots). Returns log entries for animation:
@@ -1393,6 +1525,22 @@ func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
 
 func reset_round_stats() -> void:
 	round_stats.clear()
+	influence_log.clear()
+
+func _log_influence(nation: String, source: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	if not influence_log.has(nation):
+		influence_log[nation] = {"hexes": 0, "buildings": 0}
+	influence_log[nation][source] = int(influence_log[nation].get(source, 0)) + amount
+	earned_since_turn[nation] = int(earned_since_turn.get(nation, 0)) + amount
+
+# Top `nation` up to MIN_INFLUENCE_PER_TURN for the turn just gone; returns what it got.
+func influence_topup(nation: String) -> int:
+	var topup := maxi(0, MIN_INFLUENCE_PER_TURN - int(earned_since_turn.get(nation, 0)))
+	earned_since_turn[nation] = 0
+	(players[nation] as Player).Influence += topup
+	return topup
 
 func _collapse_now(log: Array) -> void:
 	var ev := _collapse_all()
@@ -1464,8 +1612,9 @@ func _collapse_all() -> Array:
 			flag_moved = true
 		var gained: int = 0
 		if winner != "":
-			gained = moved * INFLUENCE_PER_HEX
+			gained = roundi(moved * INFLUENCE_PER_HEX)
 			(players[winner] as Player).Influence += gained
+			_log_influence(winner, "hexes", gained)
 		var lp: Player = players[loser]
 		lp.HitPoints = lp.MaxHitPoints
 		ledger[loser] = {}

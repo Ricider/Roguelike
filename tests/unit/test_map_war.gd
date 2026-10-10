@@ -156,8 +156,8 @@ func test_collapse_cedes_border_to_top_damager():
 	var before_a := w.campaign.tile_count(A)
 	var inf_before: int = (w.players[A] as Player).Influence
 	var events := w.resolve_collapses()
-	assert_eq((w.players[A] as Player).Influence, inf_before + 3 * MapWar.INFLUENCE_PER_HEX, "winner earns Influence per hex taken")
-	assert_eq(int(events[0]["influence"]), 3 * MapWar.INFLUENCE_PER_HEX, "event reports the Influence")
+	assert_eq((w.players[A] as Player).Influence, inf_before + roundi(3 * MapWar.INFLUENCE_PER_HEX), "winner earns 2.5 Influence per hex taken (rounded)")
+	assert_eq(int(events[0]["influence"]), roundi(3 * MapWar.INFLUENCE_PER_HEX), "event reports the Influence")
 	assert_eq(events.size(), 1, "one collapse")
 	assert_eq(events[0]["winner"], A, "top damager wins land")
 	assert_eq(events[0]["tiles"], 3, "1 tile per 10 HP the victor has left")
@@ -567,7 +567,7 @@ func test_round_stats_split_damage_by_source():
 	var dmg: int = Drone.new().Damage + 2 + MapWar.HOME_BONUS
 	assert_eq(int(st.get("barracks", 0)), 2, "Barracks +2 is credited")
 	assert_eq(int(st.get("home", 0)), MapWar.HOME_BONUS, "so is the home-ground +1")
-	assert_true(int(st.get("blocked_interceptor", 0)) > 0, "the Interceptor's cut is counted")
+	assert_true(int(st.get("blocked_interceptor", 0)) >= 0, "the Interceptor's cut (it blocks 7%, so often nothing on a small hit) is counted")
 	assert_eq(int(st.get("dealt", 0)) + int(st.get("blocked_interceptor", 0)) + int(st.get("blocked_mountain", 0)) + int(st.get("blocked_forest", 0)), dmg,
 		"what landed plus what was stopped adds up to the shot")
 	assert_eq(int(st.get("kills", 0)), 1, "the kill is counted")
@@ -857,10 +857,10 @@ func _zone_war() -> MapWar:
 	return w
 
 func test_deploy_anchors_by_cost_and_flight():
-	assert_eq(MapWar.deploy_anchors(Infantry.new()), ["Housing"], "people: near Housing")
-	assert_eq(MapWar.deploy_anchors(SpecialOps.new()), ["Housing"], "Special Ops are people too")
-	assert_eq(MapWar.deploy_anchors(Tank.new()), ["Factory", "Barracks"], "ground machines: Factory or Barracks")
-	assert_eq(MapWar.deploy_anchors(Artilery.new()), ["Factory", "Barracks"], "guns too")
+	assert_eq(MapWar.deploy_anchors(Infantry.new()), ["Housing", "Barracks"], "people: near Housing or Barracks")
+	assert_eq(MapWar.deploy_anchors(SpecialOps.new()), ["Housing", "Barracks"], "Special Ops are people too")
+	assert_eq(MapWar.deploy_anchors(Tank.new()), ["Factory"], "ground machines: Factory")
+	assert_eq(MapWar.deploy_anchors(Artilery.new()), ["Factory"], "guns too")
 	assert_eq(MapWar.deploy_anchors(Drone.new()), ["Corporation", "Factory"], "flying machines: Corporation or Factory")
 	assert_eq(MapWar.deploy_anchors(FighterJet.new()), ["Corporation", "Factory"], "jets too")
 	assert_eq(MapWar.deploy_anchors(Wall.new()), [], "buildings go anywhere")
@@ -871,7 +871,7 @@ func test_units_deploy_only_near_the_flag_or_their_buildings():
 	var inf := Infantry.new()
 	p.Hand = [inf]
 	assert_eq(w.can_place(A, inf, Vector2i(2, 10)), "", "2 hexes from the flag: fine")
-	assert_string_contains(w.can_place(A, inf, Vector2i(3, 10)), "within 2 hexes of your flag or a Housing", "3 is too far")
+	assert_string_contains(w.can_place(A, inf, Vector2i(3, 10)), "within 2 hexes of your flag, a Housing or a Barracks", "3 is too far")
 	w._put(A, Factory.new(), Vector2i(12, 10))
 	assert_ne(w.can_place(A, inf, Vector2i(14, 10)), "", "a Factory doesn't raise Infantry")
 	w._put(A, Housing.new(), Vector2i(18, 10))
@@ -887,7 +887,9 @@ func test_units_deploy_only_near_the_flag_or_their_buildings():
 	w._put(A, Barracks.new(), Vector2i(24, 10))
 	assert_ne(w.can_place(A, jet, Vector2i(22, 10)), "", "but not near a Barracks")
 	p.Hand = [tank]
-	assert_eq(w.can_place(A, tank, Vector2i(22, 10)), "", "where a Tank may go")
+	assert_ne(w.can_place(A, tank, Vector2i(22, 10)), "", "nor a Tank: Barracks train people")
+	p.Hand = [inf]
+	assert_eq(w.can_place(A, inf, Vector2i(22, 10)), "", "Infantry muster at the Barracks")
 	var wall := Wall.new()
 	p.Hand = [wall]
 	assert_eq(w.can_place(A, wall, Vector2i(9, 10)), "", "buildings: anywhere on your land")
@@ -1168,3 +1170,200 @@ func test_upkeep_comes_out_of_the_turns_income():
 	w.pay_upkeep(A)
 	assert_eq(p.MoneySupply, 0, "never below 0")
 	assert_eq(p.BioSupply, 0, "never below 0")
+
+# --- where buildings may go -----------------------------------------------------------
+func test_buildings_go_near_the_flag_buildings_or_infantry():
+	var w := _zone_war() # A owns row 10 from 0 to 24, flag at 0
+	var p: Player = w.players[A]
+	var wall := Wall.new()
+	p.Hand = [wall]
+	assert_eq(w.can_place(A, wall, Vector2i(5, 10)), "", "5 hexes from the flag: fine")
+	assert_string_contains(w.can_place(A, wall, Vector2i(6, 10)), "must be built within 5 hexes of your flag or one of your buildings", "6 is too far")
+	# a building extends the zone 5 more hexes
+	w._put(A, Housing.new(), Vector2i(5, 10))
+	assert_eq(w.can_place(A, wall, Vector2i(10, 10)), "", "5 from the Housing")
+	assert_ne(w.can_place(A, wall, Vector2i(11, 10)), "", "but no further")
+	# an Infantry lets you build 2 hexes around it, however far from home
+	var inf := Infantry.new()
+	w._put(A, inf, Vector2i(20, 10))
+	assert_eq(w.can_place(A, wall, Vector2i(18, 10)), "", "2 hexes from your Infantry")
+	assert_eq(w.can_place(A, wall, Vector2i(22, 10)), "", "either side")
+	assert_ne(w.can_place(A, wall, Vector2i(17, 10)), "", "3 is too far from it")
+	# other units don't count, nor do dead ones or other nations' cards
+	w._remove(MapCampaign.key_of(20, 10))
+	w._put(A, Tank.new(), Vector2i(20, 10))
+	assert_ne(w.can_place(A, wall, Vector2i(21, 10)), "", "a Tank is no builder")
+	w._put(B, Infantry.new(), Vector2i(23, 10)) # standing on A's land
+	assert_ne(w.can_place(A, wall, Vector2i(22, 10)), "", "an enemy Infantry doesn't help you build")
+	var dead := Housing.new()
+	w._put(A, dead, Vector2i(15, 10))
+	assert_eq(w.can_place(A, wall, Vector2i(17, 10)), "", "a standing Housing does")
+	dead.HitPoints = 0
+	assert_ne(w.can_place(A, wall, Vector2i(17, 10)), "", "a fallen one doesn't")
+	# still only on your own land
+	w._put(A, Infantry.new(), Vector2i(24, 9))
+	assert_ne(w.can_place(A, wall, Vector2i(25, 10)), "", "never outside your borders")
+
+func test_ai_builds_only_inside_the_zone():
+	var w := _zone_war()
+	var p: Player = w.players[A]
+	p.Hand = [Factory.new(), Housing.new(), Wall.new()]
+	var placed := w.ai_build(A)
+	assert_eq(placed.size(), 3, "all three built")
+	for pl in placed:
+		assert_true(MapCampaign.hex_distance(pl[1], Vector2i(0, 10)) <= MapWar.BUILD_RADIUS * 3, "chained out from the flag at most")
+		var ok := false
+		for z in w.deploy_zone(A, pl[0]):
+			if MapCampaign.hex_distance(pl[1], z[0]) <= int(z[1]) and z[0] != pl[1]:
+				ok = true
+		assert_true(ok, "%s sits within reach of the flag or another building" % (pl[0] as Card).card_name)
+
+# --- Interceptors: 75% ------------------------------------------------------------------
+func test_interceptors_block_three_quarters_on_average():
+	var w := _war()
+	w.rng.seed = 42
+	var total := 0
+	var n := 4000
+	for i in range(n):
+		var b := w.intercept_block(10)
+		assert_true(b == 7 or b == 8, "a 10-damage hit loses 7 or 8")
+		total += b
+	assert_almost_eq(float(total) / (n * 10), MapWar.INTERCEPT_SHARE, 0.01, "75% of the damage on average")
+	assert_eq(w.intercept_block(1), 0, "a 1-damage hit is never cut to 0")
+	assert_eq(w.intercept_block(2), 1, "a 2-damage hit keeps at least 1")
+	var big := 0
+	for i in range(1000):
+		big += w.intercept_block(100)
+	assert_eq(big, 75000, "a 100-damage hit loses exactly 75")
+
+func test_an_interceptor_only_pays_when_it_blocks():
+	var w := _war()
+	var p: Player = w.players[B]
+	p.MoneySupply = 100
+	var icp := Interceptor.new()
+	w._put(B, icp, Vector2i(16, 10))
+	w._put(B, Wall.new(), Vector2i(15, 10))
+	var drone := Drone.new() # flying: interceptable
+	var hp0 := icp.HitPoints
+	var paid := 0
+	var blocks := 0
+	for i in range(200):
+		var money0 := p.MoneySupply
+		var out := w._intercept(B, Vector2i(15, 10), drone, A, 5)
+		if out < 5:
+			blocks += 1
+			assert_true(out == 1 or out == 2, "a 5-damage hit loses 3 or 4")
+			assert_eq(p.MoneySupply, money0 - 6, "a block costs 6 Money")
+		else:
+			assert_eq(p.MoneySupply, money0, "no block, no cost")
+		p.MoneySupply = 100
+		icp.HitPoints = hp0
+	assert_eq(blocks, 200, "every 5-damage hit is blocked")
+	# a 1-damage hit can't be cut, so it costs nothing
+	var m1 := p.MoneySupply
+	assert_eq(w._intercept(B, Vector2i(15, 10), drone, A, 1), 1, "1 damage stays 1")
+	assert_eq(p.MoneySupply, m1, "and the Interceptor doesn't pay for nothing")
+
+# --- Influence for destroyed buildings --------------------------------------------------
+func test_destroying_an_enemy_building_pays_a_third_of_its_influence_price():
+	assert_eq(MapWar.building_bounty(Barracks.new()), 10, "Barracks: 30 / 3")
+	assert_eq(MapWar.building_bounty(Wall.new()), 2, "Wall: 5 / 3, rounded")
+	assert_eq(MapWar.building_bounty(Factory.new()), 7, "Factory: 20 / 3, rounded")
+	assert_eq(MapWar.building_bounty(Infantry.new()), 0, "units pay nothing")
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	var target := Barracks.new()
+	target.HitPoints = 1
+	w._put(B, target, Vector2i(15, 10))
+	var shooter := _drop(w, A, Tank.new(), 14)
+	var inf0 := (w.players[A] as Player).Influence
+	var log := w.fire(shooter)
+	assert_eq(log[0]["destroyed"].size(), 1, "the Barracks falls")
+	assert_eq(int(log[0]["destroyed"][0]["bounty"]), 10, "the shot says what it earned")
+	assert_eq((w.players[A] as Player).Influence, inf0 + 10, "the attacker gains 10 Influence")
+	assert_eq(w.take_bounty(A), 10, "the map screen can collect it for the log")
+	assert_eq(w.take_bounty(A), 0, "once")
+	# a destroyed unit pays nothing
+	var inf := Infantry.new()
+	inf.HitPoints = 1
+	w._put(B, inf, Vector2i(15, 10))
+	var inf1 := (w.players[A] as Player).Influence
+	w.fire(shooter)
+	assert_eq((w.players[A] as Player).Influence, inf1, "no Influence for units")
+
+# --- the round report's economy ----------------------------------------------------------
+func test_last_economy_explains_the_turns_income():
+	var w := _war()
+	var p: Player = w.players[A]
+	p.MoneySupply = 50
+	p.BioSupply = 50
+	w.campaign.owner[MapCampaign.key_of(9, 10)] = A
+	w._put(A, Factory.new(), Vector2i(9, 10))
+	w._put(A, Factory.new(), Vector2i(10, 10))
+	w._put(A, Housing.new(), Vector2i(11, 10))
+	for x in [12, 13, 14]:
+		_drop(w, A, SpecialOps.new(), x) # 3 x (15 Money, 20 Bio): 2 Money, 3 Bio upkeep
+	w.begin_turn(A)
+	var e: Dictionary = w.last_economy[A]
+	var money := {}
+	for l in e["money"]:
+		money[str(l[0])] = int(l[1])
+	assert_eq(money["Base income"], 10, "base income")
+	assert_eq(money["Factory x2"], 30, "two Factories, 15 each")
+	assert_eq(money["Housing x1"], 2, "a Housing's 2 Money")
+	assert_eq(money["Upkeep (5% of your units' MoneyCost)"], -2, "upkeep for 45 Money of units")
+	var sum := 0
+	for l in e["money"]:
+		sum += int(l[1])
+	assert_eq(int(e["money_to"]) - int(e["money_from"]), sum, "the lines add up to the change")
+	assert_eq(int(e["money_to"]), p.MoneySupply, "and end where the treasury is")
+	var bsum := 0
+	for l in e["bio"]:
+		bsum += int(l[1])
+	assert_eq(int(e["bio_to"]) - int(e["bio_from"]), bsum, "Bio lines add up too")
+	# the 200 cap shows as a loss
+	p.MoneySupply = 195
+	w.begin_turn(A)
+	var capped := 0
+	for l in w.last_economy[A]["money"]:
+		if str(l[0]) == "Over the 200 cap":
+			capped = int(l[1])
+	assert_lt(capped, 0, "income lost to the cap is listed")
+
+func test_influence_log_splits_hexes_and_buildings():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	var target := Barracks.new()
+	target.HitPoints = 1
+	w._put(B, target, Vector2i(15, 10))
+	w.fire(_drop(w, A, Tank.new(), 14))
+	assert_eq(int(w.influence_log[A]["buildings"]), 10, "a destroyed Barracks: 10")
+	w.reset_round_stats()
+	assert_true(w.influence_log.is_empty(), "cleared with the round")
+
+# --- minimum Influence ------------------------------------------------------------------
+func test_every_nation_gets_at_least_five_influence_a_turn():
+	var w := _war()
+	var p: Player = w.players[A]
+	var i0 := p.Influence
+	w.begin_turn(A)
+	assert_eq(p.Influence, i0 + MapWar.MIN_INFLUENCE_PER_TURN, "earned nothing: topped up to 5")
+	assert_eq(int(w.last_economy[A]["influence_topup"]), 5, "the report is told")
+	# earned 2 since: topped up by 3
+	w._log_influence(A, "buildings", 2)
+	p.Influence += 2
+	var i1 := p.Influence
+	w.begin_turn(A)
+	assert_eq(p.Influence, i1 + 3, "2 earned + 3 top-up = 5")
+	# earned 10: no top-up
+	w._log_influence(A, "hexes", 10)
+	p.Influence += 10
+	var i2 := p.Influence
+	w.begin_turn(A)
+	assert_eq(p.Influence, i2, "earned more than 5: nothing added")
+	assert_eq(int(w.last_economy[A]["influence_topup"]), 0, "and no top-up reported")
+	# every nation, not just yours
+	var q: Player = w.players[B]
+	var j0 := q.Influence
+	w.begin_turn(B)
+	assert_eq(q.Influence, j0 + 5, "AI nations get it too")

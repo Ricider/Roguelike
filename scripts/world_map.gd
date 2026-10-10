@@ -42,6 +42,8 @@ var _shop_panel: PanelContainer = null
 var _briefing: Control = null
 signal briefing_closed
 var _report_panel: PanelContainer = null
+var _report_econ: Dictionary = {} # your income this turn, line by line (MapWar.last_economy)
+var _report_influence: Dictionary = {} # Influence you earned last round: {"hexes", "buildings"}
 var _report: Dictionary = {}     # the last round's MapWar.round_stats
 var _report_turn: int = 0
 var _report_all: bool = false    # tab: all nations instead of your own fights
@@ -56,6 +58,11 @@ var _hand_box: HBoxContainer = null
 var _end_btn: Button = null
 var _speed_btn: Button = null
 var _follow_cam: bool = true # the camera follows other nations' turns and fights
+# Skip others' fights: battles between two other nations resolve at once (a line in the log
+# instead of the march and the shots), and their turns don't wait on animations.
+# Fights you are part of still play out. Remembered in SETTINGS_PATH.
+var _skip_ai_fights: bool = false
+const SETTINGS_PATH := "user://settings.cfg"
 var _log: RichTextLabel = null
 var _selected: Card = null
 var _moving: String = "" # key of the unit picked to move ("" = none)
@@ -88,6 +95,35 @@ func _ready() -> void:
 	_go_home()
 	await _story_start_briefing()
 	await _story_forces_briefing()
+
+# On/off look for a toggle button: a little light (green when on, dark when off) and
+# the gold "selected" style while it is on.
+var _toggle_lights: Dictionary = {} # true/false -> Texture2D
+func _show_toggle_state(btn: Button, on: bool) -> void:
+	if not _toggle_lights.has(on):
+		var img := Image.create(14, 14, false, Image.FORMAT_RGBA8)
+		var fill := Color(0.35, 1.0, 0.45) if on else Color(0.3, 0.3, 0.36)
+		for y in range(14):
+			for x in range(14):
+				var d := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(7, 7))
+				if d <= 6.5:
+					img.set_pixel(x, y, Color(0.05, 0.04, 0.08) if d > 5.0 else (fill.lightened(0.45) if on and d < 2.2 else fill))
+		_toggle_lights[on] = ImageTexture.create_from_image(img)
+	btn.icon = _toggle_lights[on]
+	btn.theme_type_variation = &"SelectedButton" if on else &""
+	btn.tooltip_text = "" # (the hover card explains it)
+
+func _load_setting(key: String, default_value: Variant) -> Variant:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return default_value
+	return cfg.get_value("map", key, default_value)
+
+func _save_setting(key: String, value: Variant) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH) # keep any other settings in the file
+	cfg.set_value("map", key, value)
+	cfg.save(SETTINGS_PATH)
 
 func _go_home() -> void:
 	var c := _campaign()
@@ -222,7 +258,7 @@ func _build_ui() -> void:
 	zoom_bar.add_theme_constant_override("separation", 4)
 	zoom_bar.anchor_left = 1.0
 	zoom_bar.anchor_right = 1.0
-	zoom_bar.offset_left = -300
+	zoom_bar.offset_left = -510
 	zoom_bar.offset_right = -10
 	zoom_bar.offset_top = 10
 	zoom_bar.offset_bottom = 54
@@ -233,11 +269,30 @@ func _build_ui() -> void:
 	follow.text = "Follow"
 	follow.toggle_mode = true
 	follow.button_pressed = _follow_cam
-	follow.custom_minimum_size = Vector2(98, 44)
+	follow.custom_minimum_size = Vector2(112, 44)
 	follow.add_theme_font_size_override("font_size", 16)
 	follow.focus_mode = Control.FOCUS_NONE
-	follow.toggled.connect(func(on: bool): _follow_cam = on)
+	follow.toggled.connect(func(on: bool):
+		_follow_cam = on
+		_show_toggle_state(follow, on))
+	_show_toggle_state(follow, _follow_cam)
 	_tip(follow, func(): return "[Follow]: during other nations' turns the camera flies to each of them and frames every fight, one defender at a time. Off: the camera stays where you leave it.")
+	_skip_ai_fights = _load_setting("skip_ai_fights", false)
+	var skip := Button.new()
+	skip.name = "SkipFightsButton"
+	skip.text = "Skip others' fights"
+	skip.toggle_mode = true
+	skip.button_pressed = _skip_ai_fights
+	skip.custom_minimum_size = Vector2(190, 44)
+	skip.add_theme_font_size_override("font_size", 16)
+	skip.focus_mode = Control.FOCUS_NONE
+	skip.toggled.connect(func(on: bool):
+		_skip_ai_fights = on
+		_show_toggle_state(skip, on)
+		_save_setting("skip_ai_fights", on))
+	_show_toggle_state(skip, _skip_ai_fights)
+	_tip(skip, func(): return "[Skip others' fights]: battles between other nations (where you are neither attacker nor target) happen instantly, with a one-line summary in the battle log, and their turns don't wait for animations. Fights you are part of still play out in full.")
+	zoom_bar.add_child(skip)
 	zoom_bar.add_child(follow)
 	for spec in [["-", func(): _view.zoom_by(1.0 / 1.3)], ["+", func(): _view.zoom_by(1.3)], ["Home", _go_home]]:
 		var zb := Button.new()
@@ -330,9 +385,9 @@ func _build_ui() -> void:
 	_inf_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
 	inf_row.add_child(_inf_label)
 	_inf_box = inf_row
-	_tip(inf_row, func(): return TIP_INFLUENCE % MapWar.INFLUENCE_PER_HEX)
+	_tip(inf_row, func(): return TIP_INFLUENCE % str(MapWar.INFLUENCE_PER_HEX))
 	var inf_hint := Label.new()
-	inf_hint.text = "+%d per hex won" % MapWar.INFLUENCE_PER_HEX
+	inf_hint.text = "+%s per hex won" % str(MapWar.INFLUENCE_PER_HEX)
 	inf_hint.add_theme_font_size_override("font_size", 13)
 	inf_hint.add_theme_color_override("font_color", Color(0.75, 0.76, 0.85))
 	inf_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -679,7 +734,7 @@ func _nation_row(c: MapCampaign, d: Dictionary) -> Control:
 const TIP_HP := "[Health]: Your nation's hit points. You lose HP when one of your cards is destroyed (equal to the BioSupply spent on it) and when enemies hit your flag. At 0 HP you cede border hexes to whoever hurt you most, then rebuild."
 const TIP_BIO := "[BioSupply]: The people you can call up, spent to deploy cards. Grows 10% + 5 each turn, +8 per Housing on the map. Max 200."
 const TIP_MONEY := "[MoneySupply]: Your treasury, spent to deploy cards. +10 each turn plus the Income of your buildings on the map. Max 200."
-const TIP_INFLUENCE := "[Influence]: Earned when your nation takes hexes (+%d per hex). Spend it in the [Shop] on cards and modifiers, or to remove a card from your deck."
+const TIP_INFLUENCE := "[Influence]: Earned when your nation takes hexes (+%s per hex) and when you destroy an enemy building (a third of its Influence price). You get at least 5 a turn: anything short of that is topped up at the start of your turn. Spend it in the [Shop] on cards and modifiers, or to remove a card from your deck."
 const TIP_SHOP := "[Shop]: 5 cards drawn with your starting deck's odds plus 3 modifiers, restocked every turn. Bought cards are drawn next."
 
 func _tip(node: Control, text_fn: Callable) -> void:
@@ -883,19 +938,20 @@ func _select_card(stack: Array) -> void:
 	_view.placeable = keys
 	_view.ghost_card = card.card_name
 	_hover_bar.text = "Deploy %s: click a glowing hex (Esc to cancel)." % card.card_name
-	if card is Unit:
-		# units are summoned near what raises them: show that area and its sources
-		var zone := {}
-		var sources: Array = _war.deploy_sources(_me(), card)
-		for src in sources:
-			for h in _war.hexes_within(src as Vector2i, MapWar.DEPLOY_RADIUS):
-				if _campaign().owner_of((h as Vector2i).x, (h as Vector2i).y) == _me():
-					zone[h] = true
-		_view.range_zones = [{"hexes": zone, "color": DEPLOY_ZONE}]
-		_view.group_marks = sources
-		_hover_bar.text = "Deploy %s within %d hexes of %s: click a glowing hex (Esc to cancel)." % [card.card_name, MapWar.DEPLOY_RADIUS, MapWar.deploy_anchor_text(card)]
-		if keys.is_empty():
-			_hover_bar.text = "No free hex within %d hexes of %s for %s." % [MapWar.DEPLOY_RADIUS, MapWar.deploy_anchor_text(card), card.card_name]
+	# cards go only near what raises them: show that area (on your land) and its sources
+	var zone := {}
+	var sources: Array = []
+	for z in _war.deploy_zone(_me(), card):
+		sources.append(z[0])
+		for h in _war.hexes_within(z[0] as Vector2i, int(z[1])):
+			if _campaign().owner_of((h as Vector2i).x, (h as Vector2i).y) == _me():
+				zone[h] = true
+	_view.range_zones = [{"hexes": zone, "color": DEPLOY_ZONE}]
+	_view.group_marks = sources
+	var verb := "Deploy" if card is Unit else "Build"
+	_hover_bar.text = "%s %s %s: click a glowing hex (Esc to cancel)." % [verb, card.card_name, MapWar.deploy_rule_text(card)]
+	if keys.is_empty():
+		_hover_bar.text = "No free hex for %s %s." % [card.card_name, MapWar.deploy_rule_text(card)]
 	_refresh_hand()
 
 func _clear_selection() -> void:
@@ -1249,8 +1305,10 @@ func _start_player_turn(round_over: bool = false) -> void:
 		# the round that just ended (your attack + every AI turn): keep it for the report
 		_report = _war.round_stats.duplicate(true)
 		_report_turn = _war.turn - 1
+		_report_influence = (_war.influence_log.get(_me(), {}) as Dictionary).duplicate()
 	_war.reset_round_stats()
 	_war.begin_turn(_me())
+	_report_econ = (_war.last_economy.get(_me(), {}) as Dictionary).duplicate(true)
 	var up: Dictionary = _war.last_upkeep
 	if int(up.get("money", 0)) > 0 or int(up.get("bio", 0)) > 0:
 		_log_line("[color=#ff9a7a]Upkeep:[/color] your army costs %d Money and %d Bio this turn." % [int(up["money"]), int(up["bio"])])
@@ -1275,6 +1333,11 @@ func _on_end_turn() -> void:
 	_status.text = "Your units open fire..."
 	var my_cam: Array = _view.camera_goal() # handed back when your turn comes round
 	await _nation_attacks(_me())
+	var bounty := _war.take_bounty(_me()) # enemy buildings destroyed this attack
+	if bounty > 0:
+		_bump_influence(bounty)
+		_log_line("[color=#ffd966]+%d Influence[/color] for destroying enemy buildings." % bounty)
+		_refresh_player_card()
 	_war.end_turn(_me())
 	if _check_end():
 		return
@@ -1282,11 +1345,12 @@ func _on_end_turn() -> void:
 		if n == _me() or not _war.alive(n):
 			continue
 		_status.text = "%s is moving..." % n
-		if _follow_cam:
+		var quick := _skip_ai_fights # nothing of theirs to watch but fights with you
+		if _follow_cam and not quick:
 			# fly over the nation whose turn it is, framing its whole territory
 			await _view.glide_to(_view.frame_for(_campaign().tiles_of(n), 0.5), CAM_GLIDE / _speed())
 		_war.begin_turn(n)
-		if _announce_arrivals(n):
+		if _announce_arrivals(n) and not quick:
 			await _wait(0.35)
 		var bought: Array = _war.ai_shop(n)
 		if not bought.is_empty():
@@ -1298,17 +1362,21 @@ func _on_end_turn() -> void:
 		if not placed.is_empty():
 			_sfx("card_place", -6.0)
 			_log_line("[color=#%s]%s[/color] deploys %d card%s." % [_nation_hex_color(n), n, placed.size(), "" if placed.size() == 1 else "s"])
-			await _wait(0.35)
+			if not quick:
+				await _wait(0.35)
 		# then repositions: behind walls, beside Barracks/Interceptors, onto weakened enemies
 		var moved: Array = _war.ai_move(n)
 		if not moved.is_empty():
 			var longest := 0
 			for mv in moved:
-				_view.animate_move(mv[2], MOVE_STEP / _speed())
+				if not quick: # skipping: they just appear where they went
+					_view.animate_move(mv[2], MOVE_STEP / _speed())
 				longest = maxi(longest, (mv[2] as Array).size() - 1)
 			_log_line("[color=#%s]%s[/color] moves %d unit%s." % [_nation_hex_color(n), n, moved.size(), "" if moved.size() == 1 else "s"])
-			await _wait(MOVE_STEP * longest + 0.1)
+			if not quick:
+				await _wait(MOVE_STEP * longest + 0.1)
 		await _nation_attacks(n)
+		_war.take_bounty(n) # (already added to their Influence)
 		_war.end_turn(n)
 		if _check_end():
 			return
@@ -1318,7 +1386,7 @@ func _on_end_turn() -> void:
 		_view.glide_to(my_cam, CAM_GLIDE / _speed())
 	_start_player_turn(true)
 	_refresh()
-	if not _report.is_empty() and not _campaign().has_won() and not _campaign().has_lost():
+	if (not _report.is_empty() or not _report_econ.is_empty()) and not _campaign().has_won() and not _campaign().has_lost():
 		_open_report()
 
 func _nation_attacks(n: String) -> void:
@@ -1354,6 +1422,11 @@ func _nation_attacks(n: String) -> void:
 	var groups: Array = _split_by_victim(plan)
 	var follow := _follow_cam
 	for group in groups:
+		var victim := _group_victim(group)
+		if _skip_ai_fights and n != _me() and victim != _me():
+			_log_skipped_fight(n, victim, group) # not yours: settle it at once
+			_show_fight_result(group)
+			continue
 		if follow:
 			await _frame_fight(group, flag_sites)
 		await _replay_group(n, group, snapshot, dead, flag_sites)
@@ -1465,7 +1538,7 @@ func _replay_group(n: String, plan: Array, snapshot: Dictionary, dead: Array, fl
 					_view.add_buff(e["from"]) # Barracks +2: golden burst at the shooter
 				if bool(e.get("intercepted", false)):
 					_view.add_intercept(e.get("intercept_from", Vector2i(-1, -1)), e["to"], travel)
-					_log_line("[color=#7fd8ff]%s's Interceptor halves a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
+					_log_line("[color=#7fd8ff]%s's Interceptor blocks part of a hit on its %s.[/color]" % [e["victim"], e["target_name"]])
 				for dinfo in destroyed:
 					_view.replay_remove(str(dinfo["key"])) # the wreck effect takes over until impact
 					_view.add_wreck(dinfo["hex"], str(dinfo["name"]), str(dinfo["owner"]), travel)
@@ -1496,6 +1569,40 @@ func _replay_group(n: String, plan: Array, snapshot: Dictionary, dead: Array, fl
 
 # [[k, entries], ...] split into one plan per defender, in the order they are first
 # hit; a unit firing at two nations appears in both with its shots for each.
+# The nation a group from _split_by_victim is aimed at.
+func _group_victim(group: Array) -> String:
+	for item in group:
+		for e in (item[1] as Array):
+			return str(e["victim"])
+	return ""
+
+# A fight that was not played out: show its targets, wrecks and flags as they now are.
+func _show_fight_result(group: Array) -> void:
+	for item in group:
+		for e in (item[1] as Array):
+			var to: Vector2i = e["to"]
+			_view.hp_shown.erase(MapCampaign.key_of(to.x, to.y))
+			for sp in e.get("splash", []):
+				_view.hp_shown.erase(MapCampaign.key_of((sp as Vector2i).x, (sp as Vector2i).y))
+			for d in e.get("destroyed", []):
+				_view.ghosts.erase(str(d["key"]))
+			var v := str(e["victim"])
+			if _war.players.has(v):
+				_view.flag_hp_shown[v] = (_war.players[v] as Player).HitPoints
+				if _campaign().is_alive(v):
+					_view.flag_site_shown[v] = _campaign().capital_site(v)
+
+# One line for a fight between two other nations that was not played out.
+func _log_skipped_fight(attacker: String, victim: String, group: Array) -> void:
+	var dmg := 0
+	var kills := 0
+	for item in group:
+		for e in (item[1] as Array):
+			dmg += int(e.get("damage", 0))
+			kills += (e.get("destroyed", []) as Array).size()
+	_log_line("[color=#%s]%s[/color] hits [color=#%s]%s[/color]: %d damage%s." % [_nation_hex_color(attacker), attacker,
+		_nation_hex_color(victim), victim, dmg, (", %d card%s destroyed" % [kills, "" if kills == 1 else "s"]) if kills > 0 else ""])
+
 func _split_by_victim(plan: Array) -> Array:
 	var order: Array = []
 	var by_victim := {}
@@ -1898,7 +2005,7 @@ const REPORT_COLS := [
 	["boat", "+In boat", "Extra damage on ground units caught at sea in a boat (+1 per hit).", "add"],
 	["flank", "+Flanked", "Extra damage on units hemmed in by enemy units: +1 flanked (enemies on opposite sides), +2 surrounded (4+), +4 encircled (all 6).", "add"],
 	["splash", "+Splash", "Fighter Jet splash on the target's neighbours.", "add"],
-	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they halve ranged and flying hits).", "block"],
+	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they block 75% of ranged and flying hits).", "block"],
 	["blocked_mountain", "-Mountains", "Stopped by mountain cover (1 per hit on ground units).", "block"],
 	["blocked_forest", "-Forests", "Stopped by forest cover (1 per hit from flying attackers).", "block"],
 	["blocked_flying", "-Flying", "Flying units take half damage from attackers without Range.", "block"],
@@ -1984,6 +2091,8 @@ func _open_report() -> void:
 						_: txt = str(n)
 				grid.add_child(_report_cell(txt, _report_kind_color(str(col[3])) if n != 0 else Color(0.45, 0.46, 0.55)))
 		v.add_child(_report_summary())
+	if not _report_econ.is_empty():
+		v.add_child(_report_economy())
 	var foot := HBoxContainer.new()
 	foot.alignment = BoxContainer.ALIGNMENT_END
 	v.add_child(foot)
@@ -2092,6 +2201,74 @@ func _sort_arrow(up: bool) -> Texture2D:
 					img.set_pixel(x, row + 1 if dir_up else row, Color(1.0, 0.86, 0.35))
 			_sort_arrows.append(ImageTexture.create_from_image(img))
 	return _sort_arrows[0 if up else 1]
+
+# Your economy: where this turn's Money and Bio came from, what upkeep took, and the
+# Influence you earned last round. Three columns of "label  +n" lines with a total.
+func _report_economy() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	var title := Label.new()
+	title.text = "YOUR ECONOMY THIS TURN"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	box.add_child(title)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 36)
+	box.add_child(cols)
+	for key in ["money", "bio"]:
+		var lines: Array = _report_econ.get(key, [])
+		var from: int = int(_report_econ.get(key + "_from", 0))
+		var to: int = int(_report_econ.get(key + "_to", 0))
+		cols.add_child(_economy_column("Money" if key == "money" else "Bio", lines,
+			"%d -> %d (%s%d)" % [from, to, "+" if to >= from else "", to - from]))
+	var inf: Array = []
+	if int(_report_influence.get("hexes", 0)) > 0:
+		inf.append(["Hexes taken", int(_report_influence["hexes"])])
+	if int(_report_influence.get("buildings", 0)) > 0:
+		inf.append(["Enemy buildings destroyed", int(_report_influence["buildings"])])
+	if inf.is_empty():
+		inf.append(["Nothing taken or destroyed", 0])
+	var topup := int(_report_econ.get("influence_topup", 0))
+	if topup > 0:
+		inf.append(["Top-up to the minimum of %d" % MapWar.MIN_INFLUENCE_PER_TURN, topup])
+	var inf_total := 0
+	for l in inf:
+		inf_total += int(l[1])
+	cols.add_child(_economy_column("Influence", inf, "+%d" % inf_total))
+	return box
+
+func _economy_column(heading: String, lines: Array, total: String) -> Control:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+	var h := Label.new()
+	h.text = heading
+	h.add_theme_font_size_override("font_size", 16)
+	h.add_theme_color_override("font_color", Color(0.85, 0.86, 0.95))
+	col.add_child(h)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 1)
+	col.add_child(grid)
+	for l in lines:
+		var name_l := Label.new()
+		name_l.text = str(l[0])
+		name_l.add_theme_font_size_override("font_size", 15)
+		name_l.add_theme_color_override("font_color", Color(0.8, 0.81, 0.88))
+		grid.add_child(name_l)
+		var n := int(l[1])
+		var amt := Label.new()
+		amt.text = ("+%d" % n) if n > 0 else (str(n) if n < 0 else "0")
+		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		amt.add_theme_font_size_override("font_size", 15)
+		amt.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55) if n > 0 else (Color(1.0, 0.45, 0.4) if n < 0 else Color(0.55, 0.56, 0.65)))
+		grid.add_child(amt)
+	var t := Label.new()
+	t.text = total
+	t.add_theme_font_size_override("font_size", 15)
+	t.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	col.add_child(t)
+	return col
 
 func _report_summary() -> Label:
 	var me := _me()

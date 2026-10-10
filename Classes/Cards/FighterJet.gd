@@ -2,5 +2,5 @@ extends Unit
 class_name FighterJet
 
 func _init():
-	super._init(14, 4, true, 35, 5, "Fighter Jet", true, 25)
+	super._init(14, 4, true, 70, 10, "Fighter Jet", true, 50)
 	SpecialEffect = "Strike jet with Range: hits a [random target] of the closest enemy nation within [8 hexes] and [splashes] the same damage onto that nation's cards next to it. Takes half damage from attackers without Range; flies 6 hexes a turn."

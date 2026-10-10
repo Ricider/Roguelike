@@ -435,7 +435,7 @@ FORCES = {
             ex(ST, "Special Ops", 2, {"border": CA}),
         ],
         "forces": {"title": "Blitz", "lines": [
-            "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] halves hits from anything with Range or wings. Your ground troops ignore that shield entirely.",
+            "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] blocks part of every hit from anything with Range or wings. Your ground troops ignore that shield entirely.",
             "But the Coalition is slow to mobilise. Its army only turns up on [turn 4] and [turn 6]. Every hex you take before then is a hex they have to win back.",
             "You start with [70 Influence] and [Special Ops] on the border, who deal double damage to ground units. Strike before Brussels wakes up.",
         ]},
@@ -638,7 +638,7 @@ FORCES = {
             ex(FU, "Rocket Launcher", 2, {"near": BAGHDAD}, turn=3),
         ],
         "forces": {"title": "Guns Against Wings", "lines": [
-            "The Peace Keepers fight from the air: [Fighter Jets] over Damascus, and [Interceptors] that halve hits from Range or wings.",
+            "The Peace Keepers fight from the air: [Fighter Jets] over Damascus, and [Interceptors] that blunt hits from Range or wings.",
             "You fight on the ground. Your [Anti Aircraft] guns deal triple damage to their jets, and your [Infantry] have no Range, so the Interceptors can't stop them.",
             "Your [Rocket Launchers] arrive on turn 3, but they have Range, so aim them away from the Interceptors.",
         ]},
@@ -687,7 +687,7 @@ FORCES = {
         ],
         "forces": {"title": "The Atlas Contract", "lines": [
             "The Coalition's African [depots] are four [Factories] scattered across the Maghreb, each one paying them 15 Money a turn. Burn them and their army starves.",
-            "You have wings: [Fighter Jets] and [Drones] fly straight over the desert. Keep them away from Algiers, where [Interceptors] halve their hits.",
+            "You have wings: [Fighter Jets] and [Drones] fly straight over the desert. Keep them away from Algiers, where [Interceptors] blunt their hits.",
             "[Special Ops] reach the border on turn 3 to deal with the Infantry.",
         ]},
     },

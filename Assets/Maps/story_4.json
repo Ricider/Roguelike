@@ -401,7 +401,7 @@
  "forces": {
   "title": "Blitz",
   "lines": [
-   "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] halves hits from anything with Range or wings. Your ground troops ignore that shield entirely.",
+   "The Coalition's cities are rich and guarded from the air: an [Interceptor] beside each [Corporation] blocks part of every hit from anything with Range or wings. Your ground troops ignore that shield entirely.",
    "But the Coalition is slow to mobilise. Its army only turns up on [turn 4] and [turn 6]. Every hex you take before then is a hex they have to win back.",
    "You start with [70 Influence] and [Special Ops] on the border, who deal double damage to ground units. Strike before Brussels wakes up."
   ]
