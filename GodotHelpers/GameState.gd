@@ -625,6 +625,8 @@ func _card_by_name(name: String) -> Card:
 		"Drone": return Drone.new()
 		"Interceptor": return Interceptor.new()
 		"Fighter Jet": return FighterJet.new()
+		"Bomber Jet": return BomberJet.new()
+		"Airport": return Airport.new()
 		"Howitzer": return Howitzer.new()
 		"Artilery": return Artilery.new()
 		"Rocket Launcher": return RocketLauncher.new()

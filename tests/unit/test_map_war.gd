@@ -883,7 +883,9 @@ func test_units_deploy_only_near_the_flag_or_their_buildings():
 	assert_ne(w.can_place(A, tank, Vector2i(19, 10)), "", "not near Housing")
 	var jet := FighterJet.new()
 	p.Hand = [jet]
-	assert_eq(w.can_place(A, jet, Vector2i(11, 10)), "", "a jet near the Factory")
+	assert_string_contains(w.can_place(A, jet, Vector2i(11, 10)), "within 12 hexes of one of your Airports", "no Airport yet: no jets")
+	w._put(A, Airport.new(), Vector2i(8, 10))
+	assert_eq(w.can_place(A, jet, Vector2i(11, 10)), "", "a jet near the Factory, with an Airport in range")
 	w._put(A, Barracks.new(), Vector2i(24, 10))
 	assert_ne(w.can_place(A, jet, Vector2i(22, 10)), "", "but not near a Barracks")
 	p.Hand = [tank]
@@ -1367,3 +1369,91 @@ func test_every_nation_gets_at_least_five_influence_a_turn():
 	var j0 := q.Influence
 	w.begin_turn(B)
 	assert_eq(q.Influence, j0 + 5, "AI nations get it too")
+
+# --- Airports, Fighter Jets and Bomber Jets ---------------------------------------------
+func test_new_air_cards():
+	var ap := Airport.new()
+	assert_eq([ap.HitPoints, ap.MoneyCost, ap.BioCost, ap.InfluenceCost], [25, 25, 15, 50], "Airport: 25 HP, 25 Money, 15 Bio, 50 Influence")
+	var bj := BomberJet.new()
+	assert_eq([bj.HitPoints, bj.Damage, bj.MoneyCost, bj.BioCost, bj.InfluenceCost], [8, 4, 50, 15, 60], "Bomber Jet: 8 HP, 4 damage, 50/15/60")
+	assert_true(bj.Flying and bj.HasRange, "flying, with Range")
+	var fj := FighterJet.new()
+	assert_eq([fj.Damage, fj.MoneyCost], [3, 45], "Fighter Jet: 3 damage, 45 Money")
+	assert_false(fj.HasRange, "no Range any more")
+	var ad := Player.new(100, 200, 200)
+	ad.Modifiers.append(Modifier.by_name("Advanced Robotics"))
+	assert_true(ad.has_range_for(fj), "Advanced Robotics: flying units get Range")
+
+func test_fighter_jets_stay_within_twelve_hexes_of_an_airport():
+	var w := _zone_war() # A owns row 10, 0..24, flag at 0
+	w.campaign.flag_sites[B] = Vector2i(40, 10)
+	w.campaign.flag_sites[C] = Vector2i(45, 10)
+	var p: Player = w.players[A]
+	w._put(A, Factory.new(), Vector2i(3, 10))
+	var jet := FighterJet.new()
+	p.Hand = [jet]
+	assert_true(w.deploy_hexes(A, jet).is_empty(), "no Airport: nowhere to deploy a Fighter Jet")
+	w._put(A, Airport.new(), Vector2i(2, 10))
+	assert_false(w.deploy_hexes(A, jet).is_empty(), "with one, near the Factory")
+	# flying: only to hexes within 12 of the Airport
+	w._put(A, FighterJet.new(), Vector2i(10, 10))
+	var k := MapCampaign.key_of(10, 10)
+	var reach := w.reachable(k)
+	assert_true(reach.has(Vector2i(14, 10)), "12 hexes from the Airport: fine")
+	assert_false(reach.has(Vector2i(15, 10)), "13 is out of range")
+	for t in reach.keys():
+		assert_true(MapCampaign.hex_distance(t, Vector2i(2, 10)) <= MapWar.AIRPORT_RANGE, "every destination within 12")
+
+func test_stranded_fighter_jets_lose_hp_until_home_or_crashed():
+	var w := _zone_war()
+	var ap := Airport.new()
+	w._put(A, ap, Vector2i(2, 10))
+	var jet := FighterJet.new()
+	w._put(A, jet, Vector2i(10, 10))
+	var hp0 := jet.HitPoints
+	w.begin_turn(A)
+	assert_eq(jet.HitPoints, hp0, "in range: no loss")
+	ap.HitPoints = 0 # the Airport is destroyed
+	w._remove(MapCampaign.key_of(2, 10))
+	w.begin_turn(A)
+	assert_eq(jet.HitPoints, hp0 - MapWar.JET_ATTRITION, "out of range: -2 HP a turn")
+	assert_eq(w.last_attrition.size(), 1, "the map screen is told")
+	var k := MapCampaign.key_of(10, 10)
+	assert_false(w.reachable(k).is_empty(), "a stranded jet can still fly, to find a new Airport")
+	var hp_nation := (w.players[A] as Player).HitPoints
+	jet.HitPoints = 2
+	w.begin_turn(A)
+	assert_false(w.units.has(k), "out of fuel: it crashes")
+	assert_true(bool(w.last_attrition[0][1]), "reported as crashed")
+	assert_eq((w.players[A] as Player).HitPoints >= hp_nation, true, "a crash costs the nation no HP")
+
+func test_bombers_are_covered_by_airports_and_jets_splash():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	w.campaign.flag_sites[C] = Vector2i(30, 10)
+	var bomber := BomberJet.new()
+	bomber.HitPoints = 99
+	w._put(B, bomber, Vector2i(16, 10))
+	var tank := _drop(w, A, Tank.new(), 14) # melee: half damage against flyers
+	var hp0 := bomber.HitPoints
+	w.fire(tank)
+	var plain := hp0 - bomber.HitPoints
+	w._put(B, Airport.new(), Vector2i(20, 10))
+	var hp1 := bomber.HitPoints
+	w.reset_round_stats()
+	w.fire(tank)
+	assert_eq(hp1 - bomber.HitPoints, maxi(1, plain - MapWar.BOMBER_AIRPORT_COVER), "within 12 of its Airport: 1 less damage")
+	assert_eq(int(w.round_stats[A + "|" + B].get("blocked_airport", 0)), mini(1, plain - 1), "the report counts it")
+	# a Bomber splashes the target's neighbours
+	var w2 := _war()
+	w2.campaign.flag_sites[B] = Vector2i(25, 10)
+	w2.campaign.flag_sites[C] = Vector2i(30, 10)
+	var t1 := Wall.new()
+	t1.HitPoints = 99
+	var t2 := Wall.new()
+	t2.HitPoints = 99
+	w2._put(B, t1, Vector2i(18, 10))
+	w2._put(B, t2, Vector2i(19, 10))
+	var bk := _drop(w2, A, BomberJet.new(), 14)
+	var log := w2.fire(bk)
+	assert_false((log[0]["splash"] as Array).is_empty(), "Bomber Jets splash")

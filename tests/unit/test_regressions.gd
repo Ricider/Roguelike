@@ -26,10 +26,10 @@ func test_modifier_all_modifiers_count_and_names():
 
 func test_fighter_jet_damage_4():
 	var fj := FighterJet.new()
-	assert_eq(fj.Damage, 4, "Fighter Jet damage must be 4 per latest spec (was 6)")
+	assert_eq(fj.Damage, 3, "Fighter Jet damage must be 3 per latest spec (was 4)")
 	var txt := FileAccess.get_file_as_string("res://Classes/Cards/FighterJet.gd")
 	# FighterJet sets damage via super._init(14, 4, ...) - check constructor contains , 4, and not old 6
-	assert_true(txt.contains("14, 4") or txt.contains("Damage = 4") or txt.contains("Damage, 4"), "source has Damage 4 (via _init 14,4)")
+	assert_true(txt.contains("14, 3") or txt.contains("Damage = 3") or txt.contains("Damage, 3"), "source has Damage 3 (via _init 14,3)")
 	assert_false(txt.contains("14, 6"), "source must not have old 6 damage")
 
 func test_no_invalid_animatedsprite_mouse_filter():

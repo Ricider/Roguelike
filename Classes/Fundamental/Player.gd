@@ -191,8 +191,8 @@ func get_effective_money_cost(card: Card) -> int:
 	var cost: int = card.MoneyCost
 	if Corporation != null:
 		cost = Corporation.discounted_money_cost(self, cost)
-	# Modifiers: Advanced Robotics +5 for all units, Aerial Supremacy +5 for Flying
-	if has_modifier("Advanced Robotics") and card is Unit:
+	# Modifiers: Advanced Robotics +5 for Flying units, Aerial Supremacy +5 for Flying
+	if has_modifier("Advanced Robotics") and card is Unit and (card as Unit).Flying:
 		cost += 5
 	if has_modifier("Aerial Supremacy") and card is Unit and (card as Unit).Flying:
 		cost += 5
@@ -207,8 +207,8 @@ func has_modifier(name: String) -> bool:
 	return false
 
 func has_range_for(card: Card) -> bool:
-	if card is Unit and has_modifier("Advanced Robotics"):
-		return true
+	if card is Unit and (card as Unit).Flying and has_modifier("Advanced Robotics"):
+		return true # Advanced Robotics: flying units have Range
 	if card is Unit:
 		return (card as Unit).HasRange
 	return false
@@ -283,6 +283,8 @@ func _base_card_by_name(name: String) -> Card:
 		"Rocket Launcher": return RocketLauncher.new()
 		"Drone": return Drone.new()
 		"Fighter Jet": return FighterJet.new()
+		"Bomber Jet": return BomberJet.new()
+		"Airport": return Airport.new()
 		"Factory": return Factory.new()
 		"Barracks": return Barracks.new()
 		"Housing": return Housing.new()

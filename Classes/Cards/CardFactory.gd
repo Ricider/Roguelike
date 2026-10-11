@@ -96,7 +96,7 @@ static func make_mercenaries_deck() -> Array:
 	return deck
 
 static func make_peace_keepers_deck() -> Array:
-	# Peace Keepers: [12 wall, 6 Infantry, 5 Drones, 1 Fighter Jet, 1 Corporation, 2 Housing, 2 Barrack, 3 Interceptor, 3 Anti Aircraft] =35
+	# Peace Keepers: [12 wall, 6 Infantry, 5 Drones, 1 Fighter Jet, 1 Corporation, 2 Housing, 2 Barrack, 3 Interceptor, 3 Anti Aircraft, 2 Airport] =37
 	var deck: Array = []
 	for i in range(12):
 		deck.append(Wall.new())
@@ -116,11 +116,13 @@ static func make_peace_keepers_deck() -> Array:
 		deck.append(Interceptor.new())
 	for i in range(3):
 		deck.append(AntiAircraft.new())
+	for i in range(2):
+		deck.append(Airport.new())
 	deck.shuffle()
 	return deck
 
 static func make_horde_deck() -> Array:
-	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 3 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 3 Anti Aircraft, 3 Special Ops] =52
+	# Horde: [10 wall, 15 Infantry, 8 Drones, 2 Tank, 2 Artillery, 3 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 3 Anti Aircraft, 3 Special Ops, 2 Airport, 3 Bomber Jet] =57
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -144,11 +146,15 @@ static func make_horde_deck() -> Array:
 		deck.append(AntiAircraft.new())
 	for i in range(3):
 		deck.append(SpecialOps.new())
+	for i in range(2):
+		deck.append(Airport.new())
+	for i in range(3):
+		deck.append(BomberJet.new())
 	deck.shuffle()
 	return deck
 
 static func make_coalition_army_deck() -> Array:
-	# Coalition Army: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 1 Corporation, 2 Special Ops, 1 Interceptor] =46
+	# Coalition Army: [10 wall, 8 Infantry, 8 Drones, 2 Tank, 2 Artillery, 2 Rocket Launcher, 4 Fighter Jet, 3 Factory, 1 Housing, 2 Barrack, 1 Corporation, 2 Special Ops, 1 Interceptor, 3 Airport, 2 Bomber Jet] =51
 	var deck: Array = []
 	for i in range(10):
 		deck.append(Wall.new())
@@ -176,6 +182,10 @@ static func make_coalition_army_deck() -> Array:
 		deck.append(SpecialOps.new())
 	for i in range(1):
 		deck.append(Interceptor.new())
+	for i in range(3):
+		deck.append(Airport.new())
+	for i in range(2):
+		deck.append(BomberJet.new())
 	deck.shuffle()
 	return deck
 
@@ -204,7 +214,7 @@ static func make_euro_army_deck() -> Array:
 	return deck
 
 static func make_corporate_troops_deck() -> Array:
-	# Corporate Troops: [8 wall, 4 Infantry, 12 Drones, 3 Fighter Jet, 1 Corporation, 1 Housing, 2 Barrack, 3 Rocket Launcher, 2 Interceptor] =36
+	# Corporate Troops: [8 wall, 4 Infantry, 12 Drones, 3 Fighter Jet, 1 Corporation, 1 Housing, 2 Barrack, 3 Rocket Launcher, 2 Interceptor, 2 Airport, 2 Bomber Jet] =40
 	var deck: Array = []
 	for i in range(8):
 		deck.append(Wall.new())
@@ -224,12 +234,16 @@ static func make_corporate_troops_deck() -> Array:
 		deck.append(RocketLauncher.new())
 	for i in range(2):
 		deck.append(Interceptor.new())
+	for i in range(2):
+		deck.append(Airport.new())
+	for i in range(2):
+		deck.append(BomberJet.new())
 	deck.shuffle()
 	return deck
 
 # --- Shop pool helper ---
 static func all_card_types() -> Array:
-	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new(), AntiAircraft.new(), SpecialOps.new(), Interceptor.new()]
+	return [Wall.new(), Infantry.new(), Tank.new(), Artilery.new(), RocketLauncher.new(), Drone.new(), FighterJet.new(), BomberJet.new(), Factory.new(), Barracks.new(), Housing.new(), Corporation.new(), AntiAircraft.new(), SpecialOps.new(), Interceptor.new(), Airport.new()]
 
 static func random_shop_offer() -> Array:
 	var pool := all_card_types()
@@ -443,7 +457,7 @@ static func make_corporate_troops_player(for_human: bool = false) -> AIPlayer:
 			p.Board[pos2.x].Squares[pos2.y].place(corp2)
 			p.apply_hitpoints_modifier(corp2)
 	p.DrawPile = make_corporate_troops_deck()
-	p.Modifiers = [Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60)]
+	p.Modifiers = [Modifier.new("Advanced Robotics", "Flying units have HasRange set to true, but they cost +5 extra MoneySupply", 60)]
 	return p
 
 static func all_enemy_players_sorted() -> Array:

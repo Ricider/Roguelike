@@ -29,7 +29,7 @@ static func _base_modifiers() -> Array:
 		Modifier.new("State of emergency", "You gain 3 HitPoints every turn", 20),
 		Modifier.new("Fanaticism", "Your buildings have 50% less HP, but Units have 40% more", 30),
 		Modifier.new("Corruption", "Your buildings have 50% less HP, but you gain +10 MoneySupply every turn", 30),
-		Modifier.new("Advanced Robotics", "All units have HasRange set to true, but they cost +5 extra MoneySupply", 60),
+		Modifier.new("Advanced Robotics", "Flying units have HasRange set to true, but they cost +5 extra MoneySupply", 60),
 		Modifier.new("Aerial Supremacy", "If a unit has Flying set to true then they deal +2 damage, but they cost +5 extra MoneySupply", 50),
 		Modifier.new("Defensive Doctrine", "Your cards have +10 hp, but they deal -1 damage", 40),
 	]

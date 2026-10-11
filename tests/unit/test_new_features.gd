@@ -18,16 +18,16 @@ func test_interceptor_all_types_and_decks():
 	for c in all:
 		names.append(c.card_name)
 	assert_true(names.has("Interceptor"), "all_card_types has Interceptor")
-	assert_eq(all.size(), 14, "14 types now")
+	assert_eq(all.size(), 16, "16 types now (Bomber Jet, Airport)")
 	# Decks per latest spec (spec.py diff): Fundamentalists 38, Mercenaries 30, Peace Keepers 35, Horde 52, Coalition 46, Corporate 36
 	var coa := CardFactory.make_coalition_army_deck()
-	assert_eq(coa.size(), 46, "Coalition 46 per latest spec")
+	assert_eq(coa.size(), 51, "Coalition 51 (3 Airports, 2 Bomber Jets added)")
 	var cc: Dictionary = {}
 	for card in coa:
 		cc[card.card_name] = cc.get(card.card_name,0)+1
 	assert_eq(cc.get("Interceptor",0), 1, "Coalition 1 Interceptor")
 	var corp := CardFactory.make_corporate_troops_deck()
-	assert_eq(corp.size(), 36, "Corporate 36 per latest spec")
+	assert_eq(corp.size(), 40, "Corporate 40 (2 Airports, 2 Bomber Jets added)")
 	var cc2: Dictionary = {}
 	for card in corp:
 		cc2[card.card_name] = cc2.get(card.card_name,0)+1
@@ -39,10 +39,10 @@ func test_interceptor_all_types_and_decks():
 	assert_eq(CardFactory.make_starting_deck().size(), 31, "starting 31")
 	assert_eq(CardFactory.make_insurgents_deck().size(), 33, "insurgents 33")
 	assert_eq(CardFactory.make_state_troops_deck().size(), 34, "state troops 34")
-	assert_eq(CardFactory.make_horde_deck().size(), 52, "horde 52 per latest spec")
+	assert_eq(CardFactory.make_horde_deck().size(), 57, "horde 57 (2 Airports, 3 Bomber Jets added)")
 	assert_eq(CardFactory.make_fundamentalists_deck().size(), 38, "fundamentalists 38")
 	assert_eq(CardFactory.make_mercenaries_deck().size(), 30, "mercenaries 30")
-	assert_eq(CardFactory.make_peace_keepers_deck().size(), 35, "peace keepers 35")
+	assert_eq(CardFactory.make_peace_keepers_deck().size(), 37, "peace keepers 37 (2 Airports added)")
 
 func test_interceptor_protects_units_and_buildings():
 	# Units: adjacent Interceptor halves vs HasRange/Flying

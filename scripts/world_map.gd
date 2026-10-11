@@ -22,7 +22,7 @@ const SHOT_SFX := {
 	"Infantry": "shot_rifle", "Special Ops": "shot_rifle",
 	"Tank": "shot_cannon", "Artilery": "shot_cannon", "Howitzer": "shot_cannon",
 	"Rocket Launcher": "shot_rocket", "RocketLauncher": "shot_rocket",
-	"Drone": "shot_laser", "Fighter Jet": "missile", "Interceptor": "missile",
+	"Drone": "shot_laser", "Fighter Jet": "missile", "Bomber Jet": "shot_rocket", "Interceptor": "missile",
 	"Anti Aircraft": "shot_flak",
 }
 
@@ -67,6 +67,7 @@ var _log: RichTextLabel = null
 var _selected: Card = null
 var _moving: String = "" # key of the unit picked to move ("" = none)
 var _group: Array = [] # keys of the units picked for a bulk move (drag a box / Shift+click)
+var _card_zone: Dictionary = {} # where the picked hand card may go (hex -> true), shown in green
 const DEPLOY_ZONE := Color(0.55, 1.0, 0.5) # where a selected unit card can be summoned (green, like the glowing hexes)
 const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
 var _busy: bool = false
@@ -777,6 +778,13 @@ func _unit_info(k: String) -> Dictionary:
 		d["ranged"] = p.has_range_for(u)
 		if _war._barracks_bonus(owner, t) > 0:
 			notes.append("[color=#8fe08f]+2 damage from an adjacent Barracks.[/color]")
+		if card is FighterJet:
+			if _war.in_airport_range(owner, t):
+				notes.append("[color=#9fd3ff]Within %d hexes of an Airport: it can fly anywhere in that range.[/color]" % MapWar.AIRPORT_RANGE)
+			else:
+				notes.append("[color=#ff8a7a]Out of range of every Airport: loses %d HP each turn until it gets back.[/color]" % MapWar.JET_ATTRITION)
+		elif card is BomberJet and _war.in_airport_range(owner, t):
+			notes.append("[color=#8fe08f]Airport cover: takes %d less damage from every hit.[/color]" % MapWar.BOMBER_AIRPORT_COVER)
 		var flank := _war.flank_bonus(k)
 		if flank > 0:
 			notes.append("[color=#ff8a7a]%s: takes +%d damage from every hit.[/color]" % [_war.flank_name(flank).capitalize(), flank])
@@ -941,11 +949,17 @@ func _select_card(stack: Array) -> void:
 	# cards go only near what raises them: show that area (on your land) and its sources
 	var zone := {}
 	var sources: Array = []
+	var airports: Array = _war.airports_of(_me()) if card is FighterJet else []
 	for z in _war.deploy_zone(_me(), card):
 		sources.append(z[0])
 		for h in _war.hexes_within(z[0] as Vector2i, int(z[1])):
-			if _campaign().owner_of((h as Vector2i).x, (h as Vector2i).y) == _me():
-				zone[h] = true
+			if _campaign().owner_of((h as Vector2i).x, (h as Vector2i).y) != _me():
+				continue
+			if card is FighterJet and not _war.in_airport_range(_me(), h as Vector2i, airports):
+				continue # Fighter Jets: only within reach of an Airport
+			zone[h] = true
+	sources.append_array(airports)
+	_card_zone = zone
 	_view.range_zones = [{"hexes": zone, "color": DEPLOY_ZONE}]
 	_view.group_marks = sources
 	var verb := "Deploy" if card is Unit else "Build"
@@ -1136,8 +1150,30 @@ func _show_range(keys: Array, at: Dictionary = {}) -> void:
 	for ranged in [false, true]:
 		if not (zones[ranged] as Dictionary).is_empty():
 			out.append({"hexes": zones[ranged], "ranged": ranged})
+	# Fighter Jets picked: also where your Airports let them fly (blue), Airports ringed
+	var has_jet := false
+	for k in keys:
+		if _war.units.has(k) and _war.units[k]["card"] is FighterJet:
+			has_jet = true
+	if has_jet:
+		var airports: Array = _war.airports_of(_me())
+		if not airports.is_empty():
+			out.insert(0, {"hexes": _airport_zone(airports), "color": AIRPORT_ZONE})
+		var marks: Array = []
+		for m in _view.group_marks:
+			if not airports.has(m):
+				marks.append(m)
+		_view.group_marks = marks + airports
 	_view.range_zones = out
 	_view.range_targets = targets.keys()
+
+# Every hex within AIRPORT_RANGE of any of `airports`.
+func _airport_zone(airports: Array) -> Dictionary:
+	var zone := {}
+	for a in airports:
+		for h in _war.hexes_within(a as Vector2i, MapWar.AIRPORT_RANGE):
+			zone[h] = true
+	return zone
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1209,6 +1245,13 @@ func _on_tile_hovered(x: int, y: int) -> void:
 	if _selected != null:
 		var why := _war.can_place(_me(), _selected, Vector2i(x, y))
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
+		if _selected is Airport:
+			# preview the range an Airport here would give its Fighter Jets
+			var zones: Array = [{"hexes": _card_zone, "color": DEPLOY_ZONE}]
+			if why == "":
+				zones.append({"hexes": _airport_zone([Vector2i(x, y)]), "color": AIRPORT_ZONE})
+				_hover_bar.text = "Build an Airport here: your Fighter Jets could fly within %d hexes of it (shown in blue)." % MapWar.AIRPORT_RANGE
+			_view.range_zones = zones
 		if why == "" and _selected is Unit and not (_selected as Unit).Flying and WorldMap.terrain_at(x, y) == WorldMap.MOUNTAIN:
 			_hover_bar.text += " (mountain: takes 1 less damage)"
 		elif why == "" and _selected is Unit and WorldMap.terrain_at(x, y) == WorldMap.JUNGLE:
@@ -1270,6 +1313,10 @@ func _on_tile_selected(x: int, y: int) -> void:
 		_clear_selection()
 		_sfx("map_select")
 		_hover_bar.text = _describe(x, y)
+		if not info.is_empty() and info["card"] is Airport:
+			_show_airport_range(str(info["owner"]), t0)
+		elif not info.is_empty() and info["card"] is FighterJet:
+			_show_jet_range(str(info["owner"]), t0) # (your own jets are picked to move instead)
 		return
 	var t := Vector2i(x, y)
 	var why := _war.can_place(_me(), _selected, t)
@@ -1309,6 +1356,7 @@ func _start_player_turn(round_over: bool = false) -> void:
 	_war.reset_round_stats()
 	_war.begin_turn(_me())
 	_report_econ = (_war.last_economy.get(_me(), {}) as Dictionary).duplicate(true)
+	_log_attrition(_me())
 	var up: Dictionary = _war.last_upkeep
 	if int(up.get("money", 0)) > 0 or int(up.get("bio", 0)) > 0:
 		_log_line("[color=#ff9a7a]Upkeep:[/color] your army costs %d Money and %d Bio this turn." % [int(up["money"]), int(up["bio"])])
@@ -1350,6 +1398,7 @@ func _on_end_turn() -> void:
 			# fly over the nation whose turn it is, framing its whole territory
 			await _view.glide_to(_view.frame_for(_campaign().tiles_of(n), 0.5), CAM_GLIDE / _speed())
 		_war.begin_turn(n)
+		_log_attrition(n)
 		if _announce_arrivals(n) and not quick:
 			await _wait(0.35)
 		var bought: Array = _war.ai_shop(n)
@@ -1864,6 +1913,62 @@ func _reinforcement_summary() -> String:
 		out.append("[Turn %s] %s: %s" % [bits[0], who, ", ".join(groups[key])])
 	return "; ".join(out)
 
+# A clicked Airport: tint the hexes its Fighter Jets may fly to (AIRPORT_RANGE), mark
+# the jets it covers, and say so. Cleared by the next click or Esc.
+const AIRPORT_ZONE := Color(0.55, 0.8, 1.0)
+func _show_airport_range(owner: String, at: Vector2i) -> void:
+	_view.range_zones = [{"hexes": _airport_zone([at]), "color": AIRPORT_ZONE}]
+	var jets: Array = [at]
+	for k in _war.cards_of(owner):
+		var c: Card = _war.units[k]["card"]
+		if (c is FighterJet or c is BomberJet) and MapCampaign.hex_distance(MapWar.key_to_hex(k), at) <= MapWar.AIRPORT_RANGE:
+			jets.append(MapWar.key_to_hex(k))
+	_view.group_marks = jets
+	var whose := "Your" if owner == _me() else owner + "'s"
+	_hover_bar.text = "%s Airport: Fighter Jets can be deployed and fly within %d hexes of it (shown); Bomber Jets there take 1 less damage. %d jet%s in range. Click elsewhere or Esc to hide." % [whose, MapWar.AIRPORT_RANGE, jets.size() - 1, "" if jets.size() == 2 else "s"]
+
+# A clicked (enemy) Fighter Jet: where its nation's Airports let it fly (blue, Airports
+# ringed) and what it can hit from where it is (red). Cleared by the next click or Esc.
+func _show_jet_range(owner: String, at: Vector2i) -> void:
+	var jet := _war.units[MapCampaign.key_of(at.x, at.y)]["card"] as Unit
+	var airports: Array = _war.airports_of(owner)
+	var zones: Array = []
+	if not airports.is_empty():
+		zones.append({"hexes": _airport_zone(airports), "color": AIRPORT_ZONE})
+	var hit := {}
+	for h in _war.hexes_within(at, _war.attack_range(owner, jet, at)):
+		hit[h] = true
+	zones.append({"hexes": hit, "ranged": (_war.players[owner] as Player).has_range_for(jet)})
+	_view.range_zones = zones
+	_view.group_marks = [at] + airports
+	if airports.is_empty():
+		_hover_bar.text = "%s's Fighter Jet has no Airport: it loses %d HP every turn until it crashes or one is built. Red: what it can hit." % [owner, MapWar.JET_ATTRITION]
+	elif _war.in_airport_range(owner, at, airports):
+		_hover_bar.text = "%s's Fighter Jet can fly anywhere in blue (within %d hexes of its %d Airport%s, ringed). Red: what it can hit from here." % [owner, MapWar.AIRPORT_RANGE, airports.size(), "" if airports.size() == 1 else "s"]
+	else:
+		_hover_bar.text = "%s's Fighter Jet is out of range of its Airports (blue): it loses %d HP every turn until it gets back. Red: what it can hit." % [owner, MapWar.JET_ATTRITION]
+
+# Fighter Jets out of range of every Airport (MapWar.last_attrition): log the damage and crashes.
+func _log_attrition(n: String) -> void:
+	var hit := 0
+	var crashed := 0
+	for a in _war.last_attrition:
+		if bool(a[1]):
+			crashed += 1
+		else:
+			hit += 1
+			_view.add_place(a[0] as Vector2i)
+	if hit + crashed == 0:
+		return
+	var who := "Your" if n == _me() else "[color=#%s]%s[/color]'s" % [_nation_hex_color(n), n]
+	var parts: Array = []
+	if hit > 0:
+		parts.append("%d Fighter Jet%s lose%s %d HP" % [hit, "" if hit == 1 else "s", "s" if hit == 1 else "", MapWar.JET_ATTRITION])
+	if crashed > 0:
+		parts.append("%d crash%s" % [crashed, "es" if crashed == 1 else ""])
+	_log_line("[color=#ff9a7a]Out of range of an Airport:[/color] %s %s." % [who, ", ".join(parts)])
+	_refresh()
+
 # Log and flash the reinforcements that just landed for nation `n` (MapWar.last_arrivals).
 func _announce_arrivals(n: String) -> bool:
 	var arr: Array = _war.last_arrivals
@@ -2004,10 +2109,11 @@ const REPORT_COLS := [
 	["unit_bonus", "+Unit bonus", "Special Ops x2 against ground units, Anti Aircraft x3 against flying ones.", "add"],
 	["boat", "+In boat", "Extra damage on ground units caught at sea in a boat (+1 per hit).", "add"],
 	["flank", "+Flanked", "Extra damage on units hemmed in by enemy units: +1 flanked (enemies on opposite sides), +2 surrounded (4+), +4 encircled (all 6).", "add"],
-	["splash", "+Splash", "Fighter Jet splash on the target's neighbours.", "add"],
+	["splash", "+Splash", "Fighter and Bomber Jet splash on the target's neighbours.", "add"],
 	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they block 75% of ranged and flying hits).", "block"],
 	["blocked_mountain", "-Mountains", "Stopped by mountain cover (1 per hit on ground units).", "block"],
 	["blocked_forest", "-Forests", "Stopped by forest cover (1 per hit from flying attackers).", "block"],
+	["blocked_airport", "-Airports", "Bomber Jets near one of their Airports take 1 less damage per hit.", "block"],
 	["blocked_flying", "-Flying", "Flying units take half damage from attackers without Range.", "block"],
 ]
 
@@ -2284,7 +2390,7 @@ func _report_summary() -> Label:
 			boosted += int(st.get("barracks", 0)) + int(st.get("home", 0)) + int(st.get("flank", 0)) + int(st.get("boat", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
 		elif parts[1] == me:
 			taken += int(st.get("dealt", 0))
-			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]:
+			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying", "blocked_airport"]:
 				saved += int(st.get(cat, 0))
 	var l := Label.new()
 	l.text = "You dealt %d damage (%s%d from bonuses) and took %d; your defences stopped %d." % [dealt, "+" if boosted >= 0 else "", boosted, taken, saved]

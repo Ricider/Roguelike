@@ -113,12 +113,15 @@ func test_e2e_modifiers_economy_and_persistence():
 	p_corr.economy_phase()
 	assert_true(p_corr.MoneySupply >= m_before + 10, "Corruption +10 money")
 
-	# Advanced Robotics: all units have range, costs +5 money
+	# Advanced Robotics: flying units have range and cost +5 money; ground units are untouched
 	var p_rob := Player.new(100, 200, 200, 0, "Test", "", 0)
 	p_rob.Modifiers.append(Modifier.by_name("Advanced Robotics"))
-	var inf_card := Infantry.new() # normally no range
-	assert_true(p_rob.has_range_for(inf_card), "Advanced Robotics gives range to Infantry")
-	assert_eq(p_rob.get_effective_money_cost(inf_card), inf_card.MoneyCost + 5, "Advanced Robotics +5 cost")
+	var drone_card := Drone.new() # flying, normally no range
+	assert_true(p_rob.has_range_for(drone_card), "Advanced Robotics gives range to a Drone")
+	assert_eq(p_rob.get_effective_money_cost(drone_card), drone_card.MoneyCost + 5, "Advanced Robotics +5 cost on flying units")
+	var inf_card := Infantry.new()
+	assert_false(p_rob.has_range_for(inf_card), "but not to Infantry")
+	assert_eq(p_rob.get_effective_money_cost(inf_card), inf_card.MoneyCost, "nor does Infantry cost more")
 
 	# Aerial Supremacy: flying +2 damage, +5 cost for flying
 	var p_air := Player.new(100, 200, 200, 0, "Test", "", 0)
@@ -318,7 +321,7 @@ func test_e2e_combat_with_all_modifiers():
 	for e in log:
 		assert_true(e["damage"] >= 1, "damage >=1 with modifiers")
 	# Verify range: Infantry now has range, should be able to hit even without Manhattan front restriction? Actually _pick_target_manhattan with HasRange true picks random among all; we just check no crash and damage dealt
-	assert_true(atk.has_range_for(inf), "inf now ranged via Advanced Robotics")
+	assert_false(atk.has_range_for(inf), "Advanced Robotics only gives range to flying units, not Infantry")
 
 func test_e2e_influence_shop_persistence():
 	var gs = _make_gs()

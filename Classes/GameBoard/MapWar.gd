@@ -9,7 +9,7 @@
 # Card rules carry over from the 4x10 battles: Rocket Launcher/Howitzer fire 4
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
 # from non-ranged, Barracks +2 to adjacent units, Interceptors block 75% of ranged/flying
-# hits on adjacent friends, Fighter Jets splash the target's neighbors.
+# hits on adjacent friends, Fighter and Bomber Jets splash the target's neighbors.
 # Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1);
 # units in a forest (jungle hex) take 1 less from flying attackers (minimum 1).
 # Buildings (walls included) can't be placed on mountains.
@@ -55,6 +55,7 @@ var bounties: Dictionary = {}
 var pending: Array = []
 var last_arrivals: Array = []
 var last_upkeep: Dictionary = {} # {"money", "bio"} paid in the latest begin_turn
+var last_attrition: Array = [] # [[hex, crashed], ...] Fighter Jets out of Airport range in the latest begin_turn
 # Each nation's latest turn of income, line by line, for the round report:
 # {"money": [[label, amount], ...], "bio": [...], "money_from", "money_to", "bio_from", "bio_to"}
 var last_economy: Dictionary = {}
@@ -203,6 +204,8 @@ func place_extras(rules: Array) -> Array:
 			placed.append([nation, card.card_name, t])
 		if rule.has("id"):
 			by_id[str(rule["id"])] = spots
+		if str(rule.get("card", "")) == "Fighter Jet" and not spots.is_empty():
+			_ensure_airport(nation, spots) # set-piece jets come with somewhere to land
 	return placed
 
 func _extra_free(nation: String, t: Vector2i) -> bool:
@@ -326,6 +329,73 @@ func shortfall(nation: String, card: Card) -> String:
 	return " and ".join(parts)
 
 # "" when the card can go on hex t, else a human-readable reason.
+# ------------------------------------------------------------- airports
+# Fighter Jets live off their Airports: they can only be deployed on, or fly to, hexes
+# within AIRPORT_RANGE of one of their nation's standing Airports, and a jet left
+# outside that range (its Airport destroyed) loses JET_ATTRITION HP at the start of
+# each of its nation's turns until it gets back (or crashes). A stranded jet may fly
+# anywhere it can reach, to get home. Bomber Jets don't need an Airport, but within
+# range of one they take BOMBER_AIRPORT_COVER less from every hit.
+const AIRPORT_RANGE := 12
+const JET_ATTRITION := 2
+const BOMBER_AIRPORT_COVER := 1
+
+func _splashes(unit: Unit) -> bool:
+	return unit is FighterJet or unit is BomberJet
+
+func airports_of(nation: String) -> Array:
+	var out: Array = []
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		if c is Airport and card_hp(c) > 0:
+			out.append(key_to_hex(k))
+	return out
+
+func in_airport_range(nation: String, t: Vector2i, airports: Array = []) -> bool:
+	if airports.is_empty():
+		airports = airports_of(nation)
+	for a in airports:
+		if hex_distance(t, a as Vector2i) <= AIRPORT_RANGE:
+			return true
+	return false
+
+# Jets out of their Airports' range lose JET_ATTRITION HP; returns [[hex, crashed], ...].
+func jet_attrition(nation: String) -> Array:
+	var out: Array = []
+	var airports := airports_of(nation)
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		if not (c is FighterJet) or in_airport_range(nation, key_to_hex(k), airports):
+			continue
+		(c as Unit).HitPoints -= JET_ATTRITION
+		var crashed := (c as Unit).HitPoints <= 0
+		out.append([key_to_hex(k), crashed])
+		if crashed:
+			_remove(k) # out of fuel: lost, but costs its nation no HP
+	return out
+
+# Story set pieces: jets placed by a chapter get an Airport beside them if they have none in range.
+func _ensure_airport(nation: String, jets: Array) -> void:
+	var airports := airports_of(nation)
+	var stranded: Array = jets.filter(func(t): return not in_airport_range(nation, t, airports))
+	if stranded.is_empty():
+		return
+	var free: Array = []
+	var flag := campaign.capital_site(nation)
+	for t in campaign.tiles_of(nation):
+		var tv := t as Vector2i
+		if not units.has(MapCampaign.key_of(tv.x, tv.y)) and tv != flag and can_build_on(Airport.new(), tv):
+			free.append(tv)
+	if free.is_empty():
+		return
+	var spot := _nearest_of(free, stranded)
+	var ap := Airport.new()
+	ap.set_meta("map_max_hp", ap.HitPoints)
+	_put(nation, ap, spot)
+	var covered := stranded.filter(func(t): return hex_distance(t, spot) <= AIRPORT_RANGE)
+	if not covered.is_empty() and covered.size() < stranded.size():
+		_ensure_airport(nation, stranded) # the jets were spread far apart: another one
+
 # ------------------------------------------------------------- deploy zones
 # Cards go only on free hexes of your own land, and only near what raises them.
 # Units: within DEPLOY_RADIUS hexes of your flag or one of your standing buildings:
@@ -360,6 +430,8 @@ static func deploy_anchor_text(card: Card) -> String:
 
 # Where a card may go, in words: "within 2 hexes of your flag or a Housing", ...
 static func deploy_rule_text(card: Card) -> String:
+	if card is FighterJet:
+		return "within %d hexes of %s, and within %d hexes of one of your Airports" % [DEPLOY_RADIUS, deploy_anchor_text(card), AIRPORT_RANGE]
 	if card is Unit:
 		return "within %d hexes of %s" % [DEPLOY_RADIUS, deploy_anchor_text(card)]
 	return "within %d hexes of your flag or one of your buildings, or %d hexes of one of your Infantry" % [BUILD_RADIUS, BUILD_INFANTRY_RADIUS]
@@ -391,6 +463,8 @@ func deploy_sources(nation: String, card: Card) -> Array:
 	return deploy_zone(nation, card).map(func(z): return z[0])
 
 func in_deploy_zone(nation: String, card: Card, t: Vector2i, zone: Array = []) -> bool:
+	if card is FighterJet and not in_airport_range(nation, t):
+		return false # and within AIRPORT_RANGE of one of your Airports
 	if zone.is_empty():
 		zone = deploy_zone(nation, card)
 	for z in zone:
@@ -404,11 +478,21 @@ func deploy_hexes(nation: String, card: Card) -> Array:
 	var out: Array = []
 	var flag := campaign.capital_site(nation)
 	var zone := deploy_zone(nation, card)
+	var airports := airports_of(nation) if card is FighterJet else []
+	if card is FighterJet and airports.is_empty():
+		return out # no Airport, no Fighter Jets
 	for t in campaign.tiles_of(nation):
 		var tv := t as Vector2i
 		if units.has(MapCampaign.key_of(tv.x, tv.y)) or tv == flag or not can_build_on(card, tv):
 			continue
-		if not in_deploy_zone(nation, card, tv, zone):
+		if card is FighterJet and not in_airport_range(nation, tv, airports):
+			continue
+		var in_zone := false
+		for z in zone:
+			if hex_distance(tv, z[0] as Vector2i) <= int(z[1]):
+				in_zone = true
+				break
+		if not in_zone:
 			continue
 		out.append(tv)
 	return out
@@ -542,6 +626,7 @@ func begin_turn(nation: String) -> void:
 	econ["bio_to"] = p.BioSupply
 	econ["influence_topup"] = influence_topup(nation)
 	last_economy[nation] = econ
+	last_attrition = jet_attrition(nation) # stranded Fighter Jets run low
 	restock_shop(nation)
 	last_arrivals = arrive_reinforcements(nation) # before the refill: they can move at once
 	refill_moves(nation)
@@ -665,8 +750,13 @@ func reachable(k: String) -> Dictionary:
 			cost[t] = c
 			parent[t] = cur
 			queue.append(t)
+	# Fighter Jets in range of an Airport only fly where they stay in range
+	var airports := airports_of(nation) if card is FighterJet else []
+	var tethered: bool = card is FighterJet and in_airport_range(nation, start, airports)
 	for t in cost.keys():
 		if t == start or flags.has(t) or units.has(MapCampaign.key_of(t.x, t.y)):
+			continue
+		if tethered and not in_airport_range(nation, t, airports):
 			continue
 		var path: Array = [t]
 		while path[0] != start:
@@ -1431,7 +1521,7 @@ func fire(k: String) -> Array:
 			_stat(nation, victim, "home", home)
 			_stat(nation, victim, "modifiers", mod_delta)
 			var fsplash: Array = []
-			if unit is FighterJet:
+			if _splashes(unit):
 				for nb in MapCampaign.wrapped_neighbors(site):
 					var ninfo := unit_at(nb as Vector2i)
 					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
@@ -1467,6 +1557,9 @@ func fire(k: String) -> Array:
 		var intercept_from := _last_intercept_from
 		var pre_terrain := actual
 		actual = terrain_adjusted(target, to, actual, unit)
+		var pre_airport := actual
+		if target is BomberJet and in_airport_range(victim2, to):
+			actual = maxi(1, actual - BOMBER_AIRPORT_COVER) # its Airport keeps it patched up
 		_damage_card(tk, actual)
 		# round report (see round_stats)
 		_stat(nation, victim2, "dealt", actual)
@@ -1478,10 +1571,11 @@ func fire(k: String) -> Array:
 		_stat(nation, victim2, "boat", boat)
 		_stat(nation, victim2, "blocked_flying", pre_fly - before)
 		_stat(nation, victim2, "blocked_interceptor", before - pre_terrain)
+		_stat(nation, victim2, "blocked_airport", pre_airport - actual)
 		var cover := "blocked_mountain" if WorldMap.terrain_at(to.x, to.y) == WorldMap.MOUNTAIN else "blocked_forest"
-		_stat(nation, victim2, cover, pre_terrain - actual)
+		_stat(nation, victim2, cover, pre_terrain - pre_airport)
 		var splash: Array = []
-		if unit is FighterJet:
+		if _splashes(unit):
 			for nb in MapCampaign.wrapped_neighbors(to):
 				var ninfo := unit_at(nb as Vector2i)
 				if not ninfo.is_empty() and str(ninfo["owner"]) == victim2:
@@ -1507,12 +1601,12 @@ var pending_collapses: Array = []
 #   dealt (all damage that landed, flags included), flag, kills, kill_hp (HP the
 #   victim lost for destroyed cards), barracks, home (firing from own land), modifiers (can be negative),
 #   unit_bonus (Special Ops x2 / Anti Aircraft x3), flank (target hemmed in), boat (target
-#   a ground unit at sea), splash (Fighter Jets),
+#   a ground unit at sea), splash (Fighter and Bomber Jets), blocked_airport,
 #   blocked_interceptor, blocked_mountain, blocked_forest, blocked_flying.
 # The world map shows it at the start of the player's turn, then resets it.
 var round_stats: Dictionary = {}
 const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "home", "modifiers", "unit_bonus", "flank", "boat", "splash",
-	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying"]
+	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying", "blocked_airport"]
 
 func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
 	if amount == 0 or attacker == victim:

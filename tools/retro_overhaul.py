@@ -562,6 +562,97 @@ def draw_jet(i, atk):
     return card_frame(body, i, atk, (15, 27, 11, 55), fx)
 
 
+# ------------------------------------------------------------ bomber jet
+BOMBER = [
+    "...344........................",
+    "...3444.......................",
+    "...34444..........hhh.........",
+    "..2333333333333333ggggh333....",
+    ".24444444444444444444444444433",
+    "2333333333333333333333333333322",
+    ".12222222222222222222222222221.",
+    "....111122222222222222221111...",
+    ".......1111222222222221111.....",
+    "...........11111111111.........",
+]
+BOMBER_WING = [
+    "......44444444......",
+    ".....3333333333.....",
+    "....222222222222....",
+    "...11111111111111...",
+]
+
+
+def draw_bomber(i, atk):
+    hover = wave(i, 0.8)
+
+    def body(g):
+        g.stamp(BOMBER, 0, 7 + hover)
+        g.stamp(BOMBER_WING, 6, 15 + hover)       # broad lower wing
+        g.r(9, 17 + hover, 2, 2, "k")              # engine pods
+        g.r(19, 17 + hover, 2, 2, "k")
+
+    def fx(g):
+        y = 12 + hover
+        ln = (2, 3, 2, 3)[i % 4]
+        g.r(1 - ln, y, ln, 2, "O")
+        g.p(0, y, "Y")
+        for ex in (9, 19):                          # engine glow
+            g.p(ex - 1, 18 + hover, "O" if i % 2 else "Y")
+        if atk and 3 <= i <= 12:
+            # a stick of bombs falling away
+            for b in range(3):
+                by = 20 + hover + (i - 3) * 2 - b * 3
+                if 20 + hover <= by <= 29:
+                    g.r(12 + b * 3, by, 2, 3, "k")
+                    g.p(12 + b * 3, by, "R")
+
+    return card_frame(body, i, atk, (15, 28, 13, 60), fx)
+
+
+# ------------------------------------------------------------ airport
+def draw_airport(i, atk):
+    def body(g):
+        # runway along the bottom, dashed centre line
+        g.r(0, 24, 32, 4, "1")
+        g.r(0, 24, 32, 1, "2")
+        for xx in range(1, 32, 5):
+            g.r(xx, 26, 3, 1, "4")
+        # hangar with an arched roof
+        g.r(2, 14, 17, 10, "2")
+        g.r(3, 12, 15, 2, "3")
+        g.r(5, 11, 11, 1, "3")
+        g.r(8, 10, 5, 1, "4")
+        g.r(2, 14, 17, 1, "4")
+        g.r(5, 17, 11, 7, "n")                     # open doors
+        g.r(5, 17, 11, 1, "k")
+        for xx in range(6, 15, 3):
+            g.r(xx, 18, 1, 6, "1")
+        # control tower with a glass cab
+        g.r(23, 9, 4, 15, "3")
+        g.r(23, 9, 1, 15, "4")
+        g.r(21, 5, 8, 4, "g")
+        g.r(21, 5, 8, 1, "h")
+        g.r(21, 4, 8, 1, "2")
+        g.r(24, 2, 2, 2, "2")
+        # windsock
+        g.r(30, 8, 1, 16, "2")
+
+    def fx(g):
+        # runway lights chase along the edge, the tower beacon blinks
+        for k, xx in enumerate(range(1, 32, 4)):
+            on = (k + i) % 4 == 0
+            g.p(xx, 24, "Y" if on else "O")
+        if blink(i, (0, 1, 2, 10, 11, 12)):
+            g.p(24, 1, "R")
+            g.p(25, 1, "R")
+        sway = (0, 1, 1, 0, -1, -1)[i % 6]
+        g.r(31, 8 + max(sway, 0), 1, 2, "R")
+        g.p(31, 10, "W")
+
+    return card_frame(body, i, atk, (16, 28, 15, 70), fx)
+
+
 # ------------------------------------------------------------ interceptor
 def draw_interceptor(i, atk):
     def body(g):
@@ -955,6 +1046,7 @@ CARDS = {
     "Special Ops": draw_specops,
     "Drone": draw_drone,
     "Fighter Jet": draw_jet,
+    "Bomber Jet": draw_bomber,
     "Interceptor": draw_interceptor,
     "Anti Aircraft": draw_aa,
     "Artilery": draw_artillery,
@@ -966,6 +1058,7 @@ CARDS = {
     "Factory": draw_factory,
     "Housing": draw_housing,
     "Corporation": draw_corp,
+    "Airport": draw_airport,
 }
 
 
@@ -1060,6 +1153,7 @@ PROJECTILES = {
     "Tank": p_shell,
     "Drone": p_plasma,
     "Fighter Jet": p_missile,
+    "Bomber Jet": p_shell,
     "Interceptor": p_missile,
     "Rocket Launcher": p_rocket,
     "RocketLauncher": p_rocket,
@@ -2307,7 +2401,7 @@ DECALS = {  # 3x3 patches for small surfaces, 5x5 for turrets and walls ('.' = s
 DECAL_AT = {
     "Tank": (13, 11, 5, 15), "Howitzer": (8, 11, 5, 10),
     "Infantry": (10, 18, 3, 12), "Special Ops": (10, 18, 3, 12),
-    "Drone": (14, 12, 3, 15), "Fighter Jet": (4, 10, 3, 4),
+    "Drone": (14, 12, 3, 15), "Fighter Jet": (4, 10, 3, 4), "Bomber Jet": (5, 10, 3, 5),
     "Interceptor": (15, 21, 3, None), "Anti Aircraft": (12, 17, 3, None),
     "Artilery": (12, 16, 3, None), "Rocket Launcher": (23, 18, 3, None),
     "Wall": (13, 21, 5, None),
@@ -2386,7 +2480,7 @@ def nation_touch(body, i):
                     body.p(x0 + k2, y0 + shift + j, ch)
 
 
-TINTED_STEEL = ("Drone", "Fighter Jet", "Special Ops")
+TINTED_STEEL = ("Drone", "Fighter Jet", "Bomber Jet", "Special Ops")
 
 
 def nation_frames(nation, card):

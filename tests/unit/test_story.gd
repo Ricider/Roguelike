@@ -135,7 +135,26 @@ func test_chapter_extras_come_on_top_of_the_defaults():
 			var d: int = int(a[key]) - int(b.get(key, 0))
 			if d != 0:
 				diff[key] = d
+		# set-piece Fighter Jets bring their own Airports (as many as their spread needs)
+		for key in diff.keys().duplicate():
+			if str(key).ends_with("|Airport"):
+				diff.erase(key)
 		assert_eq(diff, expect[n], "chapter %d adds exactly its extras" % n)
+
+func test_set_piece_jets_get_an_airport():
+	for cid in StoryText.ORDER:
+		for n in range(1, StoryText.count(cid) + 1):
+			var map_id := StoryText.map_id(cid, n)
+			WorldMap.use_map(map_id)
+			var faction := str(StoryText.campaign(WorldMap.STORY_CAMPAIGN).get("faction", "State Troops"))
+			var gs = load("res://GodotHelpers/GameState.gd").new()
+			var w := MapWar.new()
+			w.setup(MapCampaign.new(faction), func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name(faction, true))
+			gs.free()
+			for k in w.units.keys():
+				if w.units[k]["card"] is FighterJet:
+					var owner := str(w.units[k]["owner"])
+					assert_true(w.in_airport_range(owner, MapWar.key_to_hex(k)), "%s: %s's Fighter Jet starts in range of an Airport" % [map_id, owner])
 
 func test_chapter_one_set_pieces():
 	var w := _war_for(1, true)
