@@ -1348,6 +1348,8 @@ func _on_tile_selected(x: int, y: int) -> void:
 			_show_airport_range(str(info["owner"]), t0)
 		elif not info.is_empty() and info["card"] is FighterJet:
 			_show_jet_range(str(info["owner"]), t0) # (your own jets are picked to move instead)
+		elif not info.is_empty() and info["card"] is Unit:
+			_show_enemy_range(str(info["owner"]), t0) # any other enemy unit: what it can hit
 		return
 	var t := Vector2i(x, y)
 	var why := _war.can_place(_me(), _selected, t)
@@ -1958,6 +1960,43 @@ func _show_airport_range(owner: String, at: Vector2i) -> void:
 	var whose := "Your" if owner == _me() else owner + "'s"
 	_hover_bar.text = "%s Airport: Fighter Jets can be deployed and fly within %d hexes of it (shown); Bomber Jets there take 1 less damage. %d jet%s in range. Click elsewhere or Esc to hide." % [whose, MapWar.AIRPORT_RANGE, jets.size() - 1, "" if jets.size() == 2 else "s"]
 
+# A clicked enemy unit: its attack range (red for melee, blue for ranged, from where it
+# stands), brackets on everything it can hit, a ring on it. Cleared by the next click or Esc.
+func _show_enemy_range(owner: String, at: Vector2i) -> void:
+	var u := _war.units[MapCampaign.key_of(at.x, at.y)]["card"] as Unit
+	var r := _war.attack_range(owner, u, at)
+	var ranged: bool = (_war.players[owner] as Player).has_range_for(u)
+	var zone := {}
+	for h in _war.hexes_within(at, r):
+		zone[h] = true
+	_view.range_zones = [{"hexes": zone, "ranged": ranged}]
+	_view.range_targets = _war.targets_in_range(owner, at, r)
+	_view.group_marks = [at]
+	_hover_bar.text = "%s's %s: %s. %s" % [owner, u.card_name, _range_rule_text(u, r, ranged), _threat_text(owner, at, r)]
+
+func _range_rule_text(u: Unit, r: int, ranged: bool) -> String:
+	var shots := " (4 shots a turn)" if (u is RocketLauncher or u is Howitzer) else ""
+	if ranged:
+		return "hits a random target of the closest enemy nation within %d hexes%s (blue)" % [r, shots]
+	return "shoots the closest target within %d hexes%s (red)" % [r, shots]
+
+# "It can reach 2 of your cards and your flag." / "Nothing of yours is in its reach."
+func _threat_text(owner: String, at: Vector2i, r: int) -> String:
+	var mine := 0
+	for t in _war.targets_in_range(owner, at, r):
+		var info := _war.unit_at(t as Vector2i)
+		if not info.is_empty() and str(info["owner"]) == _me():
+			mine += 1
+	var flag_hit := _campaign().is_alive(_me()) and MapCampaign.hex_distance(at, _campaign().capital_site(_me())) <= r
+	if mine == 0 and not flag_hit:
+		return "Nothing of yours is in its reach."
+	var parts: Array = []
+	if mine > 0:
+		parts.append("%d of your cards" % mine)
+	if flag_hit:
+		parts.append("your flag")
+	return "It can reach %s." % " and ".join(parts)
+
 # A clicked (enemy) Fighter Jet: where its nation's Airports let it fly (blue, Airports
 # ringed) and what it can hit from where it is (red). Cleared by the next click or Esc.
 func _show_jet_range(owner: String, at: Vector2i) -> void:
@@ -1971,6 +2010,7 @@ func _show_jet_range(owner: String, at: Vector2i) -> void:
 		hit[h] = true
 	zones.append({"hexes": hit, "ranged": (_war.players[owner] as Player).has_range_for(jet)})
 	_view.range_zones = zones
+	_view.range_targets = _war.targets_in_range(owner, at, _war.attack_range(owner, jet, at))
 	_view.group_marks = [at] + airports
 	if airports.is_empty():
 		_hover_bar.text = "%s's Fighter Jet has no Airport: it loses %d HP every turn until it crashes or one is built. Red: what it can hit." % [owner, MapWar.JET_ATTRITION]
@@ -2241,10 +2281,7 @@ func _open_report() -> void:
 	close.pressed.connect(_close_report)
 	foot.add_child(close)
 	# centre once the table has a size
-	await get_tree().process_frame
-	if _report_panel != null and is_instance_valid(_report_panel):
-		_report_panel.reset_size()
-		_report_panel.position = ((size - _report_panel.size) * 0.5).floor()
+	_keep_fitted(_report_panel)
 
 func _close_report() -> void:
 	if _hover != null:
@@ -2460,6 +2497,30 @@ func _open_shop() -> void:
 	_clear_selection()
 	_build_shop(false)
 
+# Pop-up panels (shop, round report, your piles) size themselves to their content and
+# sit in the middle of the screen. Wrapped text can only be measured once it has a
+# width, which may take a frame or more, so a single resize after one frame could
+# leave a panel taller than its content. Instead the panel re-fits and re-centres
+# every time its content's minimum size changes (and when the window resizes).
+func _keep_fitted(panel: Control) -> void:
+	if panel == null:
+		return
+	var refit := func():
+		if is_instance_valid(panel):
+			panel.reset_size() # shrink to the content's current minimum
+			panel.size = panel.get_combined_minimum_size()
+			panel.position = ((size - panel.size) * 0.5).floor()
+	var later := func(): refit.call_deferred()
+	var content := panel.get_child(0) as Control if panel.get_child_count() > 0 else null
+	if content != null:
+		content.minimum_size_changed.connect(later) # goes away with the panel
+	resized.connect(later) # the window: unhooked when the panel closes
+	panel.tree_exiting.connect(func():
+		if resized.is_connected(later):
+			resized.disconnect(later))
+	refit.call()
+	refit.call_deferred() # again once this frame's layout is done
+
 func _close_shop() -> void:
 	if _hover != null:
 		_hover.hide_all()
@@ -2566,10 +2627,7 @@ func _open_piles(which: String) -> void:
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(_close_piles)
 	foot.add_child(close)
-	await get_tree().process_frame
-	if _piles_panel != null and is_instance_valid(_piles_panel):
-		_piles_panel.reset_size()
-		_piles_panel.position = ((size - _piles_panel.size) * 0.5).floor()
+	_keep_fitted(_piles_panel)
 
 func _pile_tile(card: Card, n: int, which: String, p: Player) -> Control:
 	var tile := PanelContainer.new()
@@ -2811,13 +2869,7 @@ func _build_shop(remove_mode: bool) -> void:
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(_close_shop)
 	foot.add_child(close)
-	# centre on screen once its size is known
-	_shop_panel.reset_size()
-	await get_tree().process_frame
-	if _shop_panel != null and is_instance_valid(_shop_panel):
-		# the wrapped odds line measures tall before it has a width; shrink back to fit
-		_shop_panel.reset_size()
-		_shop_panel.position = ((size - _shop_panel.size) * 0.5).floor()
+	_keep_fitted(_shop_panel)
 
 # "Infantry 29% · Wall 29% · Tank 9% ..." from the nation's starting deck.
 func _odds_text(nation: String) -> String:
