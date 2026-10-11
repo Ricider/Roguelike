@@ -39,6 +39,8 @@ var _inf_label: Label = null
 var _inf_box: Control = null
 var _shop_btn: Button = null
 var _shop_panel: PanelContainer = null
+var _piles_panel: PanelContainer = null # your draw / discard / graveyard piles
+var _pile_buttons: Dictionary = {} # "draw"/"discard"/"graveyard" -> Button (shows the count)
 var _briefing: Control = null
 signal briefing_closed
 var _report_panel: PanelContainer = null
@@ -455,6 +457,27 @@ func _build_ui() -> void:
 	_banner.add_theme_font_size_override("font_size", 16)
 	_banner.visible = false
 	side.add_child(_banner)
+	var piles_row := HBoxContainer.new()
+	piles_row.name = "PilesRow"
+	piles_row.add_theme_constant_override("separation", 4)
+	for spec in [["draw", "Draw"], ["discard", "Discard"], ["graveyard", "Graveyard"]]:
+		var pb := Button.new()
+		pb.name = "Pile" + str(spec[1])
+		pb.text = str(spec[1])
+		pb.custom_minimum_size = Vector2(0, 30)
+		pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pb.add_theme_font_size_override("font_size", 14)
+		pb.focus_mode = Control.FOCUS_NONE
+		var which: String = spec[0]
+		pb.pressed.connect(func(): _open_piles(which))
+		_pile_buttons[which] = pb
+		piles_row.add_child(pb)
+		var tips := {"draw": "[Draw pile]: the cards you will draw next, shown sorted (the order stays a secret).",
+			"discard": "[Discard pile]: cards played or discarded; shuffled back into the draw pile when it runs out.",
+			"graveyard": "[Graveyard]: your cards destroyed on the map. They are gone for good."}
+		var tip: String = tips[which]
+		_tip(pb, func(): return tip)
+	side.add_child(piles_row)
 	side.add_child(_section_label("NATIONS"))
 	_legend = VBoxContainer.new()
 	_legend.name = "Legend"
@@ -602,13 +625,14 @@ func _make_gauge(key: String, bg_path: String, fill_path: String, icon_path: Str
 		"money": _tip(col, func(): return TIP_MONEY + _upkeep_tip("money"))
 	return col
 
-# " Upkeep: -N per turn (5% of your units' total BioCost / MoneyCost)."
+# " Upkeep: -N per turn (the upkeep rate of your units' total BioCost / MoneyCost)."
 func _upkeep_tip(key: String) -> String:
 	if _war == null:
 		return ""
 	var up: Dictionary = _war.upkeep(_me())
 	var label := "BioCost" if key == "bio" else "MoneyCost"
-	return "\n[Upkeep]: -%d per turn, %d%% of the total %s of your units on the map." % [int(up[key]), roundi(MapWar.UPKEEP_RATE * 100.0), label]
+	var n: int = _war.unit_count(_me())
+	return "\n[Upkeep]: -%d per turn: %.2f%% of the total %s of your %d units on the map (10%%, plus 0.25%% for each unit beyond the first, so every extra unit makes them all dearer)." % [int(up[key]), _war.upkeep_rate(_me()) * 100.0, label, n]
 
 func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
 	var g: Dictionary = _gauges[key]
@@ -646,6 +670,7 @@ func _bump_influence(amount: int) -> void:
 func _refresh_player_card() -> void:
 	var c := _campaign()
 	var p := _human()
+	_refresh_pile_buttons()
 	_player_flag.texture = _flag_tex(c.player_nation)
 	_player_name.text = c.player_nation
 	if p != null:
@@ -842,6 +867,7 @@ func _clear_map_hover() -> void:
 
 # ------------------------------------------------------------------- hand
 func _refresh_hand() -> void:
+	_refresh_pile_buttons()
 	if _hover != null:
 		_hover.hide_all()
 	for child in _hand_box.get_children():
@@ -1180,7 +1206,10 @@ func _airport_zone(airports: Array) -> Dictionary:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var kc := (event as InputEventKey).keycode
-		if kc == KEY_ESCAPE and _report_panel != null:
+		if kc == KEY_ESCAPE and _piles_panel != null:
+			_close_piles()
+			get_viewport().set_input_as_handled()
+		elif kc == KEY_ESCAPE and _report_panel != null:
 			_close_report()
 			get_viewport().set_input_as_handled()
 		elif kc == KEY_ESCAPE and _shop_panel != null:
@@ -2437,6 +2466,154 @@ func _close_shop() -> void:
 	if _shop_panel != null and is_instance_valid(_shop_panel):
 		_shop_panel.queue_free()
 	_shop_panel = null
+
+# ------------------------------------------------------------------ your piles
+# Your draw pile (sorted, so the order stays hidden), discard pile and graveyard,
+# grouped by card, with art, counts and a hover card. Only your own piles.
+func _pile_cards(which: String) -> Array:
+	var p := _human()
+	if p == null:
+		return []
+	match which:
+		"draw": return p.DrawPile
+		"discard": return p.DiscardPile
+		"graveyard": return p.Graveyard
+	return []
+
+func _refresh_pile_buttons() -> void:
+	for which in _pile_buttons.keys():
+		var label: String = {"draw": "Draw", "discard": "Discard", "graveyard": "Graveyard"}[which]
+		(_pile_buttons[which] as Button).text = "%s %d" % [label, _pile_cards(which).size()]
+
+func _open_piles(which: String) -> void:
+	_close_piles()
+	_close_shop()
+	_close_report()
+	var p := _human()
+	if p == null:
+		return
+	_piles_panel = PanelContainer.new()
+	_piles_panel.name = "PilesPanel"
+	_piles_panel.theme_type_variation = &"GoldPanel"
+	_piles_panel.z_index = 60
+	add_child(_piles_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	_piles_panel.add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	v.add_child(head)
+	var title := Label.new()
+	title.text = "YOUR CARDS"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	head.add_child(title)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	for spec in [["draw", "Draw pile"], ["discard", "Discard pile"], ["graveyard", "Graveyard"]]:
+		var tb := Button.new()
+		tb.text = "%s (%d)" % [spec[1], _pile_cards(spec[0]).size()]
+		tb.focus_mode = Control.FOCUS_NONE
+		tb.theme_type_variation = &"SelectedButton" if which == spec[0] else &""
+		var w2: String = spec[0]
+		tb.pressed.connect(func(): _open_piles(w2))
+		head.add_child(tb)
+	var note := Label.new()
+	note.text = {"draw": "What you will draw next, sorted by name: the order stays a secret. You draw back up to 10 cards at the start of each turn.",
+		"discard": "Cards you played or discarded. When the draw pile runs out, these are shuffled back into it.",
+		"graveyard": "Your cards destroyed on the map. They are gone for good."}[which]
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(760, 0)
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
+	v.add_child(note)
+	# group by card name
+	var stacks := {}
+	for c in _pile_cards(which):
+		var nm := (c as Card).card_name
+		if not stacks.has(nm):
+			stacks[nm] = []
+		(stacks[nm] as Array).append(c)
+	var names: Array = stacks.keys()
+	names.sort()
+	if names.is_empty():
+		var none := Label.new()
+		none.text = "Empty."
+		none.add_theme_font_size_override("font_size", 16)
+		v.add_child(none)
+	else:
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(800, mini(430, 150 * ((names.size() + 4) / 5)))
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		v.add_child(scroll)
+		var grid := GridContainer.new()
+		grid.columns = 5
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		scroll.add_child(grid)
+		for nm in names:
+			var stack: Array = stacks[nm]
+			grid.add_child(_pile_tile(stack[0] as Card, stack.size(), which, p))
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	v.add_child(foot)
+	var close := Button.new()
+	close.text = "Close"
+	close.theme_type_variation = &"PrimaryButton"
+	close.custom_minimum_size = Vector2(120, 40)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(_close_piles)
+	foot.add_child(close)
+	await get_tree().process_frame
+	if _piles_panel != null and is_instance_valid(_piles_panel):
+		_piles_panel.reset_size()
+		_piles_panel.position = ((size - _piles_panel.size) * 0.5).floor()
+
+func _pile_tile(card: Card, n: int, which: String, p: Player) -> Control:
+	var tile := PanelContainer.new()
+	tile.custom_minimum_size = Vector2(150, 140)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.add_child(v)
+	var t := Label.new()
+	t.text = "%s  x%d" % [card.card_name, n]
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 15)
+	t.clip_text = true
+	v.add_child(t)
+	var art: Control = Card.create_sprite_for(card.card_name, Vector2(64, 64), _me())
+	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(art)
+	var stat := Label.new()
+	if card is Unit:
+		stat.text = "HP %d  DMG %d" % [p.effective_hitpoints_for(card), p.effective_damage_for(card as Unit, null)]
+	elif card is Building:
+		stat.text = "HP %d  INC %d" % [p.effective_hitpoints_for(card), (card as Building).Income]
+	stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stat.add_theme_font_size_override("font_size", 13)
+	stat.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
+	v.add_child(stat)
+	var cost := Label.new()
+	cost.text = "$%d  Bio %d" % [p.get_effective_money_cost(card), card.BioCost]
+	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cost.add_theme_font_size_override("font_size", 13)
+	cost.add_theme_color_override("font_color", Color(1.0, 0.86, 0.5))
+	v.add_child(cost)
+	tile.mouse_filter = Control.MOUSE_FILTER_STOP
+	var where: String = {"draw": "In your draw pile", "discard": "In your discard pile", "graveyard": "Destroyed (graveyard)"}[which]
+	tile.mouse_entered.connect(func(): _hover.show_card(card, _hand_info(card, p, "%s (x%d)" % [where, n]), tile.get_global_rect()))
+	tile.mouse_exited.connect(func(): _hover.hide_all())
+	return tile
+
+func _close_piles() -> void:
+	if _hover != null:
+		_hover.hide_all()
+	if _piles_panel != null and is_instance_valid(_piles_panel):
+		_piles_panel.queue_free()
+	_piles_panel = null
 
 func _shop_item(title: String, art: Control, lines: Array, cost: int, can_buy: bool, owned: bool, on_buy: Callable, hover_card: Card = null) -> Button:
 	var btn := Button.new()

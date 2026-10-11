@@ -1145,26 +1145,28 @@ func test_upkeep_is_five_percent_of_the_units_on_the_map():
 	_drop(w, A, Tank.new(), 14) # 25 Money, 10 Bio
 	var money: int = 4 * Infantry.new().MoneyCost + Tank.new().MoneyCost # 45
 	var bio: int = 4 * Infantry.new().BioCost + Tank.new().BioCost # 70
-	assert_eq(w.upkeep(A), {"money": roundi(money * 0.05), "bio": roundi(bio * 0.05)}, "5% of each, rounded on the total")
+	var rate := 0.10 + 0.0025 * 4 # 5 units: 10% plus 0.25% for each beyond the first
+	assert_almost_eq(w.upkeep_rate(A), rate, 0.0001, "11% for 5 units")
+	assert_eq(w.upkeep(A), {"money": roundi(money * rate), "bio": roundi(bio * rate)}, "of each, rounded on the total")
 	w.campaign.owner[MapCampaign.key_of(9, 10)] = A
 	w._put(A, Factory.new(), Vector2i(9, 10))
-	assert_eq(w.upkeep(A), {"money": roundi(money * 0.05), "bio": roundi(bio * 0.05)}, "buildings cost nothing to keep")
+	assert_eq(w.upkeep(A), {"money": roundi(money * rate), "bio": roundi(bio * rate)}, "buildings cost nothing to keep (nor raise the rate)")
 	assert_eq(w.upkeep(B), {"money": 0, "bio": 0}, "each nation pays for its own")
 
 func test_upkeep_comes_out_of_the_turns_income():
 	var w := _war()
 	for x in range(10, 15):
-		_drop(w, A, SpecialOps.new(), x) # 5 x (15 Money, 20 Bio): 4 Money, 5 Bio a turn
+		_drop(w, A, SpecialOps.new(), x) # 5 x (15 Money, 20 Bio) at 11%: 8 Money, 11 Bio a turn
 	var up := w.upkeep(A)
-	assert_eq(up, {"money": 4, "bio": 5}, "75 Money, 100 Bio of units")
+	assert_eq(up, {"money": 8, "bio": 11}, "75 Money, 100 Bio of units at 11%")
 	var p: Player = w.players[A]
 	p.MoneySupply = 50
 	p.BioSupply = 50
 	var money_gain := p.predicted_money_gain()
 	var bio_gain := p.predicted_bio_gain()
 	w.begin_turn(A)
-	assert_eq(p.MoneySupply, 50 + money_gain - 4, "income minus upkeep")
-	assert_eq(p.BioSupply, 50 + bio_gain - 5, "for Bio too")
+	assert_eq(p.MoneySupply, 50 + money_gain - 8, "income minus upkeep")
+	assert_eq(p.BioSupply, 50 + bio_gain - 11, "for Bio too")
 	assert_eq(w.last_upkeep, up, "and the map screen is told what was paid")
 	# a broke nation just hits 0
 	p.MoneySupply = 0
@@ -1313,7 +1315,11 @@ func test_last_economy_explains_the_turns_income():
 	assert_eq(money["Base income"], 10, "base income")
 	assert_eq(money["Factory x2"], 30, "two Factories, 15 each")
 	assert_eq(money["Housing x1"], 2, "a Housing's 2 Money")
-	assert_eq(money["Upkeep (5% of your units' MoneyCost)"], -2, "upkeep for 45 Money of units")
+	var upkeep_line := 0
+	for key in money.keys():
+		if str(key).begins_with("Upkeep (3 units: 10.50%"):
+			upkeep_line = money[key]
+	assert_eq(upkeep_line, -5, "upkeep for 45 Money of units at 10.5%")
 	var sum := 0
 	for l in e["money"]:
 		sum += int(l[1])
@@ -1502,3 +1508,16 @@ func test_difficulty_switches_the_ai_nations_between_classic_and_tuned():
 	assert_true(w.ai_policy.is_empty(), "Hard: everyone on the tuned default")
 	assert_eq(w.ai_param("Horde", "w_cohesion"), MapWar.AI_DEFAULT["w_cohesion"], "the tuned AI")
 	gs.free()
+
+func test_upkeep_ramps_with_every_unit():
+	var w := _zone_war()
+	var paid: Array = [] # Bio upkeep for 1, 2, 3 ... Infantry
+	for i in range(1, 25):
+		_drop(w, A, Infantry.new(), i)
+		paid.append(int(w.upkeep(A)["bio"]))
+	assert_almost_eq(w.upkeep_rate(A), 0.10 + 0.0025 * 23, 0.0001, "24 units: 15.75%")
+	# the cost of each extra unit keeps growing: the last few cost more than the first few
+	var first_steps: int = paid[4] - paid[0]
+	var last_steps: int = paid[23] - paid[19]
+	assert_gt(last_steps, first_steps, "the 21st-24th units add more upkeep than the 2nd-5th")
+	assert_eq(paid[9], roundi(150 * (0.10 + 0.0025 * 9)), "10 Infantry: 18 Bio a turn (was 8)")

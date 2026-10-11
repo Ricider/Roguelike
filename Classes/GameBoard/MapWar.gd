@@ -546,10 +546,18 @@ func _remove(k: String) -> void:
 	units.erase(k)
 
 # ------------------------------------------------------------------ turns
-# Upkeep: every turn a nation pays UPKEEP_RATE of the total cost of its units on the
-# map, MoneyCost out of its Money and BioCost out of its Bio (buildings are free to
-# keep). Rounded on the totals; supplies never drop below 0.
-const UPKEEP_RATE := 0.05
+# Upkeep: every turn a nation pays a share of the total cost of its units on the map,
+# MoneyCost out of its Money and BioCost out of its Bio (buildings are free to keep).
+# The share is UPKEEP_RATE plus UPKEEP_RAMP for every unit beyond the first, applied
+# to the whole army, so each extra unit makes all of them dearer: 10 units cost 12.25%,
+# 20 units 14.75%, 30 units 17.25%. Rounded on the totals; supplies never drop below 0.
+const UPKEEP_RATE := 0.10
+const UPKEEP_RAMP := 0.0025
+
+# The share of its units' cost `nation` pays this turn.
+func upkeep_rate(nation: String) -> float:
+	return UPKEEP_RATE + UPKEEP_RAMP * maxi(unit_count(nation) - 1, 0)
+
 
 # {"money": int, "bio": int} that `nation` pays at the start of its next turn.
 func upkeep(nation: String) -> Dictionary:
@@ -560,7 +568,8 @@ func upkeep(nation: String) -> Dictionary:
 		if c is Unit:
 			money += c.MoneyCost
 			bio += c.BioCost
-	return {"money": roundi(money * UPKEEP_RATE), "bio": roundi(bio * UPKEEP_RATE)}
+	var rate := upkeep_rate(nation)
+	return {"money": roundi(money * rate), "bio": roundi(bio * rate)}
 
 func pay_upkeep(nation: String) -> Dictionary:
 	var up := upkeep(nation)
@@ -619,7 +628,7 @@ func begin_turn(nation: String) -> void:
 		if capped > 0:
 			lines.append(["Over the 200 cap", -capped])
 		var after: int = p.MoneySupply if key == "money" else p.BioSupply
-		lines.append(["Upkeep (5%% of your units' %s)" % ("MoneyCost" if key == "money" else "BioCost"), after - after_income]) # shown even at 0
+		lines.append(["Upkeep (%d units: %.2f%% of their %s)" % [unit_count(nation), upkeep_rate(nation) * 100.0, "MoneyCost" if key == "money" else "BioCost"], after - after_income]) # shown even at 0
 	econ["money_from"] = money0
 	econ["money_to"] = p.MoneySupply
 	econ["bio_from"] = bio0
