@@ -169,6 +169,19 @@ Screenshot helper for checking UI changes without clicking through the game:
 godot --path . -s tools/dev/screenshot.gd -- res://scenes/Game.tscn /tmp/shot.png 160 battle_select
 ```
 
+AI tuning: the map AI's choices (what it buys, what it builds and where, how it moves) are named settings in `MapWar.AI_DEFAULT`, and `MapWar.ai_policy[nation]` can override any of them. `tools/dev/ai_tournament.gd` plays two strategies against each other in headless games. Each pair is two games on the same map and seed, with a random half of the nations on strategy A, then the sides swapped, so faction strength cancels out. It reports A's average gain in share of the land, with its standard error:
+```
+T_A='{"w_cohesion": 2.0}' T_B='{}' T_PAIRS=8 T_MAP=europe T_ROUNDS=25 godot --headless --path . -s tools/dev/ai_tournament.gd
+```
+The current AI came out of five rounds of such self-play against the first AI (`MapWar.AI_CLASSIC`). On fresh seeds it gains about +1.5 points of Europe and +2.7 points of the world map per nation (t about 5), roughly 12-21% more land. What works:
+  - keeping units together, and only moving when a spot is clearly better (`w_cohesion`, `w_stay`); this is most of the gain
+  - fearing flanks less, since staying together already prevents them
+  - closing in faster when out of range
+  - placing new units nearest the actual threat
+  - buying the modifier that suits the deck and the cards with the most firepower and HP per Influence
+
+What did not help, or hurt: keeping Money back for Interceptors, valuing home ground more, chasing wounded enemies harder, ganging up on the weakest neighbour, thinning Walls from the deck, skipping Walls, building units before economy, and pulling toward enemy flags. The main menu's **Difficulty** setting picks the AI for New Game and Campaign alike. **Hard** (the default) is the tuned AI, and **Normal** is the classic one, a gentler opponent, especially in the story chapters. The choice is saved in `user://settings.cfg` and applied to every AI nation when a war starts or a save loads (`GameState.apply_ai_difficulty`), and the battle log names it at the start of a game.
+
 ## Sound & music
 The music is a modern synthesized score, made by `tools/soundtrack.py` (stdlib-only Python). It uses detuned analog-style pads through resonant filters, plucked arpeggios with ping-pong delay, sub bass, a felt piano, electronic drums with sidechain pumping, and a stereo reverb with a soft-clipping master. It writes three seamless looping stereo tracks (32 kHz) to `Assets/Audio/music/`:
 

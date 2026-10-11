@@ -86,6 +86,8 @@ func _ready() -> void:
 	if _war != null:
 		_view.set_war(_war)
 		_log_line("[color=#ffd966]Turn %d.[/color] Place cards on your hexes, then End Turn." % _war.turn)
+		if gs != null:
+			_log_line("[color=#9fd3ff]Difficulty: %s[/color] (change it on the main menu)." % ("Hard: the tuned AI" if gs.get_ai_difficulty() == "hard" else "Normal: the classic AI"))
 		if WorldMap.STORY_CHAPTER > 0:
 			var sch: Dictionary = StoryText.chapter(WorldMap.STORY_CAMPAIGN, WorldMap.STORY_CHAPTER)
 			_log_line("[color=#ffd966]Chapter %d: %s.[/color] %s" % [WorldMap.STORY_CHAPTER, sch["title"], sch["objective"]])

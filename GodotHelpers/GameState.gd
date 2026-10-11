@@ -164,7 +164,41 @@ func ensure_map_war() -> MapWar:
 	else:
 		map_war = MapWar.new()
 		map_war.setup(map_campaign, maker, run_player)
+	apply_ai_difficulty(map_war)
 	return map_war
+
+# ---------------------------------------------------------------- difficulty
+# "hard": the AI tuned by self-play (MapWar.AI_DEFAULT); "normal": the first, classic
+# AI (MapWar.AI_CLASSIC). Chosen on the main menu, kept in user://settings.cfg, and
+# applied to every AI nation when a war starts or a save is loaded.
+const DIFFICULTIES := ["normal", "hard"]
+const SETTINGS_FILE := "user://settings.cfg"
+
+func get_ai_difficulty() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_FILE) != OK:
+		return "hard"
+	var d := str(cfg.get_value("game", "ai_difficulty", "hard"))
+	return d if DIFFICULTIES.has(d) else "hard"
+
+func set_ai_difficulty(d: String) -> void:
+	if not DIFFICULTIES.has(d):
+		return
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_FILE) # keep the other settings in the file
+	cfg.set_value("game", "ai_difficulty", d)
+	cfg.save(SETTINGS_FILE)
+	if map_war != null:
+		apply_ai_difficulty(map_war) # a war in progress follows along
+
+func apply_ai_difficulty(war: MapWar, difficulty: String = "") -> void:
+	if difficulty == "":
+		difficulty = get_ai_difficulty()
+	war.ai_policy.clear()
+	if difficulty == "normal":
+		for nm in war.players.keys():
+			if map_campaign == null or str(nm) != map_campaign.player_nation:
+				war.ai_policy[nm] = MapWar.AI_CLASSIC
 
 func end_map_battle():
 	map_war_target = ""

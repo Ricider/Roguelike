@@ -405,6 +405,10 @@ func _enforce_menu_order():
 		vbox.add_child(btn)
 		vbox.move_child(btn, insert_idx)
 		insert_idx += 1
+	# the Difficulty setting sits under the buttons
+	var diff = vbox.get_node_or_null("DifficultyRow")
+	if diff != null:
+		vbox.move_child(diff, mini(insert_idx, vbox.get_child_count() - 1))
 
 # The State Troops story campaign: chapter select, intros, transitions (scenes/Story.tscn).
 func _add_campaign_button():
@@ -544,6 +548,9 @@ func _build_player_chooser():
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.add_theme_color_override("font_color", Color(1,0.85,0.3))
 	chooser.add_child(hint)
+	var diff := _difficulty_row()
+	diff.name = "DifficultyRow" # placed under the menu buttons by _enforce_menu_order
+	vbox.add_child(diff)
 	var play = vbox.get_node_or_null("PlayButton")
 	if play:
 		vbox.add_child(chooser)
@@ -551,6 +558,59 @@ func _build_player_chooser():
 	else:
 		vbox.add_child(chooser)
 	_select_player(_selected_player)
+
+# Difficulty: Normal (the classic AI) or Hard (the AI tuned by self-play), for New Game
+# and Campaign alike; GameState keeps it in user://settings.cfg.
+var _difficulty_buttons: Dictionary = {}
+var _difficulty_note: Label = null
+const DIFFICULTY_NOTES := {
+	"normal": "Normal: the classic AI. Its units spread out and chase targets.",
+	"hard": "Hard: the AI tuned by self-play. It keeps its army together and buys smarter.",
+}
+
+func _difficulty_row() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	var lbl := Label.new()
+	lbl.text = "Difficulty:"
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	row.add_child(lbl)
+	for d in ["normal", "hard"]:
+		var b := Button.new()
+		b.name = "Difficulty" + str(d).capitalize()
+		b.text = str(d).capitalize()
+		b.custom_minimum_size = Vector2(110, 38)
+		b.add_theme_font_size_override("font_size", 14)
+		b.focus_mode = Control.FOCUS_NONE
+		var dd: String = d
+		b.pressed.connect(func(): _set_difficulty(dd))
+		_difficulty_buttons[d] = b
+		row.add_child(b)
+	box.add_child(row)
+	_difficulty_note = Label.new()
+	_difficulty_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_difficulty_note.add_theme_font_size_override("font_size", 13)
+	_difficulty_note.add_theme_color_override("font_color", Color(0.8, 0.82, 0.9))
+	box.add_child(_difficulty_note)
+	var gs = get_node_or_null("/root/GameState")
+	_show_difficulty(gs.get_ai_difficulty() if gs != null else "hard")
+	return box
+
+func _set_difficulty(d: String) -> void:
+	var gs = get_node_or_null("/root/GameState")
+	if gs != null:
+		gs.set_ai_difficulty(d)
+	_show_difficulty(d)
+
+func _show_difficulty(d: String) -> void:
+	for k in _difficulty_buttons.keys():
+		(_difficulty_buttons[k] as Button).theme_type_variation = &"SelectedButton" if k == d else &""
+	if _difficulty_note != null:
+		_difficulty_note.text = DIFFICULTY_NOTES.get(d, "")
 
 func _select_player(name: String):
 	_selected_player = name

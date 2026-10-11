@@ -887,6 +887,7 @@ func ai_move(nation: String) -> Array:
 			enemy_flags.append(fs[fn])
 	if foes.is_empty() and enemy_flags.is_empty():
 		return moves
+	var wts := _move_weights(nation)
 	for k in cards_of(nation):
 		if not units.has(k) or not (units[k]["card"] is Unit) or moves_left(k) <= 0:
 			continue
@@ -896,9 +897,9 @@ func ai_move(nation: String) -> Array:
 			continue
 		var u := units[k]["card"] as Unit
 		var best := here
-		var best_score := _position_score(nation, k, here, foes, enemy_flags, attack_range(nation, u, here)) + 0.25 # a small bias to stay put
+		var best_score := _position_score(nation, k, here, foes, enemy_flags, attack_range(nation, u, here), wts) + float(ai_param(nation, "w_stay")) # a small bias to stay put
 		for t in reach.keys():
-			var sc := _position_score(nation, k, t, foes, enemy_flags, attack_range(nation, u, t)) # shorter reach from a boat
+			var sc := _position_score(nation, k, t, foes, enemy_flags, attack_range(nation, u, t), wts) # shorter reach from a boat
 			if sc > best_score:
 				best_score = sc
 				best = t
@@ -910,13 +911,16 @@ func ai_move(nation: String) -> Array:
 
 # How good hex `t` is for the unit on key `k`. foes: [[hex, hurt 0..1], ...] for every
 # enemy card; enemy_flags: their flag hexes; reach_hexes: the unit's attack range.
-func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_flags: Array = [], reach_hexes: int = 1 << 20) -> float:
+func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_flags: Array = [], reach_hexes: int = 1 << 20, wts: Dictionary = {}) -> float:
+	if wts.is_empty():
+		wts = _move_weights(nation)
 	var score := 0.0
 	# the nearest enemy card (for walls), the nearest target (cards or flags, for range),
 	# and a pull towards badly hurt enemies nearby
 	var nearest := Vector2i(-1, -1)
 	var nearest_d := 1 << 30
 	var weak_pull := 0.0
+	var w_weak: float = wts["w_weak"]
 	for f in foes:
 		var et: Vector2i = f[0]
 		var d := MapCampaign.hex_distance(t, et)
@@ -925,30 +929,77 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 			nearest = et
 		var hurt: float = f[1]
 		if hurt > 0.0:
-			weak_pull += hurt * 6.0 / float(1 + d) # closer to a badly hurt enemy is better
+			weak_pull += hurt * w_weak / float(1 + d) # closer to a badly hurt enemy is better
 	var target_d := nearest_d
+	var flag_d := 1 << 30
 	for fl in enemy_flags:
-		target_d = mini(target_d, MapCampaign.hex_distance(t, fl as Vector2i))
+		var fd := MapCampaign.hex_distance(t, fl as Vector2i)
+		target_d = mini(target_d, fd)
+		flag_d = mini(flag_d, fd)
 	if target_d <= reach_hexes:
-		score += 5.0 # something to shoot from here
+		score += float(wts["w_inrange"]) # something to shoot from here
 	elif target_d < (1 << 30):
-		score -= 0.8 * float(target_d - reach_hexes) # else: as close as it can get
+		score -= float(wts["w_close"]) * float(target_d - reach_hexes) # else: as close as it can get
+	if float(wts["w_flag"]) != 0.0 and flag_d < (1 << 30):
+		score += float(wts["w_flag"]) * 4.0 / float(2 + flag_d) # toward enemy flags: hits there cost them HP
 	score += weak_pull
-	score -= 2.5 * float(flank_at(nation, t)) # don't walk into a pincer
+	var focus_hexes: Array = wts.get("focus_hexes", [])
+	if not focus_hexes.is_empty():
+		for fh in focus_hexes:
+			if MapCampaign.hex_distance(t, fh as Vector2i) <= reach_hexes:
+				score += float(wts["w_focus"]) # can shoot at the nation we are ganging up on
+				break
+	score -= float(wts["w_flank"]) * float(flank_at(nation, t)) # don't walk into a pincer
 	if units.has(k) and in_boat(units[k]["card"], t):
-		score -= 1.5 * float(SEA_DAMAGE_PENALTY) # boats are exposed: land when it can
+		score -= float(wts["w_boat"]) * float(SEA_DAMAGE_PENALTY) # boats are exposed: land when it can
+	if float(wts["w_home"]) != 0.0 and campaign.owner_of(t.x, t.y) == nation:
+		score += float(wts["w_home"]) # home ground: +1 damage
+	var w_coh: float = wts["w_cohesion"]
 	for nb in MapCampaign.wrapped_neighbors(t):
 		var info := unit_at(nb as Vector2i)
 		if info.is_empty() or str(info["owner"]) != nation or MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y) == k:
 			continue
 		var c: Card = info["card"]
 		if c is Wall and nearest.x >= 0 and MapCampaign.hex_distance(nb as Vector2i, nearest) < nearest_d:
-			score += 4.0 # the wall stands between this hex and the nearest enemy
+			score += float(wts["w_wall"]) # the wall stands between this hex and the nearest enemy
 		elif c is Barracks:
-			score += 2.5
+			score += float(wts["w_barracks"])
 		elif c is Interceptor:
-			score += 2.0
+			score += float(wts["w_interceptor"])
+		elif c is Unit:
+			score += w_coh # stick together: harder to flank
 	return score
+
+func _move_weights(nation: String) -> Dictionary:
+	var out := {}
+	for key in ["w_inrange", "w_close", "w_wall", "w_barracks", "w_interceptor", "w_flank", "w_boat", "w_weak", "w_flag", "w_home", "w_cohesion", "w_focus"]:
+		out[key] = float(ai_param(nation, key))
+	out["focus_hexes"] = []
+	if str(ai_param(nation, "focus")) == "weakest" and float(out["w_focus"]) != 0.0:
+		var victim := focus_target(nation)
+		if victim != "":
+			var hexes: Array = []
+			for k in cards_of(victim):
+				hexes.append(key_to_hex(k))
+			if campaign.is_alive(victim):
+				hexes.append(campaign.capital_site(victim))
+			out["focus_hexes"] = hexes
+	return out
+
+# The neighbour `nation` should gang up on: the one with the least HP left (share of its max).
+func focus_target(nation: String) -> String:
+	var best := ""
+	var best_hp := 2.0
+	for nb in campaign.neighbors_of(nation):
+		var n := str(nb)
+		if n == nation or not alive(n):
+			continue
+		var p: Player = players[n]
+		var frac := float(p.HitPoints) / float(maxi(p.MaxHitPoints, 1))
+		if frac < best_hp:
+			best_hp = frac
+			best = n
+	return best
 
 # ------------------------------------------------------------------- shop
 # Copies of each card in a player's whole deck (piles, hand and board), used as
@@ -1067,26 +1118,149 @@ func remove_card(nation: String, card: Card) -> bool:
 
 # AI shopping: a random affordable modifier (they last all game), then the
 # priciest affordable cards until Influence runs out. Returns item names bought.
+# ---------------------------------------------------------------- AI policy
+# Every choice the AI makes is a named setting, so strategies can be compared in
+# headless tournaments (tools/dev/ai_tournament.gd). AI_DEFAULT is what every AI
+# nation plays; ai_policy[nation] can override any of it.
+#   mod_pick     "random" any affordable modifier | "fit" the one that suits its deck | "none"
+#   card_pick    "priciest" | "value" (most firepower and HP per Influence) | "army" (units first)
+#   influence_reserve  Influence kept back after shopping
+#   build_order  "economy" buildings first | "army" units first | "auto" economy only while income is low
+#   money_reserve      Money kept unspent (Interceptors need 6 to block)
+#   walls        "always" | "front" (only near enemy units) | "never"
+#   unit_spot    "frontier" nearest the border | "threat" nearest enemy units and flags
+#   move weights: w_inrange (something to shoot), w_close (per hex short of range), w_wall,
+#     w_barracks, w_interceptor, w_flank (penalty), w_boat (penalty), w_weak (wounded
+#     enemies), w_stay (bias to hold still), w_flag (pull to enemy flags), w_home (own
+#     land: +1 damage), w_cohesion (per friendly unit next to it)
+#   focus        "none" | "weakest": gang up on the neighbour with the least HP left,
+#     w_focus being the bonus for a spot that can shoot at it
+#   thin_walls   spend REMOVE_COST Influence a turn taking a Wall out of the deck
+#
+# AI_DEFAULT came out of self-play tournaments against AI_CLASSIC (the first AI): over
+# 5 rounds of paired games on the Europe and world maps it gained about +1.4 points of
+# Europe and +2.6 points of the world map per nation (t about 4). What made the difference:
+#   - keep units together (w_cohesion 1) and only move when it is clearly better
+#     (w_stay 3): loose units get flanked and picked off; most of the gain
+#   - fear flanks less (w_flank 1): staying together already prevents them
+#   - close in faster when out of range (w_close 2.5)
+#   - place new units nearest the actual threat, not just the border (unit_spot "threat")
+#   - buy the modifier that suits the deck and the cards with the most firepower and HP
+#     per Influence (mod_pick "fit", card_pick "value")
+# What did not help, or hurt: keeping Money back for Interceptors, valuing home ground
+# more, chasing wounded enemies harder, ganging up on the weakest neighbour (focus),
+# thinning Walls from the deck, skipping Walls, units-first building, flag pulls.
+const AI_DEFAULT := {
+	"mod_pick": "fit", "card_pick": "value", "influence_reserve": 0,
+	"build_order": "economy", "money_reserve": 0, "walls": "always", "unit_spot": "threat",
+	"w_inrange": 5.0, "w_close": 2.5, "w_wall": 4.0, "w_barracks": 2.5, "w_interceptor": 2.0,
+	"w_flank": 1.0, "w_boat": 1.5, "w_weak": 6.0, "w_stay": 3.0, "w_flag": 0.0, "w_home": 0.0,
+	"w_cohesion": 1.0, "focus": "none", "w_focus": 0.0, "thin_walls": false,
+}
+# The first AI, kept for comparisons (and as an easier opponent): pass it as ai_policy.
+const AI_CLASSIC := {
+	"mod_pick": "random", "card_pick": "priciest", "unit_spot": "frontier",
+	"w_close": 0.8, "w_flank": 2.5, "w_stay": 0.25, "w_cohesion": 0.0,
+}
+var ai_policy: Dictionary = {} # nation -> {setting: value} overriding AI_DEFAULT
+
+func ai_param(nation: String, key: String) -> Variant:
+	var own: Dictionary = ai_policy.get(nation, {})
+	return own.get(key, AI_DEFAULT[key])
+
+# How well a modifier suits `nation`'s starting deck (for mod_pick "fit").
+func _modifier_fit(nation: String, m: Modifier) -> float:
+	var w: Dictionary = deck_weights.get(nation, {})
+	var total := 0.0
+	var units_n := 0.0
+	var flyers := 0.0
+	var people := 0.0
+	for nm in w.keys():
+		var c: Card = (players[nation] as Player)._base_card_by_name(str(nm))
+		if c == null:
+			continue
+		var n := float(w[nm])
+		total += n
+		if c is Unit:
+			units_n += n
+			if (c as Unit).Flying:
+				flyers += n
+			if c.BioCost > c.MoneyCost:
+				people += n
+	if total <= 0.0:
+		return 0.0
+	match m.modifier_name:
+		"Guerilla Warfare": return 2.0 * people / total
+		"Fanaticism": return 1.6 * units_n / total
+		"Aerial Supremacy", "Advanced Robotics": return 2.2 * flyers / total
+		"Corruption": return 0.9
+		"Conscription": return 1.0 if (players[nation] as Player).BioSupply < 60 else 0.3
+		"State of emergency": return 0.7
+		"Defensive Doctrine": return 0.6
+	return 0.0
+
+# Firepower and toughness per Influence (card_pick "value").
+static func _card_value(c: Card) -> float:
+	if c is Unit:
+		var u := c as Unit
+		var shots := 4.0 if (c is RocketLauncher or c is Howitzer) else 1.0
+		return (u.Damage * shots * 3.0 + u.HitPoints + (6.0 if u.HasRange else 0.0)) / maxf(c.InfluenceCost, 1.0)
+	if c is Building:
+		return ((c as Building).Income * 2.0 + (c as Building).HitPoints * 0.3) / maxf(c.InfluenceCost, 1.0)
+	return 0.0
+
 func ai_shop(nation: String) -> Array:
 	var p: Player = players[nation]
 	var shop := shop_of(nation)
 	var bought: Array = []
 	last_modifier_changes = []
 	last_modifier_changes_nation = ""
-	# a random affordable modifier, so nations don't all converge on the same one
+	var reserve: int = int(ai_param(nation, "influence_reserve"))
+	var mod_pick: String = ai_param(nation, "mod_pick")
 	var affordable: Array = []
 	for m in shop["mods"]:
-		if p.Influence >= (m as Modifier).InfluenceCost and not p.has_modifier((m as Modifier).modifier_name):
+		if p.Influence - reserve >= (m as Modifier).InfluenceCost and not p.has_modifier((m as Modifier).modifier_name):
 			affordable.append(m)
-	if not affordable.is_empty():
-		var pick: Modifier = affordable[rng.randi_range(0, affordable.size() - 1)]
-		if buy_modifier(nation, pick):
+	if not affordable.is_empty() and mod_pick != "none":
+		var pick: Modifier = null
+		if mod_pick == "fit":
+			var best_fit := 0.5 # only buy one that clearly suits the deck
+			for m in affordable:
+				var f := _modifier_fit(nation, m)
+				if f > best_fit:
+					best_fit = f
+					pick = m
+		else:
+			# a random affordable modifier, so nations don't all converge on the same one
+			pick = affordable[rng.randi_range(0, affordable.size() - 1)]
+		if pick != null and buy_modifier(nation, pick):
 			bought.append(pick.modifier_name)
+	if bool(ai_param(nation, "thin_walls")) and p.Influence - reserve >= REMOVE_COST:
+		for pile in [p.DrawPile, p.DiscardPile, p.Hand]:
+			var wall: Card = null
+			for c in pile:
+				if c is Wall:
+					wall = c
+					break
+			if wall != null:
+				if remove_card(nation, wall):
+					bought.append("(removed a Wall)")
+				break
+	var card_pick: String = ai_param(nation, "card_pick")
 	while true:
 		var best: Card = null
+		var best_score := -INF
 		for c in shop["cards"]:
 			var card := c as Card
-			if card.InfluenceCost <= p.Influence and (best == null or card.InfluenceCost > best.InfluenceCost):
+			if card.InfluenceCost > p.Influence - reserve:
+				continue
+			var score: float = float(card.InfluenceCost)
+			if card_pick == "value":
+				score = _card_value(card)
+			elif card_pick == "army":
+				score = float(card.InfluenceCost) + (1000.0 if card is Unit else 0.0)
+			if score > best_score:
+				best_score = score
 				best = card
 		if best == null or not buy_card(nation, best):
 			break
@@ -1119,6 +1293,19 @@ func frontier_distance(nation: String) -> Dictionary:
 				queue.append(v)
 	return dist
 
+# Hex distance from `t` to the nearest enemy unit (or flag too); 99 if none.
+func _nearest_enemy_unit(nation: String, t: Vector2i, flags_too: bool = false) -> int:
+	var best := 99
+	for k in units.keys():
+		if str(units[k]["owner"]) != nation and units[k]["card"] is Unit:
+			best = mini(best, hex_distance(t, key_to_hex(k)))
+	if flags_too:
+		var fs := flag_sites()
+		for fn in fs.keys():
+			if str(fn) != nation:
+				best = mini(best, hex_distance(t, fs[fn]))
+	return best
+
 func _friendly_adjacent(nation: String, t: Vector2i, want_units: bool) -> int:
 	var n := 0
 	for nb in MapCampaign.wrapped_neighbors(t):
@@ -1138,7 +1325,9 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 		var tv := t as Vector2i
 		var d: float = float(fdist.get(MapCampaign.key_of(tv.x, tv.y), 50))
 		var score: float
-		if card is Unit or card is Wall:
+		if card is Unit and ai_param(nation, "unit_spot") == "threat":
+			score = -float(_nearest_enemy_unit(nation, tv, true)) * 10.0 - d * 2.0
+		elif card is Unit or card is Wall:
 			score = -d * 10.0
 		elif card is Barracks or card is Interceptor:
 			score = _friendly_adjacent(nation, tv, true) * 25.0 - d * 4.0
@@ -1157,13 +1346,27 @@ func ai_build(nation: String) -> Array:
 	var fdist := frontier_distance(nation)
 	var hand: Array = p.Hand.duplicate()
 	hand.shuffle()
-	# economy first when there is little of it, then the army
-	hand.sort_custom(func(a, b): return (a is Building and not (a is Wall)) and not (b is Building and not (b is Wall)))
+	var order: String = ai_param(nation, "build_order")
+	if order == "auto":
+		order = "economy" if p.predicted_money_gain() < 30 else "army"
+	if order == "army":
+		hand.sort_custom(func(a, b): return (a is Unit) and not (b is Unit))
+	else:
+		# economy first, then the army
+		hand.sort_custom(func(a, b): return (a is Building and not (a is Wall)) and not (b is Building and not (b is Wall)))
+	var reserve: int = int(ai_param(nation, "money_reserve"))
+	var walls: String = ai_param(nation, "walls")
 	for c in hand:
 		var card := c as Card
 		if shortfall(nation, card) != "":
 			continue
+		if reserve > 0 and p.MoneySupply - p.get_effective_money_cost(card) < reserve:
+			continue # keep some Money back
+		if card is Wall and walls == "never":
+			continue
 		var t := best_hex_for(nation, card, fdist)
+		if card is Wall and walls == "front" and t.x >= 0 and _nearest_enemy_unit(nation, t) > 6:
+			continue # no enemy nearby: a Wall here would only waste Money
 		if t.x < 0:
 			continue # nowhere for this one (land full, or no flag/building near enough): try the rest
 		if place(nation, card, t):

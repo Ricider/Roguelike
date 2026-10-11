@@ -1457,3 +1457,48 @@ func test_bombers_are_covered_by_airports_and_jets_splash():
 	var bk := _drop(w2, A, BomberJet.new(), 14)
 	var log := w2.fire(bk)
 	assert_false((log[0]["splash"] as Array).is_empty(), "Bomber Jets splash")
+
+# --- AI policy (tuned by self-play: tools/dev/ai_tournament.gd) ---------------------------
+func test_ai_policy_defaults_and_overrides():
+	var w := _war()
+	assert_eq(w.ai_param(A, "w_cohesion"), MapWar.AI_DEFAULT["w_cohesion"], "defaults apply")
+	w.ai_policy[A] = MapWar.AI_CLASSIC
+	assert_eq(w.ai_param(A, "w_cohesion"), 0.0, "the classic AI can be switched back on per nation")
+	assert_eq(w.ai_param(A, "w_inrange"), MapWar.AI_DEFAULT["w_inrange"], "unset keys fall back to the default")
+	assert_eq(w.ai_param(B, "w_stay"), MapWar.AI_DEFAULT["w_stay"], "other nations keep the default")
+	for k in MapWar.AI_CLASSIC.keys():
+		assert_true(MapWar.AI_DEFAULT.has(k), "classic setting %s exists" % k)
+
+func test_ai_values_firepower_per_influence():
+	assert_gt(MapWar._card_value(Infantry.new()), MapWar._card_value(Wall.new()), "a fighting unit beats a Wall for the same Influence")
+	assert_gt(MapWar._card_value(Factory.new()), 0.0, "buildings have some value")
+
+func test_ai_keeps_units_together():
+	var w := _war()
+	w.campaign.flag_sites[B] = Vector2i(25, 10)
+	_drop(w, A, Infantry.new(), 11) # a friend on 11
+	var k := _drop(w, A, Infantry.new(), 14)
+	var wts := w._move_weights(A)
+	var foes: Array = []
+	var next_to := w._position_score(A, k, Vector2i(12, 10), foes, [], 4, wts)
+	var alone := w._position_score(A, k, Vector2i(13, 10), foes, [], 4, wts)
+	assert_almost_eq(next_to - alone, float(MapWar.AI_DEFAULT["w_cohesion"]), 0.001, "a hex beside a friend scores w_cohesion more")
+
+func test_focus_target_is_the_weakest_neighbour():
+	var w := _war()
+	(w.players[B] as Player).HitPoints = 10
+	assert_eq(w.focus_target(A), B, "B (its only neighbour) is the one to gang up on")
+
+# --- difficulty --------------------------------------------------------------------------
+func test_difficulty_switches_the_ai_nations_between_classic_and_tuned():
+	var gs = load("res://GodotHelpers/GameState.gd").new()
+	gs.map_campaign = MapCampaign.new("State Troops")
+	var w := MapWar.new()
+	w.setup(gs.map_campaign, func(nm): return gs.make_player_by_name(nm), gs.make_player_by_name("State Troops", true))
+	gs.apply_ai_difficulty(w, "normal")
+	assert_eq(w.ai_param("Horde", "w_cohesion"), MapWar.AI_CLASSIC["w_cohesion"], "Normal: AI nations play the classic AI")
+	assert_false(w.ai_policy.has("State Troops"), "your own nation is never given an AI policy")
+	gs.apply_ai_difficulty(w, "hard")
+	assert_true(w.ai_policy.is_empty(), "Hard: everyone on the tuned default")
+	assert_eq(w.ai_param("Horde", "w_cohesion"), MapWar.AI_DEFAULT["w_cohesion"], "the tuned AI")
+	gs.free()
