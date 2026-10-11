@@ -400,7 +400,8 @@ func _ensure_airport(nation: String, jets: Array) -> void:
 # Cards go only on free hexes of your own land, and only near what raises them.
 # Units: within DEPLOY_RADIUS hexes of your flag or one of your standing buildings:
 #   BioCost >= MoneyCost (people: Infantry, Special Ops)       -> Housing or Barracks
-#   MoneyCost > BioCost, Flying (Drone, Fighter Jet)            -> Corporation or Factory
+#   Fighter Jets and Bomber Jets                                -> an Airport only (not the flag)
+#   MoneyCost > BioCost, Flying (Drone)                         -> Corporation, Factory or Airport
 #   MoneyCost > BioCost, on the ground (Tank, Artilery, AA...)  -> Factory
 # Buildings (Walls included): within BUILD_RADIUS hexes of your flag or any of your
 # standing buildings, or within BUILD_INFANTRY_RADIUS hexes of one of your Infantry
@@ -413,14 +414,22 @@ const BUILD_INFANTRY_RADIUS := 2
 static func deploy_anchors(card: Card) -> Array:
 	if not (card is Unit):
 		return []
+	if _airport_built(card):
+		return ["Airport"]
 	if card.BioCost >= card.MoneyCost:
 		return ["Housing", "Barracks"]
 	if (card as Unit).Flying:
-		return ["Corporation", "Factory"]
+		return ["Corporation", "Factory", "Airport"]
 	return ["Factory"]
+
+# Jets are built only at Airports: not even near the flag.
+static func _airport_built(card: Card) -> bool:
+	return card is FighterJet or card is BomberJet
 
 # "your flag or a Housing", "your flag, a Corporation or a Factory", ... (units)
 static func deploy_anchor_text(card: Card) -> String:
+	if _airport_built(card):
+		return "one of your Airports"
 	var names: Array = deploy_anchors(card).map(func(n): return "a " + str(n))
 	if names.is_empty():
 		return "your flag or one of your buildings"
@@ -430,8 +439,6 @@ static func deploy_anchor_text(card: Card) -> String:
 
 # Where a card may go, in words: "within 2 hexes of your flag or a Housing", ...
 static func deploy_rule_text(card: Card) -> String:
-	if card is FighterJet:
-		return "within %d hexes of %s, and within %d hexes of one of your Airports" % [DEPLOY_RADIUS, deploy_anchor_text(card), AIRPORT_RANGE]
 	if card is Unit:
 		return "within %d hexes of %s" % [DEPLOY_RADIUS, deploy_anchor_text(card)]
 	return "within %d hexes of your flag or one of your buildings, or %d hexes of one of your Infantry" % [BUILD_RADIUS, BUILD_INFANTRY_RADIUS]
@@ -441,7 +448,7 @@ func deploy_zone(nation: String, card: Card) -> Array:
 	var flag := campaign.capital_site(nation)
 	if card is Unit:
 		var anchors := deploy_anchors(card)
-		var out: Array = [[flag, DEPLOY_RADIUS]]
+		var out: Array = [] if _airport_built(card) else [[flag, DEPLOY_RADIUS]]
 		for k in cards_of(nation):
 			var c: Card = units[k]["card"]
 			if anchors.has(c.card_name) and card_hp(c) > 0:

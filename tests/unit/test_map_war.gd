@@ -861,8 +861,9 @@ func test_deploy_anchors_by_cost_and_flight():
 	assert_eq(MapWar.deploy_anchors(SpecialOps.new()), ["Housing", "Barracks"], "Special Ops are people too")
 	assert_eq(MapWar.deploy_anchors(Tank.new()), ["Factory"], "ground machines: Factory")
 	assert_eq(MapWar.deploy_anchors(Artilery.new()), ["Factory"], "guns too")
-	assert_eq(MapWar.deploy_anchors(Drone.new()), ["Corporation", "Factory"], "flying machines: Corporation or Factory")
-	assert_eq(MapWar.deploy_anchors(FighterJet.new()), ["Corporation", "Factory"], "jets too")
+	assert_eq(MapWar.deploy_anchors(Drone.new()), ["Corporation", "Factory", "Airport"], "Drones: Corporation, Factory or Airport")
+	assert_eq(MapWar.deploy_anchors(FighterJet.new()), ["Airport"], "Fighter Jets: Airports only")
+	assert_eq(MapWar.deploy_anchors(BomberJet.new()), ["Airport"], "Bomber Jets: Airports only")
 	assert_eq(MapWar.deploy_anchors(Wall.new()), [], "buildings go anywhere")
 
 func test_units_deploy_only_near_the_flag_or_their_buildings():
@@ -883,9 +884,11 @@ func test_units_deploy_only_near_the_flag_or_their_buildings():
 	assert_ne(w.can_place(A, tank, Vector2i(19, 10)), "", "not near Housing")
 	var jet := FighterJet.new()
 	p.Hand = [jet]
-	assert_string_contains(w.can_place(A, jet, Vector2i(11, 10)), "within 12 hexes of one of your Airports", "no Airport yet: no jets")
+	assert_string_contains(w.can_place(A, jet, Vector2i(11, 10)), "within 2 hexes of one of your Airports", "no Airport yet: no jets, even beside the Factory")
+	assert_ne(w.can_place(A, jet, Vector2i(1, 10)), "", "nor beside the flag")
 	w._put(A, Airport.new(), Vector2i(8, 10))
-	assert_eq(w.can_place(A, jet, Vector2i(11, 10)), "", "a jet near the Factory, with an Airport in range")
+	assert_ne(w.can_place(A, jet, Vector2i(11, 10)), "", "3 hexes from the Airport: too far")
+	assert_eq(w.can_place(A, jet, Vector2i(10, 10)), "", "2 hexes from the Airport: built there")
 	w._put(A, Barracks.new(), Vector2i(24, 10))
 	assert_ne(w.can_place(A, jet, Vector2i(22, 10)), "", "but not near a Barracks")
 	p.Hand = [tank]
@@ -1529,3 +1532,21 @@ func test_upkeep_caps_at_half():
 			w._put(A, Infantry.new(), Vector2i(x, y)) # 48 units
 	assert_eq(w.unit_count(A), 48, "48 units")
 	assert_almost_eq(w.upkeep_rate(A), MapWar.UPKEEP_MAX, 0.0001, "never more than 50%")
+
+func test_jets_are_built_only_at_airports():
+	var w := _zone_war() # A owns row 10, 0..24, flag at 0
+	w._put(A, Factory.new(), Vector2i(3, 10))
+	w._put(A, Corporation.new(), Vector2i(5, 10))
+	for card in [FighterJet.new(), BomberJet.new()]:
+		assert_true(w.deploy_hexes(A, card).is_empty(), "%s: no Airport, nowhere to build it (flag, Factory and Corporation don't count)" % card.card_name)
+	w._put(A, Airport.new(), Vector2i(15, 10))
+	for card in [FighterJet.new(), BomberJet.new()]:
+		var hexes := w.deploy_hexes(A, card)
+		assert_false(hexes.is_empty(), "%s: now beside the Airport" % card.card_name)
+		for t in hexes:
+			assert_true(MapCampaign.hex_distance(t, Vector2i(15, 10)) <= MapWar.DEPLOY_RADIUS, "all within 2 hexes of it")
+	assert_false(w.deploy_hexes(A, Drone.new()).is_empty(), "Drones still come from the Factory or Corporation")
+	var drone_spots := w.deploy_hexes(A, Drone.new())
+	assert_true(drone_spots.has(Vector2i(16, 10)), "and now from the Airport too")
+	assert_true(drone_spots.has(Vector2i(4, 10)), "as well as beside the Factory")
+	assert_eq(MapWar.deploy_rule_text(BomberJet.new()), "within 2 hexes of one of your Airports", "the rule in words")
