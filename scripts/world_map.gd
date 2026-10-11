@@ -632,7 +632,7 @@ func _upkeep_tip(key: String) -> String:
 	var up: Dictionary = _war.upkeep(_me())
 	var label := "BioCost" if key == "bio" else "MoneyCost"
 	var n: int = _war.unit_count(_me())
-	return "\n[Upkeep]: -%d per turn: %.2f%% of the total %s of your %d units on the map (10%%, plus 0.25%% for each unit beyond the first, so every extra unit makes them all dearer)." % [int(up[key]), _war.upkeep_rate(_me()) * 100.0, label, n]
+	return "\n[Upkeep]: -%d per turn: %.2f%% of the total %s of your %d units on the map (10%%, plus 1%% for each unit beyond the first, up to 50%%, so every extra unit makes them all dearer)." % [int(up[key]), _war.upkeep_rate(_me()) * 100.0, label, n]
 
 func _set_gauge(key: String, val: int, max_val: int, gain: int) -> void:
 	var g: Dictionary = _gauges[key]

@@ -548,15 +548,17 @@ func _remove(k: String) -> void:
 # ------------------------------------------------------------------ turns
 # Upkeep: every turn a nation pays a share of the total cost of its units on the map,
 # MoneyCost out of its Money and BioCost out of its Bio (buildings are free to keep).
-# The share is UPKEEP_RATE plus UPKEEP_RAMP for every unit beyond the first, applied
-# to the whole army, so each extra unit makes all of them dearer: 10 units cost 12.25%,
-# 20 units 14.75%, 30 units 17.25%. Rounded on the totals; supplies never drop below 0.
+# The share is UPKEEP_RATE plus UPKEEP_RAMP for every unit beyond the first, up to
+# UPKEEP_MAX, applied to the whole army, so each extra unit makes all of them dearer:
+# 10 units cost 19%, 20 units 29%, 30 units 39%, and 41 or more 50%. Rounded on the
+# totals; supplies never drop below 0.
 const UPKEEP_RATE := 0.10
-const UPKEEP_RAMP := 0.0025
+const UPKEEP_RAMP := 0.01
+const UPKEEP_MAX := 0.50
 
 # The share of its units' cost `nation` pays this turn.
 func upkeep_rate(nation: String) -> float:
-	return UPKEEP_RATE + UPKEEP_RAMP * maxi(unit_count(nation) - 1, 0)
+	return minf(UPKEEP_RATE + UPKEEP_RAMP * maxi(unit_count(nation) - 1, 0), UPKEEP_MAX)
 
 
 # {"money": int, "bio": int} that `nation` pays at the start of its next turn.
