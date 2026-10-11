@@ -553,32 +553,47 @@ func _remove(k: String) -> void:
 	units.erase(k)
 
 # ------------------------------------------------------------------ turns
-# Upkeep: every turn a nation pays a share of the total cost of its units on the map,
-# MoneyCost out of its Money and BioCost out of its Bio (buildings are free to keep).
-# The share is UPKEEP_RATE plus UPKEEP_RAMP for every unit beyond the first, up to
-# UPKEEP_MAX, applied to the whole army, so each extra unit makes all of them dearer:
-# 10 units cost 19%, 20 units 29%, 30 units 39%, and 41 or more 50%. Rounded on the
-# totals; supplies never drop below 0.
+# Upkeep: every turn a nation pays for its units on the map, MoneyCost out of its
+# Money and BioCost out of its Bio (buildings are free to keep). It works like a
+# progressive tax: the 1st unit pays UPKEEP_RATE of its cost, each further unit one
+# UPKEEP_RAMP more (2nd 11%, 3rd 12% ...), never more than UPKEEP_MAX (50%, from the
+# 41st unit on). A unit only pays its own bracket, so a new unit never makes the
+# others dearer. In the nation's favour, its most expensive units fill the cheapest
+# brackets, Money and Bio each sorted on their own (the lowest bill any order gives).
+# Rounded on the totals; supplies never drop below 0.
 const UPKEEP_RATE := 0.10
 const UPKEEP_RAMP := 0.01
 const UPKEEP_MAX := 0.50
 
-# The share of its units' cost `nation` pays this turn.
+# The rate of the n-th unit's bracket (n from 1).
+static func upkeep_bracket(n: int) -> float:
+	return minf(UPKEEP_RATE + UPKEEP_RAMP * maxi(n - 1, 0), UPKEEP_MAX)
+
+# The bracket the next unit `nation` deploys would pay (the marginal rate).
 func upkeep_rate(nation: String) -> float:
-	return minf(UPKEEP_RATE + UPKEEP_RAMP * maxi(unit_count(nation) - 1, 0), UPKEEP_MAX)
+	return upkeep_bracket(unit_count(nation) + 1)
 
+# Costs (the most expensive first) times the brackets (the cheapest first).
+static func progressive_upkeep(costs: Array) -> float:
+	var sorted_costs := costs.duplicate()
+	sorted_costs.sort()
+	sorted_costs.reverse()
+	var total := 0.0
+	for i in range(sorted_costs.size()):
+		total += float(sorted_costs[i]) * upkeep_bracket(i + 1)
+	return total
 
-# {"money": int, "bio": int} that `nation` pays at the start of its next turn.
+# {"money": int, "bio": int} that `nation` pays at the start of its next turn,
+# plus "money_cost"/"bio_cost": the units' total cost (for the effective rate).
 func upkeep(nation: String) -> Dictionary:
-	var money := 0
-	var bio := 0
+	var money: Array = []
+	var bio: Array = []
 	for k in cards_of(nation):
 		var c: Card = units[k]["card"]
 		if c is Unit:
-			money += c.MoneyCost
-			bio += c.BioCost
-	var rate := upkeep_rate(nation)
-	return {"money": roundi(money * rate), "bio": roundi(bio * rate)}
+			money.append(c.MoneyCost)
+			bio.append(c.BioCost)
+	return {"money": roundi(progressive_upkeep(money)), "bio": roundi(progressive_upkeep(bio))}
 
 func pay_upkeep(nation: String) -> Dictionary:
 	var up := upkeep(nation)
@@ -637,7 +652,7 @@ func begin_turn(nation: String) -> void:
 		if capped > 0:
 			lines.append(["Over the 200 cap", -capped])
 		var after: int = p.MoneySupply if key == "money" else p.BioSupply
-		lines.append(["Upkeep (%d units: %.2f%% of their %s)" % [unit_count(nation), upkeep_rate(nation) * 100.0, "MoneyCost" if key == "money" else "BioCost"], after - after_income]) # shown even at 0
+		lines.append(["Upkeep (%d units, progressive: 10%% up to %d%% of their %s)" % [unit_count(nation), roundi(upkeep_bracket(maxi(unit_count(nation), 1)) * 100.0), "MoneyCost" if key == "money" else "BioCost"], after - after_income]) # shown even at 0
 	econ["money_from"] = money0
 	econ["money_to"] = p.MoneySupply
 	econ["bio_from"] = bio0
