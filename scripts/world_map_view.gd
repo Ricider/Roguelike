@@ -87,7 +87,13 @@ var _sea_phase: int = 0
 var _sea_clock: float = 0.0
 var _pulse_t: float = 0.0
 var _pulse_clock: float = 0.0
-var _overlay: Control = null
+var _overlay: Control = null # marks over the units: hover, selection, auras, effects
+var _grid: Control = null # hex grid, borders and flags
+var _under: Control = null # marks under the units: zones, rings, glows, boat wakes
+var _units: Control = null # the cards themselves (redrawn on change and 4x a second)
+var _walkers: Control = null # cards marching right now (redrawn every frame they move)
+var _chips: Control = null # HP / attack chips of the cards standing still (redrawn on change)
+var _ci: CanvasItem = null # the layer being drawn (the draw helpers paint on it)
 var _corner_unit: PackedVector2Array = PackedVector2Array()
 var _hex_uvs: PackedVector2Array = PackedVector2Array()
 # Hex war: cards on the map, legal placement hexes, hover ghost and battle FX
@@ -158,13 +164,14 @@ func _ready() -> void:
 			var tex := load(path) as Texture2D
 			if tex != null:
 				_flags[str(d["name"])] = tex
-	_overlay = Control.new()
-	_overlay.name = "Overlay"
-	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_overlay.draw.connect(_draw_overlay)
-	add_child(_overlay)
+	# Grid, borders and flags; marks under the units; the units; marks over them.
+	_grid = _add_layer("Grid", _draw_base)
+	_under = _add_layer("UnderUnits", _draw_under)
+	_units = _add_layer("Units", _draw_unit_layer)
+	_walkers = _add_layer("Walkers", _draw_walker_layer)
+	_overlay = _add_layer("Overlay", _draw_overlay)
+	_chips = _add_layer("StatChips", _draw_chip_layer)
+	_chips.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_text_layer = Control.new()
 	_text_layer.name = "TextFX"
 	_text_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -176,19 +183,97 @@ func _ready() -> void:
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
 		aim = {}
-		_overlay.queue_redraw()
+		_redraw(_overlay)
 		hover_cleared.emit())
 
+func _add_layer(layer_name: String, draw_fn: Callable) -> Control:
+	var layer := Control.new()
+	layer.name = layer_name
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	layer.draw.connect(draw_fn)
+	add_child(layer)
+	return layer
+
 func _redraw_all() -> void:
-	queue_redraw()
 	if _terrain != null:
 		_terrain.queue_redraw()
-	if _overlay != null:
-		_overlay.queue_redraw()
-	if _text_layer != null:
-		_text_layer.queue_redraw()
+	for layer in [_grid, _under, _units, _walkers, _overlay, _chips, _text_layer]:
+		if layer != null:
+			_redraw(layer)
+
+# Everything that shows the war's state: call after changing what the map shows
+# (cards, HP, ghosts, zones...). Hover and selection only need the overlay.
+func redraw_layers() -> void:
+	for layer in [_under, _units, _walkers, _overlay, _chips]:
+		_redraw(layer)
+
+# ------------------------------------------------------------ scrolling
+# Panning doesn't redraw: each layer is drawn with SCROLL_SLACK pixels of extra
+# content round the screen and is slid by the camera's offset since it was drawn
+# (a few hundred units cost a few ms to draw; moving a layer costs nothing). A
+# layer is redrawn, back in place, when it has slid too far, on a zoom, or when
+# its content changes anyway (the animation pulses).
+const SCROLL_SLACK := 192.0
+var _drawn_cam: Dictionary = {} # layer -> [origin x, origin y, hex size] it was drawn at
+
+func _mark_drawn(layer: Control, m: Array) -> void:
+	_drawn_cam[layer] = [float(m[1]), float(m[2]), float(m[0])]
+
+func _redraw(layer: Control) -> void:
+	layer.position = Vector2.ZERO
+	layer.scale = Vector2.ONE
+	layer.queue_redraw()
+
+# Zooming works the same way while the camera moves (a glide, the mouse wheel): a
+# layer drawn at hex size s0 is scaled by s/s0 instead of redrawn, as long as what
+# it drew still covers the screen. A frame after the camera stops, scaled layers
+# are redrawn crisp.
+const ZOOM_SLACK := 0.2 # redraw once the scale is more than 20% off
+var _cam_settle: int = 0 # frames until the camera counts as resting
+
+func _camera_moved() -> void:
+	if _terrain != null:
+		_terrain.queue_redraw() # one mesh per wrapped copy: always cheap
+	_cam_settle = 2
+	var m := metrics()
+	for layer in [_grid, _under, _units, _walkers, _overlay, _chips, _text_layer]:
+		if layer == null:
+			continue
+		var d: Array = _drawn_cam.get(layer, [])
+		if d.is_empty() or float(d[2]) <= 0.0:
+			_redraw(layer)
+			continue
+		var k: float = float(m[0]) / float(d[2])
+		# where the drawn picture's origin must go: o_now = offset + o_drawn * k
+		var off := Vector2(float(m[1]) - float(d[0]) * k, float(m[2]) - float(d[1]) * k)
+		if WorldMap.WRAPS:
+			var period: float = m[4]
+			off.x = wrapf(off.x, -period * 0.5, period * 0.5)
+		# the screen, in the drawn picture's coordinates, must lie within what it drew
+		var lo := -off / k
+		var hi := (size - off) / k
+		if absf(k - 1.0) > ZOOM_SLACK or lo.x < -SCROLL_SLACK or lo.y < -SCROLL_SLACK \
+				or hi.x > size.x + SCROLL_SLACK or hi.y > size.y + SCROLL_SLACK:
+			_redraw(layer)
+		else:
+			layer.position = off
+			layer.scale = Vector2(k, k)
+
+func _settle_layers() -> void:
+	for layer in [_grid, _under, _units, _walkers, _overlay, _chips, _text_layer]:
+		if layer != null and layer.scale != Vector2.ONE:
+			_redraw(layer)
 
 func set_campaign(campaign: MapCampaign) -> void:
+	# The game calls this after every change that might move a border; when none did,
+	# skip re-tracing every border and re-tinting the land (tens of ms on the world map).
+	var sig: Array = [campaign.get_instance_id(), WorldMap.MAP_ID, campaign.player_nation, campaign.owner.hash(), campaign.flag_sites.hash()]
+	if war != null and sig == _campaign_sig:
+		redraw_layers()
+		return
+	_campaign_sig = sig
 	_campaign = campaign
 	_owners = campaign.owner.duplicate()
 	_nation_colors.clear()
@@ -216,14 +301,30 @@ func set_campaign(campaign: MapCampaign) -> void:
 			(_edge_map[k] as Array).append([int(entry[2]), bc])
 	# The pulsing "you can attack here" front line only applies to the old card-battle wars.
 	_front = _compute_front(campaign) if war == null else []
+	_campaign_rev += 1
 	_land_dirty = true
 	_build_borders()
 	_redraw_all()
 
+# Where each nation's flag stands, cached until the borders or flags change (the map
+# asks for every flag on every redraw; MapCampaign works it out from the owner map).
+var _sites: Dictionary = {}
+var _sites_sig: Array = []
+
+func capital_site(nation: String) -> Vector2i:
+	var sig: Array = [_campaign_rev, _campaign.flag_sites.hash()]
+	if sig != _sites_sig:
+		_sites_sig = sig
+		_sites.clear()
+	if not _sites.has(nation):
+		_sites[nation] = _campaign.capital_site(nation)
+	return _sites[nation]
+
 func set_war(w: MapWar) -> void:
 	war = w
+	_ucache_sig = []
 	_front = []
-	_overlay.queue_redraw()
+	redraw_layers()
 
 func _compute_front(campaign: MapCampaign) -> Array:
 	var out: Array = []
@@ -242,6 +343,10 @@ func _compute_front(campaign: MapCampaign) -> Array:
 	return out
 
 func _process(delta: float) -> void:
+	if _cam_settle > 0:
+		_cam_settle -= 1
+		if _cam_settle == 0:
+			_settle_layers()
 	_sea_clock += delta
 	_pulse_t += delta
 	_pulse_clock += delta
@@ -254,14 +359,32 @@ func _process(delta: float) -> void:
 	var busy := not effects.is_empty() or not placeable.is_empty() or not aim.is_empty() or (war != null and not war.units.is_empty())
 	if (not _front.is_empty() or busy) and _pulse_clock >= 1.0 / PULSE_FPS:
 		_pulse_clock = 0.0
-		_overlay.queue_redraw()
-		_text_layer.queue_redraw() # the HP / attack chips under the units
+		# the animated marks (few) every pulse; the units and their stat chips (many,
+		# and costly to draw) only when what they show changes
+		_redraw(_under)
+		_redraw(_overlay)
+		var hp_sig := _hp_sig()
+		var usig: Array = [int(_clock * 4.0), hp_sig] # sprite frame, war state
+		if usig != _last_units_sig:
+			_last_units_sig = usig
+			_redraw(_units)
+		var csig: Array = hp_sig if metrics()[0] >= STAT_CHIP_MIN_HEX else []
+		if csig != _last_chip_sig:
+			_last_chip_sig = csig
+			_redraw(_chips)
+		if walks.size() != _last_walk_n: # a march began or ended: the walkers layer empties
+			_last_walk_n = walks.size()
+			_redraw(_walkers)
+			_redraw(_text_layer)
 	if not effects.is_empty() or not walks.is_empty():
 		_fx_clock += delta
 		if _fx_clock >= 1.0 / 40.0:
 			_fx_clock = 0.0
-			_overlay.queue_redraw()
-			_text_layer.queue_redraw()
+			_redraw(_under)
+			_redraw(_overlay)
+			_redraw(_text_layer) # damage numbers, and the marching cards' chips
+			if not walks.is_empty():
+				_redraw(_walkers) # only they move: the units layer stays as it is
 		var keep: Array = []
 		for e in effects:
 			if _clock < float(e["t0"]) + float(e["dur"]):
@@ -271,6 +394,21 @@ func _process(delta: float) -> void:
 		var w: Dictionary = walks[wk]
 		if bool(w["back"]) and _walk_progress(w) <= 0.0:
 			walks.erase(wk)
+			_walks_changed()
+
+# What the units layer and the stat chips show, apart from the camera: the war
+# (cards, owners, buffs...), every card's HP and the attack replay's state.
+var _last_chip_sig: Array = []
+var _last_units_sig: Array = []
+var _last_walk_n: int = 0
+
+func _hp_sig() -> Array:
+	if war == null:
+		return []
+	var hp_sum := 0
+	for k in war.units.keys():
+		hp_sum = (hp_sum * 31 + war.card_hp(war.units[k]["card"])) & 0x3fffffffffff
+	return [_war_sig(), hp_sum, hp_shown.hash(), ghosts.hash(), walks.size()]
 
 func _variant_for(x: int, y: int) -> int:
 	return absi(x * 73856093 ^ y * 19349663) % TileArt.VARIANTS
@@ -327,6 +465,7 @@ func screen_pos(t: Vector2i, m: Array) -> Vector2:
 
 # Every wrapped copy of hex t that is on screen (for units and flags).
 func _visible_copies(t: Vector2i, m: Array, margin: float) -> Array:
+	margin += SCROLL_SLACK # layers slide by up to this much before they are redrawn
 	var out: Array = []
 	var period: float = m[4]
 	var c := hex_center(t.x, t.y, m)
@@ -362,13 +501,13 @@ func zoom_by(factor: float, anchor: Vector2 = Vector2(-1, -1)) -> void:
 	_pan.x = new_ox - (size.x - new_map_w) * 0.5
 	_pan.y = new_oy - (size.y - new_map_h) * 0.5
 	_normalize_pan()
-	_redraw_all()
+	_camera_moved()
 
 func pan_by(delta: Vector2) -> void:
 	_edge_free = false
 	_pan += delta
 	_normalize_pan()
-	_redraw_all()
+	_camera_moved()
 
 func _normalize_pan() -> void:
 	var s: float = _fit_size() * zoom
@@ -397,7 +536,7 @@ func center_on(t: Vector2i, new_zoom: float = -1.0) -> void:
 	var c := hex_center(t.x, t.y, m)
 	_pan = size * 0.5 - c
 	_normalize_pan()
-	_redraw_all()
+	_camera_moved()
 
 # ------------------------------------------------------------ camera moves
 # The camera as [centre in map units (hex size 1, see _unit_center), zoom].
@@ -419,7 +558,7 @@ func set_camera(center: Vector2, new_zoom: float, free: bool = false) -> void:
 	var s: float = m[0]
 	_pan = size * 0.5 - (Vector2(float(m[1]), float(m[2])) + center * s)
 	_normalize_pan()
-	_redraw_all()
+	_camera_moved()
 
 # The camera that shows every hex in `hexes` as large as possible, with `pad`
 # hexes of margin all round. On the wrapping world map each hex is taken in the
@@ -498,7 +637,7 @@ func center_on_fraction(fx: float, fy: float) -> void:
 	var c := Vector2(float(m[1]), float(m[2])) + Vector2(fx, fy) * map_px
 	_pan = size * 0.5 - c
 	_normalize_pan()
-	_redraw_all()
+	_camera_moved()
 
 # ------------------------------------------------------------- picking
 func _hex_points(c: Vector2, s: float) -> PackedVector2Array:
@@ -564,7 +703,7 @@ func _gui_input(event: InputEvent) -> void:
 				if _boxing and mb.button_index == MOUSE_BUTTON_LEFT:
 					var boxed := _press_pos.distance_to(mb.position) > DRAG_THRESHOLD
 					_boxing = false
-					_overlay.queue_redraw()
+					_redraw(_overlay)
 					if boxed:
 						_pressed = false
 						box_selected.emit(Rect2(_press_pos, Vector2.ZERO).expand(mb.position), mb.shift_pressed)
@@ -589,7 +728,7 @@ func _gui_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if _pressed and _boxing:
 			_box_end = mm.position
-			_overlay.queue_redraw()
+			_redraw(_overlay)
 			return
 		if _pressed:
 			if not _dragging and mm.position.distance_to(_press_pos) > DRAG_THRESHOLD:
@@ -601,7 +740,7 @@ func _gui_input(event: InputEvent) -> void:
 		var h := tile_at_point(mm.position)
 		if h != hovered:
 			hovered = h
-			_overlay.queue_redraw()
+			_redraw(_overlay)
 			if h.x >= 0:
 				tile_hovered.emit(h.x, h.y)
 			else:
@@ -635,7 +774,7 @@ func clear_range() -> void:
 	range_targets = []
 	group_marks = []
 	plan_marks = []
-	_overlay.queue_redraw()
+	redraw_layers()
 
 func select_tile(t: Vector2i, emit: bool = true) -> void:
 	selected = t
@@ -659,8 +798,9 @@ func _visible_range(m: Array) -> Array:
 	var y1 := int(ceil((size.y - oy) / (1.5 * s))) + 1
 	return [x0, x1, y0, y1]
 
-func _draw() -> void:
+func _draw_base() -> void:
 	var m := metrics()
+	_mark_drawn(_grid, m)
 	var s: float = m[0]
 	if s < 2.0:
 		return
@@ -669,46 +809,46 @@ func _draw() -> void:
 	# hex grid (1px hairlines) and nation borders, from precomputed map-unit segments
 	var bw: float = maxf(2.0, floorf(s * 0.22))
 	for ox in _copy_origins(m):
-		draw_set_transform(Vector2(ox, m[2]), 0.0, Vector2(s, s))
+		_grid.draw_set_transform(Vector2(ox, m[2]), 0.0, Vector2(s, s))
 		if not _grid_pts.is_empty():
-			draw_multiline(_grid_pts, Color(0, 0, 0, 0.22), -1.0)
+			_grid.draw_multiline(_grid_pts, Color(0, 0, 0, 0.22), -1.0)
 		for seg in _border_segs:
-			draw_multiline(seg[1], Color(0.05, 0.04, 0.08, 0.85), (bw + 2.0) / s)
+			_grid.draw_multiline(seg[1], Color(0.05, 0.04, 0.08, 0.85), (bw + 2.0) / s)
 		for seg in _border_segs:
-			draw_multiline(seg[1], seg[0], bw / s)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_grid.draw_multiline(seg[1], seg[0], bw / s)
+	_grid.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Pixel bezel: polar edges (the world wraps sideways); all four sides on regional maps
 	if WorldMap.WRAPS:
 		for edge_y in [oy - FRAME_PX, oy + map_h]:
 			if edge_y + FRAME_PX >= 0.0 and edge_y <= size.y:
-				draw_rect(Rect2(0, edge_y, size.x, FRAME_PX), Color8(20, 16, 30), true)
-				draw_rect(Rect2(0, edge_y + 2.0, size.x, 2.0), Color8(94, 104, 128), true)
+				_grid.draw_rect(Rect2(0, edge_y, size.x, FRAME_PX), Color8(20, 16, 30), true)
+				_grid.draw_rect(Rect2(0, edge_y + 2.0, size.x, 2.0), Color8(94, 104, 128), true)
 	else:
 		var fr := Rect2(m[1], oy, _map_width(s), map_h).grow(FRAME_PX * 0.5)
-		draw_rect(fr, Color8(20, 16, 30), false, FRAME_PX)
-		draw_rect(fr.grow(-2.0), Color8(94, 104, 128), false, 2.0)
+		_grid.draw_rect(fr, Color8(20, 16, 30), false, FRAME_PX)
+		_grid.draw_rect(fr.grow(-2.0), Color8(94, 104, 128), false, 2.0)
 	# Capitals: pixel flag on a pole, planted on the capital hex
 	for n in WorldMap.nations():
 		var d := n as Dictionary
 		var nm := str(d["name"])
 		var site := Vector2i(int(d["x"]), int(d["y"]))
 		if _campaign != null:
-			site = flag_site_shown.get(nm, _campaign.capital_site(nm))
+			site = flag_site_shown.get(nm, capital_site(nm))
 		var fs: float = maxf(s * 2.6, 16.0)
 		for cc in _visible_copies(site, m, fs):
 			var base := (cc as Vector2) + Vector2(0, s * 0.55)
-			draw_rect(Rect2(base + Vector2(-fs * 0.2, -2.0), Vector2(fs * 0.4, 3.0)), Color(0, 0, 0, 0.45), true)
+			_grid.draw_rect(Rect2(base + Vector2(-fs * 0.2, -2.0), Vector2(fs * 0.4, 3.0)), Color(0, 0, 0, 0.45), true)
 			if _dead.has(nm):
 				var xc := base - Vector2(0, s * 0.6)
 				var r: float = s * 0.45
-				draw_line(xc - Vector2(r, r), xc + Vector2(r, r), Color(0.8, 0.8, 0.85), 2.0)
-				draw_line(xc + Vector2(-r, r), xc + Vector2(r, -r), Color(0.8, 0.8, 0.85), 2.0)
+				_grid.draw_line(xc - Vector2(r, r), xc + Vector2(r, r), Color(0.8, 0.8, 0.85), 2.0)
+				_grid.draw_line(xc + Vector2(-r, r), xc + Vector2(r, -r), Color(0.8, 0.8, 0.85), 2.0)
 				continue
 			if _flags.has(nm):
 				# flag art has its pole at ~x=0.12 of the texture; plant that on the hex centre
-				draw_texture_rect(_flags[nm] as Texture2D, Rect2(base - Vector2(fs * 0.12, fs * 0.9), Vector2(fs, fs)), false)
+				_grid.draw_texture_rect(_flags[nm] as Texture2D, Rect2(base - Vector2(fs * 0.12, fs * 0.9), Vector2(fs, fs)), false)
 			if nm == _player_nation:
-				_draw_star(self, base + Vector2(0, -fs * 0.98), maxf(s * 0.5, 4.0), Color(1.0, 0.86, 0.3))
+				_draw_star(_grid, base + Vector2(0, -fs * 0.98), maxf(s * 0.5, 4.0), Color(1.0, 0.86, 0.3))
 
 # Map-unit centre of hex (x, y) (hex size 1, origin at the map's top-left).
 static func _unit_center(x: int, y: int) -> Vector2:
@@ -900,13 +1040,290 @@ func unit_frames(card_name: String, nation: String = "") -> Array:
 	_unit_tex[cache_key] = out
 	return out
 
+# Every unit's idle frames also go into one shared atlas texture, so the whole army
+# draws as a single batch (a texture switch per sprite would cost a draw call each).
+const ATLAS_CELL := 32
+const ATLAS_SIZE := 1024 # 32x32 cells of 32px; full => fall back to the frame textures
+var _sprite_img: Image = null
+var _sprite_atlas: ImageTexture = null
+var _sprite_regions: Dictionary = {} # "card|nation" -> Array[Rect2] in the atlas ([] = not in it)
+var _sprite_cells: int = 0
+
+func _atlas_regions(card_name: String, nation: String) -> Array:
+	var cache_key := card_name + "|" + nation
+	if _sprite_regions.has(cache_key):
+		return _sprite_regions[cache_key]
+	var frames := unit_frames(card_name, nation)
+	var per_row: int = ATLAS_SIZE / ATLAS_CELL
+	var out: Array = []
+	if _sprite_cells + frames.size() <= per_row * per_row:
+		if _sprite_img == null:
+			_sprite_img = Image.create(ATLAS_SIZE, ATLAS_SIZE, false, Image.FORMAT_RGBA8)
+		for tex in frames:
+			var img: Image = (tex as Texture2D).get_image()
+			if img.get_format() != Image.FORMAT_RGBA8:
+				img.convert(Image.FORMAT_RGBA8)
+			var at := Vector2i((_sprite_cells % per_row) * ATLAS_CELL, (_sprite_cells / per_row) * ATLAS_CELL)
+			_sprite_img.blit_rect(img, Rect2i(0, 0, ATLAS_CELL, ATLAS_CELL), at)
+			out.append(Rect2(Vector2(at), Vector2(ATLAS_CELL, ATLAS_CELL)))
+			_sprite_cells += 1
+		if _sprite_atlas == null:
+			_sprite_atlas = ImageTexture.create_from_image(_sprite_img)
+		elif not out.is_empty():
+			_sprite_atlas.update(_sprite_img)
+	_sprite_regions[cache_key] = out
+	return out
+
+# Owner base under each unit (a dark-rimmed flat ellipse, white inside so the draw
+# call's modulate paints it in the nation's colour): one texture, batched like the sprites.
+var _base_tex: ImageTexture = null
+
+func _unit_base_tex() -> ImageTexture:
+	if _base_tex != null:
+		return _base_tex
+	var w := 72
+	var h := 33
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var rim := Color(0.05, 0.04, 0.08, 0.85)
+	var inner: float = 0.6 / 0.72
+	for y in range(h):
+		for x in range(w):
+			# 3x3 supersampling for soft edges
+			var cover_out := 0.0
+			var cover_in := 0.0
+			for sy in range(3):
+				for sx in range(3):
+					var px: float = ((x + (sx + 0.5) / 3.0) / w) * 2.0 - 1.0
+					var py: float = ((y + (sy + 0.5) / 3.0) / h) * 2.0 - 1.0
+					var d: float = px * px + py * py
+					if d <= 1.0:
+						cover_out += 1.0 / 9.0
+					if d <= inner * inner:
+						cover_in += 1.0 / 9.0
+			var col := Color(rim.r, rim.g, rim.b, rim.a * cover_out)
+			if cover_in > 0.0:
+				col = col.blend(Color(1, 1, 1, cover_in)) # the white fill over the dark rim
+			img.set_pixel(x, y, col)
+	_base_tex = ImageTexture.create_from_image(img)
+	return _base_tex
+
+# What every card on the map looks like apart from the camera and the clock: owner,
+# colour, sprite frames, Barracks buff, Interceptor cover, flanking and the damage it
+# deals from where it stands. Rebuilt only when the war changes (cards placed, moved
+# or removed, a new turn, money crossing the Interceptor's fee, modifiers, borders),
+# not on every redraw: on a crowded map those neighbour scans were most of a frame.
+var _ucache: Array = [] # entries in drawing order (north to south)
+var _ucache_sig: Array = []
+var _ucache_barracks: Array = [] # hexes of Barracks (their ripples)
+var _ucache_marked: Array = [] # entries with an aura, flank arrows or a boat
+var _ucache_by_key: Dictionary = {} # "x,y" -> entry
+var _campaign_rev: int = 0 # bumped by set_campaign: ownership feeds the home-ground bonus
+var _campaign_sig: Array = [] # what set_campaign last traced the borders for
+
+func _war_sig() -> Array:
+	var sig: Array = [war.units.hash(), war.turn, _campaign_rev]
+	for nm in war.players.keys():
+		var p: Player = war.players[nm]
+		sig.append(p.MoneySupply >= 6)
+		sig.append(p.Modifiers.size())
+	return sig
+
+func unit_cache() -> Array:
+	if war == null:
+		return []
+	var sig := _war_sig()
+	if sig == _ucache_sig:
+		return _ucache
+	# Only cards moved, arrived or fell (same turn, money, modifiers, borders): redo
+	# just them and their neighbours, which is all a buff, cover or flank can reach.
+	var patched := not _ucache_sig.is_empty() and sig.slice(1) == _ucache_sig.slice(1) and _patch_cache()
+	_ucache_sig = sig
+	if patched:
+		return _ucache
+	_ucache.clear()
+	_ucache_by_key.clear()
+	# Plain arrays and integer cell keys: a full rebuild avoids the string keys and
+	# helper calls of MapWar's own checks (a crowded map has a thousand cards).
+	var keys: Array = war.units.keys()
+	var n := keys.size()
+	var gw: int = WorldMap.GRID_W
+	var gh: int = WorldMap.GRID_H
+	var wraps: bool = WorldMap.WRAPS
+	var hexes: Array = []
+	var cards: Array = []
+	var owner_of: PackedStringArray = PackedStringArray()
+	var owner_ix: PackedInt32Array = PackedInt32Array()
+	var alive: PackedByteArray = PackedByteArray()
+	var nation_ix: Dictionary = {}
+	var occ: Dictionary = {} # y * gw + x -> index
+	for idx in range(n):
+		var info: Dictionary = war.units[keys[idx]]
+		var h := MapWar.key_to_hex(str(keys[idx]))
+		var o := str(info["owner"])
+		if not nation_ix.has(o):
+			nation_ix[o] = nation_ix.size()
+		hexes.append(h)
+		cards.append(info["card"])
+		owner_of.append(o)
+		owner_ix.append(int(nation_ix[o]))
+		alive.append(1 if war.card_hp(info["card"]) > 0 else 0)
+		occ[h.y * gw + h.x] = idx
+	var nb_cells := func(t: Vector2i) -> PackedInt32Array: # the 6 neighbours' cells (-1 = off the map)
+		var out := PackedInt32Array()
+		var dirs: Array = MapCampaign.HEX_DIRS_ODD if (t.y & 1) == 1 else MapCampaign.HEX_DIRS_EVEN
+		for d in dirs:
+			var ny: int = t.y + d.y
+			var nx: int = t.x + d.x
+			if wraps:
+				nx = posmod(nx, gw)
+			out.append(ny * gw + nx if (ny >= 0 and ny < gh and nx >= 0 and nx < gw) else -1)
+		return out
+	# A living Barracks buffs its owner's units round it (MapWar.is_buffed); a living
+	# Interceptor covers its owner's other cards round it while they can pay 6 Money
+	# (MapWar.is_shielded). Mark the hexes they reach: there are few of them.
+	var buff_at: Dictionary = {} # cell * 64 + nation index -> true
+	var cover_at: Dictionary = {}
+	for idx in range(n):
+		var c: Card = cards[idx]
+		if alive[idx] == 0 or not (c is Barracks or c is Interceptor):
+			continue
+		var into: Dictionary = buff_at if c is Barracks else cover_at
+		for cell in nb_cells.call(hexes[idx]):
+			if cell >= 0:
+				into[cell * 64 + owner_ix[idx]] = true
+	var can_pay: Dictionary = {}
+	for nm in war.players.keys():
+		can_pay[str(nm)] = (war.players[nm] as Player).MoneySupply >= 6
+	var base_dmg: Dictionary = {} # [owner, card stats] -> Player.effective_damage_for (the same for every copy)
+	var barracks_bonus: Dictionary = {} # owner -> MapWar._barracks_bonus next to one of its Barracks
+	var land_owner: Dictionary = war.campaign.owner if war.campaign != null else {}
+	for idx in range(n):
+		var k: String = str(keys[idx])
+		var t: Vector2i = hexes[idx]
+		var owner: String = owner_of[idx]
+		var card: Card = cards[idx]
+		var is_unit := card is Unit
+		var cell: int = t.y * gw + t.x
+		var buffed: bool = is_unit and buff_at.has(cell * 64 + owner_ix[idx])
+		var shielded: bool = not (card is Interceptor) and bool(can_pay.get(owner, false)) and cover_at.has(cell * 64 + owner_ix[idx])
+		var flank := 0 # MapWar.flank_at: living enemy units on the 6 sides
+		if is_unit:
+			var enemy: Array = [false, false, false, false, false, false]
+			var n_enemy := 0
+			var cells: PackedInt32Array = nb_cells.call(t)
+			for i in range(6):
+				var j: int = occ.get(cells[i], -1) if cells[i] >= 0 else -1
+				if j >= 0 and alive[j] == 1 and owner_ix[j] != owner_ix[idx] and cards[j] is Unit:
+					enemy[i] = true
+					n_enemy += 1
+			if n_enemy >= 6:
+				flank = MapWar.FLANK_ENCIRCLED
+			elif n_enemy >= 4:
+				flank = MapWar.FLANK_SURROUNDED
+			elif (enemy[0] and enemy[3]) or (enemy[1] and enemy[4]) or (enemy[2] and enemy[5]):
+				flank = MapWar.FLANK_FLANKED
+		var atk := "" # MapWar.effective_damage, from the parts worked out above
+		if is_unit and war.players.has(owner):
+			var u := card as Unit
+			var bk: Array = [owner, u.card_name, u.Damage, u.BioCost, u.MoneyCost, u.Flying]
+			if not base_dmg.has(bk):
+				base_dmg[bk] = (war.players[owner] as Player).effective_damage_for(u, null)
+			if buffed and not barracks_bonus.has(owner): # the same next to any of its Barracks
+				barracks_bonus[owner] = war._barracks_bonus(owner, t)
+			var dmg: int = int(base_dmg[bk]) + (int(barracks_bonus[owner]) if buffed else 0) \
+				+ (MapWar.HOME_BONUS if str(land_owner.get(k, "")) == owner else 0)
+			atk = str(dmg) + ("x4" if (card is RocketLauncher or card is Howitzer) else "")
+		_ucache_by_key[k] = _cache_entry(k, t, owner, card, buffed, shielded, flank, atk)
+	_order_cache()
+	return _ucache
+
+func _cache_entry(k: String, t: Vector2i, owner: String, card: Card, buffed: bool, shielded: bool, flank: int, atk: String) -> Dictionary:
+	var is_unit := card is Unit
+	return {
+		"k": k, "t": t, "owner": owner, "card": card, "is_unit": is_unit,
+		"nc": _nation_colors.get(owner, Color.WHITE), "buffed": buffed, "shielded": shielded,
+		"flank": flank, "atk": atk, "seed": t.x * 13 + t.y * 7, "frame_off": t.x + t.y,
+		"regions": _atlas_regions(card.card_name, owner),
+		"frames": unit_frames(card.card_name, owner),
+		"sea": not (is_unit and (card as Unit).Flying) and not WorldMap.is_land(t.x, t.y),
+	}
+
+# _ucache (and the Barracks and marked lists) from _ucache_by_key, north to south so
+# a sprite never stands behind the one on the row above it. (A native sort of
+# row-major keys: a GDScript comparator was most of a rebuild.)
+func _order_cache() -> void:
+	var entries: Array = _ucache_by_key.values()
+	var order := PackedInt64Array()
+	for i in range(entries.size()):
+		var t: Vector2i = entries[i]["t"]
+		order.append((int(t.y) * 65536 + int(t.x)) * 65536 + i)
+	order.sort()
+	_ucache = []
+	_ucache_barracks.clear()
+	_ucache_marked.clear()
+	for o in order:
+		var e: Dictionary = entries[o & 0xffff]
+		_ucache.append(e)
+		if e["card"] is Barracks:
+			_ucache_barracks.append(e["t"])
+		if e["buffed"] or e["shielded"] or int(e["flank"]) > 0 or e["sea"]:
+			_ucache_marked.append(e)
+
+# Bring the cache up to date after a few cards changed hex, arrived or were removed,
+# asking MapWar itself about each card they could affect. False (nothing done) when
+# too much changed for that to be cheaper than a full rebuild.
+const PATCH_MAX := 24
+
+func _patch_cache() -> bool:
+	var changed: Array = []
+	for k in war.units.keys():
+		var e: Dictionary = _ucache_by_key.get(k, {})
+		if e.is_empty() or e["card"] != war.units[k]["card"] or e["owner"] != str(war.units[k]["owner"]):
+			changed.append(k)
+			if changed.size() > PATCH_MAX:
+				return false
+	if _ucache_by_key.size() != war.units.size() - _count_new(changed):
+		for k in _ucache_by_key.keys():
+			if not war.units.has(k):
+				changed.append(k)
+				if changed.size() > PATCH_MAX:
+					return false
+	var redo: Dictionary = {} # the changed hexes and their neighbours
+	for k in changed:
+		redo[k] = true
+		for nb in MapCampaign.wrapped_neighbors(MapWar.key_to_hex(str(k))):
+			redo[MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y)] = true
+	for k in redo.keys():
+		_ucache_by_key.erase(k)
+		if not war.units.has(k):
+			continue
+		var info: Dictionary = war.units[k]
+		var owner := str(info["owner"])
+		var card: Card = info["card"]
+		var t := MapWar.key_to_hex(str(k))
+		var atk := ""
+		if card is Unit and war.players.has(owner):
+			atk = str(war.effective_damage(owner, card as Unit, t)) + ("x4" if (card is RocketLauncher or card is Howitzer) else "")
+		_ucache_by_key[k] = _cache_entry(str(k), t, owner, card, war.is_buffed(str(k)),
+			war.is_shielded(str(k)) and not (card is Interceptor), war.flank_bonus(str(k)), atk)
+	_order_cache()
+	return true
+
+# How many of `keys` are new to the cache (so its size can be checked for removals).
+func _count_new(keys: Array) -> int:
+	var n := 0
+	for k in keys:
+		if not _ucache_by_key.has(k):
+			n += 1
+	return n
+
 func _draw_card(card_name: String, c: Vector2, s: float, tint: Color = Color.WHITE, frame_offset: int = 0, nation: String = "") -> void:
 	var frames := unit_frames(card_name, nation)
 	if frames.is_empty():
 		return
 	var tex: Texture2D = frames[(int(_clock * 4.0) + frame_offset) % frames.size()]
 	var side: float = s * 2.1
-	_overlay.draw_texture_rect(tex, Rect2(c - Vector2(side * 0.5, side * 0.62), Vector2(side, side)), false, tint)
+	_ci.draw_texture_rect(tex, Rect2(c - Vector2(side * 0.5, side * 0.62), Vector2(side, side)), false, tint)
 
 func add_shot(from: Vector2i, to: Vector2i, sfx_kind: String, travel: float) -> void:
 	effects.append({"kind": "shot", "from": from, "to": to, "t0": _clock, "dur": travel, "color": SHOT_COLORS.get(sfx_kind, Color.WHITE)})
@@ -935,6 +1352,7 @@ func add_intercept(interceptor: Vector2i, target: Vector2i, impact_delay: float)
 # `step` seconds per hex, and waits at the end until walk_back(). It never moves on the board.
 func walk_out(k: String, path: Array, step: float) -> void:
 	walks[k] = {"path": path, "t0": _clock, "step": maxf(step, 0.001), "back": false}
+	_walks_changed()
 
 # A real move (MapWar.move): the card already stands on the path's last hex; show it
 # walking there from the first one, `step` seconds per hex.
@@ -945,7 +1363,8 @@ func animate_move(path: Array, step: float) -> void:
 	var rev: Array = path.duplicate()
 	rev.reverse()
 	walks[MapCampaign.key_of(dest.x, dest.y)] = {"path": rev, "t0": _clock, "step": maxf(step, 0.001), "back": true}
-	_overlay.queue_redraw()
+	_walks_changed()
+	redraw_layers()
 
 func walk_back(k: String) -> void:
 	if walks.has(k):
@@ -954,6 +1373,14 @@ func walk_back(k: String) -> void:
 
 func clear_walks() -> void:
 	walks.clear()
+	_walks_changed()
+
+# A card started or stopped marching: it moves between the units and walkers layers.
+func _walks_changed() -> void:
+	_last_walk_n = walks.size()
+	for layer in [_units, _walkers, _chips, _text_layer]:
+		if layer != null:
+			_redraw(layer)
 
 # How many path steps the walker has covered right now (0 = at home).
 func _walk_progress(w: Dictionary) -> float:
@@ -1034,9 +1461,9 @@ func _draw_flank_marks(c: Vector2, s: float, bonus: int) -> void:
 		var tri := PackedVector2Array([tip, base + side, base - side])
 		var outline := tri.duplicate()
 		outline.append(tri[0])
-		_overlay.draw_colored_polygon(tri, Color(1.0, 0.25, 0.18, pulse))
-		_overlay.draw_polyline(outline, Color(0.05, 0.04, 0.08, 0.95), maxf(2.0, s * 0.07))
-		_overlay.draw_line(tip.lerp(base, 0.25), tip.lerp(base, 0.8), Color(1.0, 0.85, 0.7, 0.8 * pulse), maxf(1.0, s * 0.04))
+		_ci.draw_colored_polygon(tri, Color(1.0, 0.25, 0.18, pulse))
+		_ci.draw_polyline(outline, Color(0.05, 0.04, 0.08, 0.95), maxf(2.0, s * 0.07))
+		_ci.draw_line(tip.lerp(base, 0.25), tip.lerp(base, 0.8), Color(1.0, 0.85, 0.7, 0.8 * pulse), maxf(1.0, s * 0.04))
 
 # Pixel boat under a card crossing the sea: wake behind, then the hull drawn over
 # the sprite's feet so the unit stands inside it. Bow points along `facing`.
@@ -1045,8 +1472,8 @@ func _draw_boat_wake(c: Vector2, s: float, facing: float) -> void:
 	for i in range(3):
 		var wx: float = -facing * s * (1.15 + i * 0.32)
 		var ph: float = fmod(_clock * 3.0 + i * 0.33, 1.0)
-		_overlay.draw_line(c + Vector2(wx, s * (0.6 - 0.12 * i)), c + Vector2(wx - facing * s * 0.25, s * (0.66 - 0.08 * i)), Color(foam.r, foam.g, foam.b, foam.a * (1.0 - ph * 0.6)), maxf(1.5, s * 0.08))
-	_overlay.draw_line(c + Vector2(-s * 1.0, s * 0.7), c + Vector2(s * 1.0, s * 0.7), Color(foam.r, foam.g, foam.b, 0.35), maxf(1.5, s * 0.09))
+		_ci.draw_line(c + Vector2(wx, s * (0.6 - 0.12 * i)), c + Vector2(wx - facing * s * 0.25, s * (0.66 - 0.08 * i)), Color(foam.r, foam.g, foam.b, foam.a * (1.0 - ph * 0.6)), maxf(1.5, s * 0.08))
+	_ci.draw_line(c + Vector2(-s * 1.0, s * 0.7), c + Vector2(s * 1.0, s * 0.7), Color(foam.r, foam.g, foam.b, 0.35), maxf(1.5, s * 0.09))
 
 func _draw_boat_hull(c: Vector2, s: float, nc: Color, facing: float) -> void:
 	var pts := PackedVector2Array()
@@ -1054,13 +1481,13 @@ func _draw_boat_hull(c: Vector2, s: float, nc: Color, facing: float) -> void:
 		pts.append(c + Vector2(p.x * facing, p.y) * s)
 	var outline := pts.duplicate()
 	outline.append(pts[0])
-	_overlay.draw_colored_polygon(pts, Color(0.46, 0.28, 0.15))
+	_ci.draw_colored_polygon(pts, Color(0.46, 0.28, 0.15))
 	# nation-coloured stripe under the gunwale, then plank lines
 	var stripe := PackedVector2Array([pts[0], pts[1], pts[1].lerp(pts[2], 0.32), pts[0].lerp(pts[3], 0.32)])
-	_overlay.draw_colored_polygon(stripe, nc)
-	_overlay.draw_line(pts[0].lerp(pts[3], 0.66), pts[1].lerp(pts[2], 0.66), Color(0.3, 0.17, 0.09), maxf(1.0, s * 0.06))
-	_overlay.draw_polyline(outline, Color(0.08, 0.05, 0.1), maxf(1.5, s * 0.09))
-	_overlay.draw_line(pts[0], pts[1], Color(0.8, 0.6, 0.38), maxf(1.0, s * 0.06))
+	_ci.draw_colored_polygon(stripe, nc)
+	_ci.draw_line(pts[0].lerp(pts[3], 0.66), pts[1].lerp(pts[2], 0.66), Color(0.3, 0.17, 0.09), maxf(1.0, s * 0.06))
+	_ci.draw_polyline(outline, Color(0.08, 0.05, 0.1), maxf(1.5, s * 0.09))
+	_ci.draw_line(pts[0], pts[1], Color(0.8, 0.6, 0.38), maxf(1.0, s * 0.06))
 
 func add_place(at: Vector2i) -> void:
 	effects.append({"kind": "place", "to": at, "t0": _clock, "dur": 0.45})
@@ -1080,107 +1507,233 @@ func _hex_poly(c: Vector2, r: float) -> PackedVector2Array:
 
 # Glowing line helper: wide faint stroke under a thin bright one.
 func _glow_polyline(pts: PackedVector2Array, col: Color, width: float) -> void:
-	_overlay.draw_polyline(pts, Color(col.r, col.g, col.b, col.a * 0.25), width * 3.0)
-	_overlay.draw_polyline(pts, col, width)
+	_ci.draw_polyline(pts, Color(col.r, col.g, col.b, col.a * 0.25), width * 3.0)
+	_ci.draw_polyline(pts, col, width)
 
 # Barracks: golden hex ripples washing over the ring of hexes it buffs.
 func _draw_barracks_ripples(m: Array) -> void:
 	var s: float = m[0]
-	for k in war.units.keys():
-		if not (war.units[k]["card"] is Barracks):
-			continue
-		var t := MapWar.key_to_hex(str(k))
+	for t in _ucache_barracks:
 		for cp in _visible_copies(t, m, s * 3.0):
 			for wave_i in range(2):
 				var ph: float = fposmod(_clock * 0.45 + wave_i * 0.5 + float(t.x * 7 + t.y) * 0.013, 1.0)
 				var a: float = (1.0 - ph) * 0.6 * minf(ph * 6.0, 1.0)
-				_glow_polyline(_hex_poly(cp as Vector2, s * (0.9 + ph * 1.35)), Color(GOLD.r, GOLD.g, GOLD.b, a), 2.0)
+				var rad: float = s * (0.9 + ph * 1.35)
+				var e: float = rad * FX_HEX_SPAN
+				_ci.draw_texture_rect_region(_fx_texture(), Rect2((cp as Vector2) - Vector2(e, e), Vector2(e, e) * 2.0), _fx(FX_HEX, rad), Color(GOLD.r, GOLD.g, GOLD.b, a))
 
-# Buffed unit: warm glow + rotating dashed gold ring at its feet, bobbing double chevron.
+# The per-unit animations (buff rings, chevrons, shield bubbles, glints, Barracks
+# ripples) are sprites cut from one small texture baked at start-up, moved, turned
+# and tinted per frame: hundreds of them still batch into a few draw calls, where
+# drawing each from arcs and polylines cost a draw call per stroke.
+# Each comes in two stroke weights: the old strokes had a minimum width in pixels,
+# so on small hexes (the whole world fits on screen) they are relatively bolder.
+const FX_BUFF := Rect2(0, 0, 96, 96)       # glow disc + 6 dashes on a ring (radius 0.92 of 1.25)
+const FX_HEX := Rect2(96, 0, 96, 96)       # glowing hex outline (radius 1 of 1.2)
+const FX_SHIELD := Rect2(192, 0, 96, 96)   # hex bubble: faint fill + glowing rim (radius 1 of 1.2)
+const FX_CHEVRON := Rect2(288, 0, 48, 48)  # double chevron (x -0.5..0.5, y -0.3..0.7 of the hex size)
+const FX_DOT := Rect2(336, 0, 16, 16)      # soft white dot
+const FX_BOLD := Vector2(0, 96)            # offset of the bold copy of each (not the dot)
+const FX_BOLD_BELOW := 20.0                # px: hexes / rings smaller than this use the bold copy
+const FX_RING_SPAN := 1.25 # FX_BUFF covers -1.25..1.25 of the hex size
+const FX_HEX_SPAN := 1.2   # FX_HEX / FX_SHIELD cover -1.2..1.2 of the hex radius
+var _fx_tex: ImageTexture = null
+
+# `cell` in the stroke weight for something `px` pixels across (hex size or radius).
+static func _fx(cell: Rect2, px: float) -> Rect2:
+	return Rect2(cell.position + FX_BOLD, cell.size) if px < FX_BOLD_BELOW else cell
+
+func _fx_texture() -> ImageTexture:
+	if _fx_tex != null:
+		return _fx_tex
+	var img := Image.create(352, 192, false, Image.FORMAT_RGBA8)
+	var light := Color(1, 0.93, 0.6)
+	var dark := Color(0.08, 0.06, 0.12)
+	for bold in [false, true]:
+		# half stroke widths (hex-size units): [glow/outline, bright line]
+		var ring_w: Array = [0.25, 0.105] if bold else [0.15, 0.06]
+		var hex_w: Array = [0.25, 0.08] if bold else [0.12, 0.04]
+		var chev_w: Array = [0.21, 0.105] if bold else [0.12, 0.06]
+		for cell in [FX_BUFF, FX_HEX, FX_SHIELD, FX_CHEVRON, FX_DOT]:
+			var r: Rect2 = cell
+			if bold and r == FX_DOT:
+				continue
+			var at := r.position + (FX_BOLD if bold else Vector2.ZERO)
+			var n: int = int(r.size.x)
+			for py in range(n):
+				for px in range(n):
+					var u := Vector2((px + 0.5) / n, (py + 0.5) / n) # 0..1 across the cell
+					var col := Color(0, 0, 0, 0)
+					if r == FX_BUFF:
+						var q := (u * 2.0 - Vector2.ONE) * FX_RING_SPAN
+						var aa: float = 2.0 * FX_RING_SPAN / n
+						col = _over(col, Color(GOLD.r, GOLD.g, GOLD.b, 0.17 * _cover(q.length() - 1.05, aa)))
+						var d := _dist_to_dashes(q, 0.92)
+						col = _over(col, Color(GOLD.r, GOLD.g, GOLD.b, 0.35 * _cover(d - float(ring_w[0]), aa)))
+						col = _over(col, Color(light.r, light.g, light.b, _cover(d - float(ring_w[1]), aa)))
+					elif r == FX_HEX or r == FX_SHIELD:
+						var q := (u * 2.0 - Vector2.ONE) * FX_HEX_SPAN
+						var aa: float = 2.0 * FX_HEX_SPAN / n
+						var sd := _hex_sd(q)
+						if r == FX_SHIELD:
+							col = _over(col, Color(1, 1, 1, 0.083 * _cover(sd, aa)))
+						var glow := 0.125 if r == FX_SHIELD else 0.25
+						var line := 0.5 if r == FX_SHIELD else 1.0
+						col = _over(col, Color(1, 1, 1, glow * _cover(absf(sd) - float(hex_w[0]), aa)))
+						col = _over(col, Color(1, 1, 1, line * _cover(absf(sd) - float(hex_w[1]), aa)))
+					elif r == FX_CHEVRON:
+						var q := Vector2(u.x - 0.5, u.y - 0.3) # hex-size units
+						var aa: float = 1.0 / n
+						for j in range(2):
+							var y: float = j * 0.26
+							var d: float = minf(_seg_dist(q, Vector2(-0.3, y + 0.225), Vector2(0, y)), _seg_dist(q, Vector2(0, y), Vector2(0.3, y + 0.225)))
+							var c2: Color = Color(1, 0.93, 0.55).lerp(GOLD, 0.5 * j)
+							col = _over(col, Color(dark.r, dark.g, dark.b, _cover(d - float(chev_w[0]), aa)))
+							col = _over(col, Color(c2.r, c2.g, c2.b, _cover(d - float(chev_w[1]), aa)))
+					else: # FX_DOT
+						var q := u * 2.0 - Vector2.ONE
+						col = Color(1, 1, 1, _cover(q.length() - 0.8, 2.0 / n))
+					img.set_pixel(int(at.x) + px, int(at.y) + py, col)
+	_fx_tex = ImageTexture.create_from_image(img)
+	return _fx_tex
+
+# Anti-aliased coverage of a shape at signed distance `sd` (pixel size `aa`).
+static func _cover(sd: float, aa: float) -> float:
+	return clampf(0.5 - sd / aa, 0.0, 1.0)
+
+static func _over(under: Color, top: Color) -> Color:
+	return under.blend(top) if top.a > 0.0 else under
+
+static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
+	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
+
+# Signed distance to a pointy-top hex of circumradius 1 (negative inside).
+static func _hex_sd(p: Vector2) -> float:
+	var d := -INF
+	for k in range(6):
+		var ang: float = deg_to_rad(60.0 * k)
+		d = maxf(d, p.dot(Vector2(cos(ang), sin(ang))))
+	return d - 0.8660254
+
+# Distance to the buff ring's 6 dashes (radius `rad`, each TAU/11 long, one every TAU/6).
+static func _dist_to_dashes(p: Vector2, rad: float) -> float:
+	var ang: float = fposmod(p.angle(), TAU)
+	var best := INF
+	for i in range(6):
+		var a0: float = i * TAU / 6.0
+		var a1: float = a0 + TAU / 11.0
+		if ang >= a0 and ang <= a1:
+			best = minf(best, absf(p.length() - rad))
+		else:
+			best = minf(best, minf(p.distance_to(Vector2(cos(a0), sin(a0)) * rad), p.distance_to(Vector2(cos(a1), sin(a1)) * rad)))
+	return best
+
+# Buffed unit: warm glow + rotating dashed gold ring at its feet...
 func _draw_buff_aura(c: Vector2, s: float, seed_i: int) -> void:
+	var fx := _fx_texture()
 	var base := c + Vector2(0, s * 0.45)
 	var pulse: float = 0.5 + 0.5 * sin(_clock * 3.0 + seed_i)
-	_overlay.draw_set_transform(base, 0.0, Vector2(1.0, 0.45))
-	_overlay.draw_circle(Vector2.ZERO, s * 1.05, Color(GOLD.r, GOLD.g, GOLD.b, 0.12 + 0.1 * pulse))
 	var rot: float = _clock * 1.6 + seed_i
-	for i in range(6):
-		var a0: float = rot + i * TAU / 6.0
-		_overlay.draw_arc(Vector2.ZERO, s * 0.92, a0, a0 + TAU / 11.0, 8, Color(GOLD.r, GOLD.g, GOLD.b, 0.35), maxf(6.0, s * 0.3))
-		_overlay.draw_arc(Vector2.ZERO, s * 0.92, a0, a0 + TAU / 11.0, 8, Color(1, 0.93, 0.6), maxf(2.5, s * 0.12))
-	_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# turn the ring, then squash it flat onto the ground
+	_ci.draw_set_transform_matrix(Transform2D(Vector2(cos(rot), 0.45 * sin(rot)), Vector2(-sin(rot), 0.45 * cos(rot)), base))
+	var e: float = s * FX_RING_SPAN
+	_ci.draw_texture_rect_region(fx, Rect2(-e, -e, e * 2.0, e * 2.0), _fx(FX_BUFF, s), Color(1, 1, 1, 0.8 + 0.2 * pulse))
+	_ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+# ...and its bobbing double chevron, drawn over the units so neighbours can't hide it.
+func _draw_buff_chevron(c: Vector2, s: float, seed_i: int) -> void:
 	var bob: float = sin(_clock * 3.0 + seed_i) * s * 0.08
 	var p := c + Vector2(s * 0.8, -s * 0.85 + bob)
-	var w: float = s * 0.3
-	for j in range(2):
-		var y: float = p.y + j * s * 0.26
-		var chev := PackedVector2Array([Vector2(p.x - w, y + w * 0.75), Vector2(p.x, y), Vector2(p.x + w, y + w * 0.75)])
-		_overlay.draw_polyline(chev, Color8(20, 16, 30), maxf(5.0, s * 0.24))
-		_overlay.draw_polyline(chev, Color(1, 0.93, 0.55).lerp(GOLD, 0.5 * j), maxf(2.5, s * 0.12))
+	_ci.draw_texture_rect_region(_fx_texture(), Rect2(p + Vector2(-0.5, -0.3) * s, Vector2(s, s)), _fx(FX_CHEVRON, s))
 
 # Shielded unit: faint cyan hex bubble with a bright glint running round its edge.
 func _draw_shield_aura(c: Vector2, s: float, seed_i: int) -> void:
+	var fx := _fx_texture()
 	var r: float = s * 0.95
-	var pts := _hex_points(c, r)
-	_overlay.draw_colored_polygon(pts, Color(CYAN.r, CYAN.g, CYAN.b, 0.07))
 	var shimmer: float = 0.35 + 0.15 * sin(_clock * 2.5 + seed_i)
-	_glow_polyline(_hex_poly(c, r), Color(CYAN.r, CYAN.g, CYAN.b, shimmer), 1.5)
+	var e: float = r * FX_HEX_SPAN
+	_ci.draw_texture_rect_region(fx, Rect2(c - Vector2(e, e), Vector2(e, e) * 2.0), _fx(FX_SHIELD, r), Color(CYAN.r, CYAN.g, CYAN.b, shimmer / 0.42 * 0.84))
 	var u: float = fposmod(_clock * 0.55 + seed_i * 0.17, 1.0) * 6.0
-	var e := int(u)
-	var f: float = u - e
-	var a := pts[e]
-	var b := pts[(e + 1) % 6]
-	var head := a.lerp(b, f)
-	var tail := a.lerp(b, maxf(0.0, f - 0.45))
-	_overlay.draw_line(tail, head, Color(1, 1, 1, 0.9), 2.5)
-	_overlay.draw_circle(head, maxf(1.5, s * 0.07), Color(0.85, 1, 1, 0.95))
+	var k := int(u)
+	var f: float = u - k
+	var a: Vector2 = c + _corner_unit[k] * r
+	var b: Vector2 = c + _corner_unit[(k + 1) % 6] * r
+	var dot: float = maxf(1.5, s * 0.07)
+	for i in range(3): # the glint and its fading tail
+		var t: float = f - i * 0.15
+		if t < 0.0:
+			break
+		var rr: float = dot * (1.3 - i * 0.3)
+		_ci.draw_texture_rect_region(fx, Rect2(a.lerp(b, t) - Vector2(rr, rr), Vector2(rr, rr) * 2.0), FX_DOT, Color(0.85, 1, 1, 0.95 - i * 0.3))
 
-func _draw_units(m: Array) -> void:
+# [entry, screen centre, at sea, boat facing] for every on-screen copy of `ents`.
+func _visible_units(m: Array, ents: Array) -> Array:
+	var margin: float = float(m[0]) * 2.0
+	var vis: Array = []
+	for e in ents:
+		var k: String = e["k"]
+		var walking := walks.has(k)
+		var shift := unit_offset(k, m) if walking else Vector2.ZERO
+		var cps := _visible_copies(e["t"], m, margin + shift.length())
+		if cps.is_empty():
+			continue
+		var sea: bool = at_sea(k) if walking else bool(e["sea"])
+		var facing := _walk_facing(k, m) if (sea and walking) else 1.0
+		for cp in cps:
+			vis.append([e, (cp as Vector2) + shift, sea, facing])
+	return vis
+
+# The few units with animated marks (auras, flank arrows, boats) and any marching ones.
+func _marked_units(m: Array) -> Array:
+	unit_cache()
+	var ents: Array = _ucache_marked.duplicate()
+	for k in walks.keys():
+		if _ucache_by_key.has(k) and not ents.has(_ucache_by_key[k]):
+			ents.append(_ucache_by_key[k])
+	return _visible_units(m, ents)
+
+# Units layer: bases, sprites, boats and HP bars of every card on screen. Each kind
+# of mark goes in its own pass: the bases, the sprites and the bars each share one
+# texture, so the renderer batches the whole army's into a few draw calls instead of
+# switching state for every unit.
+func _draw_units(m: Array, ents: Array, with_ghosts: bool) -> void:
 	var s: float = m[0]
-	var margin: float = s * 2.0
-	_draw_barracks_ripples(m)
-	var flanked: Array = [] # [[screen centre, bonus], ...]
-	for k in war.units.keys():
-		var info: Dictionary = war.units[k]
-		var t := MapWar.key_to_hex(str(k))
-		var owner := str(info["owner"])
-		var nc: Color = _nation_colors.get(owner, Color.WHITE)
-		var card: Card = info["card"]
-		var hp: int = int(hp_shown.get(k, war.card_hp(card)))
+	var vis := _visible_units(m, ents)
+	var base_tex := _unit_base_tex()
+	var base_size := Vector2(s * 1.44, s * 0.648)
+	for v in vis:
+		if not v[2]:
+			_ci.draw_texture_rect(base_tex, Rect2((v[1] as Vector2) + Vector2(0, s * 0.45) - base_size * 0.5, base_size), false, v[0]["nc"])
+	var side: float = s * 2.1
+	var tick: int = int(_clock * 4.0)
+	for v in vis:
+		var e: Dictionary = v[0]
+		var c: Vector2 = v[1]
+		var dst := Rect2(c - Vector2(side * 0.5, side * 0.62), Vector2(side, side))
+		var regions: Array = e["regions"]
+		if not regions.is_empty():
+			_ci.draw_texture_rect_region(_sprite_atlas, dst, regions[(tick + int(e["frame_off"])) % regions.size()])
+		else:
+			var frames: Array = e["frames"]
+			if not frames.is_empty():
+				_ci.draw_texture_rect(frames[(tick + int(e["frame_off"])) % frames.size()], dst, false)
+		if v[2]:
+			_draw_boat_hull(c, s, e["nc"], v[3]) # the hull goes over the sprite's feet
+	# HP bar under each unit
+	var bwid: float = s * 1.3
+	var bh: float = maxf(2.0, s * 0.16)
+	for v in vis:
+		var e: Dictionary = v[0]
+		var card: Card = e["card"]
+		var hp: int = int(hp_shown.get(e["k"], war.card_hp(card)))
 		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
 		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
-		var buffed: bool = war.is_buffed(str(k))
-		var shielded: bool = war.is_shielded(str(k)) and not (card is Interceptor)
-		var flank: int = war.flank_bonus(str(k)) if card is Unit else 0
-		var seed_i: int = t.x * 13 + t.y * 7
-		var shift := unit_offset(str(k), m)
-		var sea := at_sea(str(k))
-		var facing := _walk_facing(str(k), m) if sea else 1.0
-		for cp in _visible_copies(t, m, margin):
-			var c := (cp as Vector2) + shift
-			if sea:
-				_draw_boat_wake(c, s, facing)
-			else:
-				# owner base: flat ellipse in nation colour under the sprite
-				_overlay.draw_set_transform(c + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
-				_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
-				_overlay.draw_circle(Vector2.ZERO, s * 0.6, nc)
-				_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-			if buffed:
-				_draw_buff_aura(c, s, seed_i)
-			_draw_card(card.card_name, c, s, Color.WHITE, t.x + t.y, owner)
-			if sea:
-				_draw_boat_hull(c, s, nc, facing)
-			if shielded:
-				_draw_shield_aura(c, s, seed_i)
-			if flank > 0:
-				flanked.append([c, flank]) # drawn after every unit, so neighbours can't hide them
-			# HP bar under the unit
-			var bwid: float = s * 1.3
-			var r := Rect2(c + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, maxf(2.0, s * 0.16)))
-			_overlay.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
-			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
-	for f in flanked:
-		_draw_flank_marks(f[0], s, int(f[1]))
+		var r := Rect2((v[1] as Vector2) + Vector2(-bwid * 0.5, s * 0.72), Vector2(bwid, bh))
+		_ci.draw_rect(r.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
+		_ci.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), Color(1.0 - frac, 0.35 + 0.6 * frac, 0.25), true)
+	if not with_ghosts:
+		return
+	var margin: float = s * 2.0
 	# cards the logic already destroyed, standing until the shot that kills them
 	for gk in ghosts.keys():
 		var gd: Dictionary = ghosts[gk]
@@ -1189,15 +1742,12 @@ func _draw_units(m: Array) -> void:
 		var gfrac: float = clampf(float(gd["hp"]) / float(maxi(int(gd["max"]), 1)), 0.0, 1.0)
 		for cp in _visible_copies(gt, m, margin):
 			var gc := cp as Vector2
-			_overlay.draw_set_transform(gc + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
-			_overlay.draw_circle(Vector2.ZERO, s * 0.72, Color(0.05, 0.04, 0.08, 0.85))
-			_overlay.draw_circle(Vector2.ZERO, s * 0.6, gnc)
-			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_ci.draw_texture_rect(base_tex, Rect2(gc + Vector2(0, s * 0.45) - base_size * 0.5, base_size), false, gnc)
 			_draw_card(str(gd["name"]), gc, s, Color.WHITE, gt.x + gt.y, str(gd["owner"]))
 			var gw: float = s * 1.3
 			var gr := Rect2(gc + Vector2(-gw * 0.5, s * 0.72), Vector2(gw, maxf(2.0, s * 0.16)))
-			_overlay.draw_rect(gr.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
-			_overlay.draw_rect(Rect2(gr.position, Vector2(gr.size.x * gfrac, gr.size.y)), Color(1.0 - gfrac, 0.35 + 0.6 * gfrac, 0.25), true)
+			_ci.draw_rect(gr.grow(1.0), Color(0.05, 0.04, 0.08, 0.9), true)
+			_ci.draw_rect(Rect2(gr.position, Vector2(gr.size.x * gfrac, gr.size.y)), Color(1.0 - gfrac, 0.35 + 0.6 * gfrac, 0.25), true)
 
 # Show the board as it was before an attack that the logic has already resolved.
 func begin_replay(snapshot: Dictionary, dead_keys: Array, flag_hp: Dictionary, flag_sites: Dictionary = {}) -> void:
@@ -1210,7 +1760,7 @@ func begin_replay(snapshot: Dictionary, dead_keys: Array, flag_hp: Dictionary, f
 		if snapshot.has(k):
 			ghosts[k] = (snapshot[k] as Dictionary).duplicate()
 	flag_hp_shown = flag_hp.duplicate()
-	_overlay.queue_redraw()
+	redraw_layers()
 
 # A replayed shot landed on hex `to` (a card or a flag) for `dmg`.
 func replay_hit(to: Vector2i, dmg: int, flag_owner: String = "") -> void:
@@ -1222,7 +1772,7 @@ func replay_hit(to: Vector2i, dmg: int, flag_owner: String = "") -> void:
 		hp_shown[k] = maxi(0, int(hp_shown[k]) - dmg)
 		if ghosts.has(k):
 			ghosts[k]["hp"] = hp_shown[k]
-	_overlay.queue_redraw()
+	redraw_layers()
 
 # The replay's killing shot launched: from here the wreck effect shows the card.
 func replay_remove(k: String) -> void:
@@ -1255,18 +1805,18 @@ func end_replay() -> void:
 func _draw_flag_hp(m: Array) -> void:
 	var s: float = m[0]
 	for nm in war.players.keys():
-		if _dead.has(nm) or _campaign == null or not _campaign.is_alive(str(nm)):
+		if _dead.has(nm) or _campaign == null:
 			continue
 		var p: Player = war.players[nm]
 		var fhp: int = int(flag_hp_shown.get(nm, p.HitPoints))
 		var frac: float = clampf(float(fhp) / float(maxi(p.MaxHitPoints, 1)), 0.0, 1.0)
 		var nc: Color = _nation_colors.get(nm, Color.WHITE)
-		for cp in _visible_copies(flag_site_shown.get(nm, _campaign.capital_site(str(nm))), m, s * 3.0):
+		for cp in _visible_copies(flag_site_shown.get(nm, capital_site(str(nm))), m, s * 3.0):
 			var bw: float = s * 2.0
 			var r := Rect2((cp as Vector2) + Vector2(-bw * 0.5, s * 1.0), Vector2(bw, maxf(3.0, s * 0.2)))
-			_overlay.draw_rect(r.grow(1.5), Color8(20, 16, 30), true)
-			_overlay.draw_rect(r.grow(0.5), Color(1.0, 0.86, 0.35), false, 1.0)
-			_overlay.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), nc.lightened(0.15), true)
+			_ci.draw_rect(r.grow(1.5), Color8(20, 16, 30), true)
+			_ci.draw_rect(r.grow(0.5), Color(1.0, 0.86, 0.35), false, 1.0)
+			_ci.draw_rect(Rect2(r.position, Vector2(r.size.x * frac, r.size.y)), nc.lightened(0.15), true)
 
 func _draw_effects(m: Array) -> void:
 	var s: float = m[0]
@@ -1284,71 +1834,72 @@ func _draw_effects(m: Array) -> void:
 				var col: Color = e["color"]
 				var head := a.lerp(b, k)
 				var tail := a.lerp(b, maxf(0.0, k - 0.25))
-				_overlay.draw_line(tail, head, Color(col.r, col.g, col.b, 0.55), maxf(1.5, s * 0.12))
-				_overlay.draw_circle(head, maxf(1.5, s * 0.16), col)
+				_ci.draw_line(tail, head, Color(col.r, col.g, col.b, 0.55), maxf(1.5, s * 0.12))
+				_ci.draw_circle(head, maxf(1.5, s * 0.16), col)
 			"boom":
 				var big: bool = e["big"]
 				var rad: float = s * (0.4 + k * (1.6 if big else 0.9))
 				var alpha: float = 1.0 - k
-				_overlay.draw_circle(to_c, rad, Color(1.0, 0.55, 0.15, 0.55 * alpha))
-				_overlay.draw_circle(to_c, rad * 0.6, Color(1.0, 0.92, 0.5, 0.8 * alpha))
-				_overlay.draw_arc(to_c, rad * 1.1, 0.0, TAU, 18, Color(1, 1, 1, 0.6 * alpha), 1.5)
+				_ci.draw_circle(to_c, rad, Color(1.0, 0.55, 0.15, 0.55 * alpha))
+				_ci.draw_circle(to_c, rad * 0.6, Color(1.0, 0.92, 0.5, 0.8 * alpha))
+				_ci.draw_arc(to_c, rad * 1.1, 0.0, TAU, 18, Color(1, 1, 1, 0.6 * alpha), 1.5)
 			"buff":
 				var ease_k: float = 1.0 - pow(1.0 - k, 3.0)
 				var fade: float = 1.0 - k
-				_overlay.draw_circle(to_c, s * (0.5 + ease_k * 0.9), Color(GOLD.r, GOLD.g, GOLD.b, 0.18 * fade))
-				_overlay.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(GOLD.r, GOLD.g, GOLD.b, 0.35 * fade), 6.0)
-				_overlay.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(1, 0.95, 0.7, fade), 2.0)
+				_ci.draw_circle(to_c, s * (0.5 + ease_k * 0.9), Color(GOLD.r, GOLD.g, GOLD.b, 0.18 * fade))
+				_ci.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(GOLD.r, GOLD.g, GOLD.b, 0.35 * fade), 6.0)
+				_ci.draw_arc(to_c, s * (0.45 + ease_k * 1.25), 0.0, TAU, 28, Color(1, 0.95, 0.7, fade), 2.0)
 				for ray in range(8):
 					var ang: float = ray * TAU / 8.0 + k * 1.2
 					var d0: float = s * (0.35 + ease_k * 0.9)
 					var d1: float = d0 + s * 0.45 * fade
-					_overlay.draw_line(to_c + Vector2(cos(ang), sin(ang)) * d0, to_c + Vector2(cos(ang), sin(ang)) * d1, Color(GOLD.r, GOLD.g, GOLD.b, fade), 2.0)
+					_ci.draw_line(to_c + Vector2(cos(ang), sin(ang)) * d0, to_c + Vector2(cos(ang), sin(ang)) * d1, Color(GOLD.r, GOLD.g, GOLD.b, fade), 2.0)
 				var cy: float = to_c.y - s * (0.7 + ease_k * 1.3)
 				var w: float = s * 0.3
 				for j in range(2):
 					var yy: float = cy + j * s * 0.26
 					var chev := PackedVector2Array([Vector2(to_c.x - w, yy + w * 0.7), Vector2(to_c.x, yy), Vector2(to_c.x + w, yy + w * 0.7)])
-					_overlay.draw_polyline(chev, Color(0.08, 0.06, 0.12, fade), maxf(4.0, s * 0.2))
-					_overlay.draw_polyline(chev, Color(GOLD.r, GOLD.g, GOLD.b, fade), maxf(2.0, s * 0.1))
+					_ci.draw_polyline(chev, Color(0.08, 0.06, 0.12, fade), maxf(4.0, s * 0.2))
+					_ci.draw_polyline(chev, Color(GOLD.r, GOLD.g, GOLD.b, fade), maxf(2.0, s * 0.1))
 			"counter":
 				var fa := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.6)
 				var fb := _wrap_target(fa, to_c, m)
 				var hk: float = k * k # accelerates towards the hit
 				var head2 := fa.lerp(fb, hk)
 				var tail2 := fa.lerp(fb, maxf(0.0, hk - 0.3))
-				_overlay.draw_line(tail2, head2, Color(CYAN.r, CYAN.g, CYAN.b, 0.35), maxf(4.0, s * 0.25))
-				_overlay.draw_line(tail2, head2, Color(0.9, 1, 1, 0.95), maxf(1.5, s * 0.09))
-				_overlay.draw_circle(head2, maxf(2.0, s * 0.13), Color(1, 1, 1))
+				_ci.draw_line(tail2, head2, Color(CYAN.r, CYAN.g, CYAN.b, 0.35), maxf(4.0, s * 0.25))
+				_ci.draw_line(tail2, head2, Color(0.9, 1, 1, 0.95), maxf(1.5, s * 0.09))
+				_ci.draw_circle(head2, maxf(2.0, s * 0.13), Color(1, 1, 1))
 			"shield":
 				var ek: float = 1.0 - pow(1.0 - k, 2.0)
 				var fade2: float = 1.0 - k
 				var r: float = s * (0.95 + ek * 0.35)
 				var hex := _hex_points(to_c, r)
-				_overlay.draw_colored_polygon(hex, Color(CYAN.r, CYAN.g, CYAN.b, 0.32 * fade2))
+				_ci.draw_colored_polygon(hex, Color(CYAN.r, CYAN.g, CYAN.b, 0.32 * fade2))
 				for cc in range(3):
-					_overlay.draw_line(hex[cc], hex[cc + 3], Color(0.85, 1, 1, 0.45 * fade2), 1.5)
+					_ci.draw_line(hex[cc], hex[cc + 3], Color(0.85, 1, 1, 0.45 * fade2), 1.5)
 				var inner := _hex_poly(to_c, r * 0.55)
-				_overlay.draw_polyline(inner, Color(0.85, 1, 1, 0.5 * fade2), 1.5)
+				_ci.draw_polyline(inner, Color(0.85, 1, 1, 0.5 * fade2), 1.5)
 				_glow_polyline(_hex_poly(to_c, r), Color(0.8, 1, 1, fade2), 2.5)
 				for sp in range(10):
 					var sa: float = sp * TAU / 10.0 + 0.3
 					var sd: float = s * (1.0 + ek * 1.0)
-					_overlay.draw_circle(to_c + Vector2(cos(sa), sin(sa)) * sd, maxf(1.0, s * 0.06 * fade2), Color(0.85, 1, 1, fade2))
+					_ci.draw_circle(to_c + Vector2(cos(sa), sin(sa)) * sd, maxf(1.0, s * 0.06 * fade2), Color(0.85, 1, 1, fade2))
 			"wreck":
 				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k), 0, str(e.get("owner", "")))
 			"place":
-				_overlay.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
+				_ci.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
 
 # Floating damage numbers, drawn with the UI font on a smoothly filtered layer.
 func _draw_text_fx() -> void:
 	var m := metrics()
+	_mark_drawn(_text_layer, m)
 	var s: float = m[0]
 	if s < 2.0:
 		return
 	var font := get_theme_default_font()
-	if war != null and s >= STAT_CHIP_MIN_HEX:
-		_draw_stat_chips(m, font)
+	if war != null and s >= STAT_CHIP_MIN_HEX and not walks.is_empty():
+		_draw_stat_chips(_text_layer, m, font, _walking_units())
 	for e in effects:
 		if str(e["kind"]) != "num":
 			continue
@@ -1370,82 +1921,133 @@ func _draw_text_fx() -> void:
 		_text_layer.draw_string(font, Vector2(-tw * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(col2.r, col2.g, col2.b, a))
 		_text_layer.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+func _draw_chip_layer() -> void:
+	var m := metrics()
+	_mark_drawn(_chips, m)
+	if war == null or float(m[0]) < STAT_CHIP_MIN_HEX:
+		return
+	_draw_stat_chips(_chips, m, get_theme_default_font(), _standing_units())
+
 # Stat chips under every card on the map: a heart and its HP (as shown, so they tick
 # down with each hit during an attack replay) and, for units, a sword and the damage
 # each shot deals from where it stands (Barracks, home ground and modifiers included;
 # "2x4" for guns that fire 4 times). Hidden when zoomed far out.
 const STAT_CHIP_MIN_HEX := 15.0 # hex radius in pixels below which the chips are hidden
-var _chip_box: StyleBoxFlat = null # rounded, see-through pill behind each chip
+# The chip art (a rounded see-through pill, drawn in three slices so it stretches
+# to any width, plus the heart and sword) lives in one small texture, so every
+# chip on the map draws in one batch, then all the text outlines, then the text.
+const CHIP_PILL := Rect2(0, 0, 64, 32)
+const CHIP_HEART := Rect2(72, 0, 32, 32)
+const CHIP_SWORD := Rect2(112, 0, 32, 32)
+const CHIP_ICON_SPAN := 1.1 # icon art covers -1.1r..1.1r of the icon radius r
+var _chip_tex: ImageTexture = null
+var _chip_text_w: Dictionary = {} # chip text -> width at _chip_fs
+var _chip_fs: int = -1
 
-func _draw_stat_chips(m: Array, font: Font) -> void:
+func _chip_texture() -> ImageTexture:
+	if _chip_tex != null:
+		return _chip_tex
+	var img := Image.create(152, 32, false, Image.FORMAT_RGBA8)
+	var bg := Color(0.06, 0.05, 0.1, 0.45)
+	var border := Color(1, 1, 1, 0.12)
+	const SS := 4 # supersampling per axis
+	for y in range(32):
+		for x in range(152):
+			var col := Color(0, 0, 0, 0)
+			for sy in range(SS):
+				for sx in range(SS):
+					var px: float = x + (sx + 0.5) / SS
+					var py: float = y + (sy + 0.5) / SS
+					col += _chip_sample(px, py, bg, border) / float(SS * SS)
+			img.set_pixel(x, y, col)
+	_chip_tex = ImageTexture.create_from_image(img)
+	return _chip_tex
+
+# Colour of the chip art at texel (px, py), premultiplied-free (averaged by the caller).
+func _chip_sample(px: float, py: float, bg: Color, border: Color) -> Color:
+	if px < CHIP_PILL.end.x:
+		# stadium: within 16px of the segment (16,16)-(48,16)
+		var d: float = Vector2(clampf(px, 16.0, 48.0), 16.0).distance_to(Vector2(px, py))
+		if d > 16.0:
+			return Color(0, 0, 0, 0)
+		return bg.blend(border) if d > 14.5 else bg
+	if px >= CHIP_HEART.position.x and px < CHIP_HEART.end.x:
+		var q := (Vector2(px, py) - CHIP_HEART.get_center()) / (16.0 / CHIP_ICON_SPAN)
+		var inside: bool = q.distance_to(Vector2(-0.45, -0.25)) <= 0.52 or q.distance_to(Vector2(0.45, -0.25)) <= 0.52 \
+			or Geometry2D.point_is_inside_triangle(q, Vector2(-0.95, -0.05), Vector2(0.95, -0.05), Vector2(0, 0.95))
+		return Color.WHITE if inside else Color(0, 0, 0, 0)
+	if px >= CHIP_SWORD.position.x and px < CHIP_SWORD.end.x:
+		var q := (Vector2(px, py) - CHIP_SWORD.get_center()) / (16.0 / CHIP_ICON_SPAN)
+		var g := Vector2(-0.35, 0.35) # crossguard over the blade
+		if q.distance_to(Geometry2D.get_closest_point_to_segment(q, g + Vector2(-0.45, -0.45), g + Vector2(0.45, 0.45))) <= 0.15:
+			return Color(1.0, 0.8, 0.35)
+		if q.distance_to(Geometry2D.get_closest_point_to_segment(q, Vector2(-0.8, 0.8), Vector2(0.85, -0.85))) <= 0.16:
+			return Color(0.92, 0.92, 1.0)
+	return Color(0, 0, 0, 0)
+
+func _draw_stat_chips(ci: CanvasItem, m: Array, font: Font, ents: Array) -> void:
 	var s: float = m[0]
 	var margin: float = s * 2.0
 	var fs := int(clampf(s * 0.4, 10.0, 16.0))
 	var pad: float = maxf(2.0, s * 0.06)
 	var icon: float = fs * 0.62
-	if _chip_box == null:
-		_chip_box = StyleBoxFlat.new()
-		_chip_box.bg_color = Color(0.06, 0.05, 0.1, 0.45)
-		_chip_box.border_color = Color(1, 1, 1, 0.12)
-		_chip_box.set_border_width_all(1)
-		_chip_box.anti_aliasing = true
-	_chip_box.set_corner_radius_all(int(maxf(3.0, (fs + pad * 1.2) * 0.5))) # a full pill
-	for k in war.units.keys():
-		var info: Dictionary = war.units[k]
-		var card: Card = info["card"]
-		var t := MapWar.key_to_hex(str(k))
+	var h: float = fs + pad * 1.2
+	if fs != _chip_fs:
+		_chip_fs = fs
+		_chip_text_w.clear()
+	var tex := _chip_texture()
+	var texts: Array = [] # [position, text, colour], drawn after every chip's art
+	for e in ents:
+		var k: String = e["k"]
+		var walking := walks.has(k)
+		var shift := unit_offset(k, m) if walking else Vector2.ZERO
+		var cps := _visible_copies(e["t"], m, margin + shift.length())
+		if cps.is_empty():
+			continue
+		var card: Card = e["card"]
 		var hp: int = int(hp_shown.get(k, war.card_hp(card)))
 		var mx: int = int(card.get_meta("map_max_hp", maxi(hp, 1)))
 		var frac: float = clampf(float(hp) / float(maxi(mx, 1)), 0.0, 1.0)
-		var chips: Array = [["hp", str(hp), Color(1.0 - 0.6 * frac, 0.55 + 0.4 * frac, 0.45)]]
-		if card is Unit:
-			var u := card as Unit
-			var dmg: int = war.effective_damage(str(info["owner"]), u, t)
-			var txt := str(dmg) + ("x4" if (card is RocketLauncher or card is Howitzer) else "")
-			chips.append(["atk", txt, Color(1.0, 0.72, 0.35)])
-		var shift := unit_offset(str(k), m)
-		for cp in _visible_copies(t, m, margin):
+		var chips: Array = [[CHIP_HEART, str(hp), Color(1.0 - 0.6 * frac, 0.55 + 0.4 * frac, 0.45), Color(1.0, 0.32, 0.36)]]
+		if e["is_unit"]:
+			chips.append([CHIP_SWORD, e["atk"], Color(1.0, 0.72, 0.35), Color.WHITE])
+		# lay the chips out side by side, centred under the HP bar
+		var widths: Array = []
+		var total: float = pad * 2.0 * (chips.size() - 1)
+		for ch in chips:
+			var txt: String = ch[1]
+			if not _chip_text_w.has(txt):
+				_chip_text_w[txt] = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var w: float = icon + pad * 4.5 + float(_chip_text_w[txt])
+			widths.append(w)
+			total += w
+		for cp in cps:
 			var c := (cp as Vector2) + shift
-			# lay the chips out side by side, centred under the HP bar
-			var widths: Array = []
-			var total: float = 0.0
-			for ch in chips:
-				var w: float = icon + pad * 4.5 + font.get_string_size(str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-				widths.append(w)
-				total += w
-			total += pad * 2.0 * (chips.size() - 1)
 			var x: float = c.x - total * 0.5
 			var y: float = c.y + s * 0.92
-			var h: float = fs + pad * 1.2
 			for i in range(chips.size()):
 				var ch: Array = chips[i]
 				var w2: float = widths[i]
-				var r := Rect2(x, y, w2, h)
-				_text_layer.draw_style_box(_chip_box, r)
+				var cap: float = h * 0.5
+				ci.draw_texture_rect_region(tex, Rect2(x, y, cap, h), Rect2(0, 0, 16, 32))
+				ci.draw_texture_rect_region(tex, Rect2(x + cap, y, w2 - cap * 2.0, h), Rect2(31, 0, 2, 32))
+				ci.draw_texture_rect_region(tex, Rect2(x + w2 - cap, y, cap, h), Rect2(48, 0, 16, 32))
 				var ic := Vector2(x + pad * 1.8 + icon * 0.5, y + h * 0.5)
-				if str(ch[0]) == "hp":
-					_draw_heart(ic, icon * 0.5, Color(1.0, 0.32, 0.36))
-				else:
-					_draw_sword(ic, icon * 0.5, Color(0.92, 0.92, 1.0))
-				var tx := Vector2(x + pad * 2.8 + icon, y + h * 0.5 + fs * 0.36)
-				_text_layer.draw_string_outline(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.04, 0.03, 0.07, 0.75))
-				_text_layer.draw_string(font, tx, str(ch[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ch[2])
+				var span: float = icon * 0.5 * CHIP_ICON_SPAN
+				ci.draw_texture_rect_region(tex, Rect2(ic - Vector2(span, span), Vector2(span, span) * 2.0), ch[0], ch[3])
+				texts.append([Vector2(x + pad * 2.8 + icon, y + h * 0.5 + fs * 0.36), ch[1], ch[2]])
 				x += w2 + pad * 2.0
+	for t in texts:
+		ci.draw_string_outline(font, t[0], t[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.04, 0.03, 0.07, 0.75))
+	for t in texts:
+		ci.draw_string(font, t[0], t[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, t[2])
 
-func _draw_heart(c: Vector2, r: float, col: Color) -> void:
-	_text_layer.draw_circle(c + Vector2(-r * 0.45, -r * 0.25), r * 0.52, col)
-	_text_layer.draw_circle(c + Vector2(r * 0.45, -r * 0.25), r * 0.52, col)
-	_text_layer.draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.95, -r * 0.05), c + Vector2(r * 0.95, -r * 0.05), c + Vector2(0, r * 0.95)]), col)
-
-func _draw_sword(c: Vector2, r: float, col: Color) -> void:
-	var a := c + Vector2(-r * 0.8, r * 0.8)
-	var b := c + Vector2(r * 0.85, -r * 0.85)
-	_text_layer.draw_line(a, b, col, maxf(1.5, r * 0.32))
-	var g := c + Vector2(-r * 0.35, r * 0.35) # crossguard
-	_text_layer.draw_line(g + Vector2(-r * 0.45, -r * 0.45), g + Vector2(r * 0.45, r * 0.45), Color(1.0, 0.8, 0.35), maxf(1.5, r * 0.3))
-
-func _draw_overlay() -> void:
+# Under the units: placement rings, the front, range zones, selection rings, Barracks
+# ripples, buff glows and boat wakes (all animated, redrawn every pulse).
+func _draw_under() -> void:
+	_ci = _under
 	var m := metrics()
+	_mark_drawn(_under, m)
 	var s: float = m[0]
 	if s < 2.0:
 		return
@@ -1457,23 +2059,85 @@ func _draw_overlay() -> void:
 			for cp in _visible_copies(MapWar.key_to_hex(str(key)), m, margin):
 				var ring := _hex_points(cp as Vector2, s - 1.5)
 				ring.append(ring[0])
-				_overlay.draw_polyline(ring, Color(0.6, 1.0, 0.45, a), 2.0)
+				_ci.draw_polyline(ring, Color(0.6, 1.0, 0.45, a), 2.0)
 	# Front line (card-battle mode): enemy hexes you could win next pulse red
 	if not _front.is_empty():
 		var pulse: float = 0.30 + 0.25 * (0.5 + 0.5 * sin(_pulse_t * 4.0))
 		for t in _front:
 			for cp in _visible_copies(t as Vector2i, m, margin):
 				var c := cp as Vector2
-				_overlay.draw_colored_polygon(_hex_points(c, s), Color(1.0, 0.18, 0.12, pulse))
+				_ci.draw_colored_polygon(_hex_points(c, s), Color(1.0, 0.18, 0.12, pulse))
 				var ring2 := _hex_points(c, s - 1.5)
 				ring2.append(ring2[0])
-				_overlay.draw_polyline(ring2, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
+				_ci.draw_polyline(ring2, Color(1, 0.3, 0.25, pulse + 0.25), 2.0)
 	if not range_zones.is_empty():
 		_draw_range_zones(m)
 	if not group_marks.is_empty() or not plan_marks.is_empty():
 		_draw_group_marks(m)
 	if war != null:
-		_draw_units(m)
+		unit_cache()
+		_draw_barracks_ripples(m)
+		for v in _marked_units(m):
+			if v[0]["buffed"]:
+				_draw_buff_aura(v[1], s, int(v[0]["seed"]))
+			if v[2]:
+				_draw_boat_wake(v[1], s, v[3])
+
+func _draw_unit_layer() -> void:
+	_ci = _units
+	var m := metrics()
+	_mark_drawn(_units, m)
+	if float(m[0]) < 2.0 or war == null:
+		return
+	_draw_units(m, _standing_units(), true)
+
+func _draw_walker_layer() -> void:
+	_ci = _walkers
+	var m := metrics()
+	_mark_drawn(_walkers, m)
+	if float(m[0]) < 2.0 or war == null or walks.is_empty():
+		return
+	_draw_units(m, _walking_units(), false)
+
+# The cache entries standing still / marching (walks), each in drawing order.
+func _standing_units() -> Array:
+	var ents := unit_cache()
+	if walks.is_empty():
+		return ents
+	var out: Array = []
+	for e in ents:
+		if not walks.has(e["k"]):
+			out.append(e)
+	return out
+
+func _walking_units() -> Array:
+	var out: Array = []
+	for e in unit_cache():
+		if walks.has(e["k"]):
+			out.append(e)
+	return out
+
+# Over the units: shields, flank arrows, flag HP, shots and blasts, the placement
+# ghost, targets, the aim arrow, the selection box and the hover/selected outlines.
+func _draw_overlay() -> void:
+	_ci = _overlay
+	var m := metrics()
+	_mark_drawn(_overlay, m)
+	var s: float = m[0]
+	if s < 2.0:
+		return
+	var margin: float = s * 2.0
+	if war != null:
+		var marked := _marked_units(m)
+		for v in marked:
+			if v[0]["shielded"]:
+				_draw_shield_aura(v[1], s, int(v[0]["seed"]))
+		for v in marked:
+			if v[0]["buffed"]:
+				_draw_buff_chevron(v[1], s, int(v[0]["seed"]))
+		for v in marked: # after every shield, so nothing hides them
+			if int(v[0]["flank"]) > 0:
+				_draw_flank_marks(v[1], s, int(v[0]["flank"]))
 		_draw_flag_hp(m)
 		_draw_effects(m)
 		if ghost_card != "" and hovered.x >= 0 and placeable.has(MapCampaign.key_of(hovered.x, hovered.y)):
@@ -1487,8 +2151,8 @@ func _draw_overlay() -> void:
 		_draw_aim(m)
 	if _boxing and _pressed and _press_pos.distance_to(_box_end) > DRAG_THRESHOLD:
 		var box := Rect2(_press_pos, Vector2.ZERO).expand(_box_end)
-		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.12), true)
-		_overlay.draw_rect(box, Color(1.0, 0.86, 0.3, 0.9), false, 2.0)
+		_ci.draw_rect(box, Color(1.0, 0.86, 0.3, 0.12), true)
+		_ci.draw_rect(box, Color(1.0, 0.86, 0.3, 0.9), false, 2.0)
 	if hovered.x >= 0 and hovered != selected:
 		_hex_outline(hovered, m, Color(1, 1, 1, 0.6), 2.0)
 	if selected.x >= 0:
@@ -1517,7 +2181,7 @@ func _draw_range_zones(m: Array) -> void:
 			for cp in _visible_copies(t, m, margin):
 				var c := cp as Vector2
 				var pts := _hex_points(c, s)
-				_overlay.draw_colored_polygon(pts, Color(col.r, col.g, col.b, 0.22))
+				_ci.draw_colored_polygon(pts, Color(col.r, col.g, col.b, 0.22))
 				for d in out_dirs:
 					# the hex edge facing that neighbour: its midpoint points the same way
 					var best := 0
@@ -1531,12 +2195,12 @@ func _draw_range_zones(m: Array) -> void:
 					edges.append([pts[best], pts[(best + 1) % 6]])
 		var w: float = clampf(s * 0.14, 3.0, 6.0)
 		for e in edges:
-			_overlay.draw_line(e[0], e[1], Color(0.05, 0.04, 0.08, 0.9), w + 3.0)
+			_ci.draw_line(e[0], e[1], Color(0.05, 0.04, 0.08, 0.9), w + 3.0)
 		for e in edges:
-			_overlay.draw_line(e[0], e[1], Color(col.r, col.g, col.b, a), w)
+			_ci.draw_line(e[0], e[1], Color(col.r, col.g, col.b, a), w)
 		# a white dashed stripe down the middle, so the rim never reads as a border
 		for e in edges:
-			_overlay.draw_dashed_line(e[0], e[1], Color(1, 1, 1, 0.9 * a), maxf(1.5, w * 0.4), maxf(3.0, s * 0.18))
+			_ci.draw_dashed_line(e[0], e[1], Color(1, 1, 1, 0.9 * a), maxf(1.5, w * 0.4), maxf(3.0, s * 0.18))
 
 # Screen direction from hex `t` to its neighbour `i` (unit length; odd-r rows are
 # shifted half a hex, so it is the same whatever the row).
@@ -1557,8 +2221,8 @@ func _draw_range_targets(m: Array) -> void:
 			for sx in [-1.0, 1.0]:
 				for sy in [-1.0, 1.0]:
 					var corner := c + Vector2(sx, sy) * s * k
-					_overlay.draw_line(corner, corner - Vector2(sx * s * 0.28, 0), Color(1.0, 0.3, 0.25, 0.95), 2.5)
-					_overlay.draw_line(corner, corner - Vector2(0, sy * s * 0.28), Color(1.0, 0.3, 0.25, 0.95), 2.5)
+					_ci.draw_line(corner, corner - Vector2(sx * s * 0.28, 0), Color(1.0, 0.3, 0.25, 0.95), 2.5)
+					_ci.draw_line(corner, corner - Vector2(0, sy * s * 0.28), Color(1.0, 0.3, 0.25, 0.95), 2.5)
 
 # A gold ring under each selected unit; for a planned bulk move, a dotted line to
 # the hex each one would reach and a hollow marker there.
@@ -1567,10 +2231,10 @@ func _draw_group_marks(m: Array) -> void:
 	var margin: float = s * 2.0
 	for t in group_marks:
 		for cp in _visible_copies(t as Vector2i, m, margin):
-			_overlay.draw_set_transform((cp as Vector2) + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
-			_overlay.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(0.05, 0.04, 0.08, 0.85), 5.0)
-			_overlay.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(1.0, 0.86, 0.3, 0.95), 2.5)
-			_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_ci.draw_set_transform((cp as Vector2) + Vector2(0, s * 0.45), 0.0, Vector2(1.0, 0.45))
+			_ci.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(0.05, 0.04, 0.08, 0.85), 5.0)
+			_ci.draw_arc(Vector2.ZERO, s * 0.86, 0.0, TAU, 28, Color(1.0, 0.86, 0.3, 0.95), 2.5)
+			_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for pm in plan_marks:
 		var from: Vector2i = pm[0]
 		var to: Vector2i = pm[1]
@@ -1579,9 +2243,9 @@ func _draw_group_marks(m: Array) -> void:
 			var a := _wrap_target(b, screen_pos(from, m), m)
 			var n := maxi(2, int(a.distance_to(b) / maxf(6.0, s * 0.35)))
 			for i in range(1, n):
-				_overlay.draw_circle(a.lerp(b, float(i) / n), maxf(1.5, s * 0.06), Color(1.0, 0.86, 0.3, 0.8))
-			_overlay.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(0.05, 0.04, 0.08, 0.85), 4.0)
-			_overlay.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(1.0, 0.86, 0.3, 0.95), 2.0)
+				_ci.draw_circle(a.lerp(b, float(i) / n), maxf(1.5, s * 0.06), Color(1.0, 0.86, 0.3, 0.8))
+			_ci.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(0.05, 0.04, 0.08, 0.85), 4.0)
+			_ci.draw_arc(b, s * 0.42, 0.0, TAU, 20, Color(1.0, 0.86, 0.3, 0.95), 2.0)
 
 # Hover help (like the old battle screen's attack arrow): dashed line from the
 # hovered unit to the target it would hit next, with a pulsing crosshair.
@@ -1598,14 +2262,14 @@ func _draw_aim(m: Array) -> void:
 		var t0 := clampf((i * dash * 2.0 + off - dash) / maxf(dist, 1.0), 0.0, 1.0)
 		var t1 := clampf((i * dash * 2.0 + off) / maxf(dist, 1.0), 0.0, 1.0)
 		if t1 > t0:
-			_overlay.draw_line(a.lerp(b, t0), a.lerp(b, t1), Color(0.05, 0.04, 0.08, 0.8), 5.0)
-			_overlay.draw_line(a.lerp(b, t0), a.lerp(b, t1), col, 2.5)
+			_ci.draw_line(a.lerp(b, t0), a.lerp(b, t1), Color(0.05, 0.04, 0.08, 0.8), 5.0)
+			_ci.draw_line(a.lerp(b, t0), a.lerp(b, t1), col, 2.5)
 	var r: float = s * (0.75 + 0.12 * sin(_clock * 6.0))
-	_overlay.draw_arc(b, r, 0.0, TAU, 20, col, 2.5)
-	_overlay.draw_line(b - Vector2(r * 1.4, 0), b - Vector2(r * 0.5, 0), col, 2.0)
-	_overlay.draw_line(b + Vector2(r * 0.5, 0), b + Vector2(r * 1.4, 0), col, 2.0)
-	_overlay.draw_line(b - Vector2(0, r * 1.4), b - Vector2(0, r * 0.5), col, 2.0)
-	_overlay.draw_line(b + Vector2(0, r * 0.5), b + Vector2(0, r * 1.4), col, 2.0)
+	_ci.draw_arc(b, r, 0.0, TAU, 20, col, 2.5)
+	_ci.draw_line(b - Vector2(r * 1.4, 0), b - Vector2(r * 0.5, 0), col, 2.0)
+	_ci.draw_line(b + Vector2(r * 0.5, 0), b + Vector2(r * 1.4, 0), col, 2.0)
+	_ci.draw_line(b - Vector2(0, r * 1.4), b - Vector2(0, r * 0.5), col, 2.0)
+	_ci.draw_line(b + Vector2(0, r * 0.5), b + Vector2(0, r * 1.4), col, 2.0)
 
 # Global-space rectangle around hex t (for anchoring hover cards).
 func hex_global_rect(t: Vector2i) -> Rect2:
@@ -1618,7 +2282,7 @@ func _hex_outline(t: Vector2i, m: Array, col: Color, width: float) -> void:
 	for cp in _visible_copies(t, m, m[0] * 2.0):
 		var pts := _hex_points(cp as Vector2, m[0])
 		pts.append(pts[0])
-		_overlay.draw_polyline(pts, col, width)
+		_ci.draw_polyline(pts, col, width)
 
 func _draw_star(ci: CanvasItem, c: Vector2, r: float, col: Color) -> void:
 	var pts := PackedVector2Array()

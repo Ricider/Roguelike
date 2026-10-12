@@ -72,6 +72,7 @@ var _group: Array = [] # keys of the units picked for a bulk move (drag a box / 
 var _card_zone: Dictionary = {} # where the picked hand card may go (hex -> true), shown in green
 const DEPLOY_ZONE := Color(0.55, 1.0, 0.5) # where a selected unit card can be summoned (green, like the glowing hexes)
 const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
+const AI_THINK_USEC := 3000 # AI planning / attack resolving per frame before it lets the map draw (keeps 60 fps)
 var _busy: bool = false
 var _speed_idx: int = 1 # 2x: a full round of 8 nations stays snappy
 var _log_lines: Array = []
@@ -95,11 +96,49 @@ func _ready() -> void:
 			_log_line("[color=#ffd966]Chapter %d: %s.[/color] %s" % [WorldMap.STORY_CHAPTER, sch["title"], sch["objective"]])
 		_start_player_turn()
 	_refresh()
+	_warm_card_art.call_deferred()
 	# camera needs the laid-out view size before it can centre
 	await get_tree().process_frame
 	_go_home()
 	await _story_start_briefing()
 	await _story_forces_briefing()
+
+# The first time a card type shows (hand, shop, hover card) its 40 animation frames
+# load from disk, a visible stall (~50 ms each). Load your own deck's art on a
+# background thread while you look at the map, then build its frames a type per
+# frame; later cards (bought ones, other nations' hover cards) still load on demand.
+func _warm_card_art() -> void:
+	var p := _human()
+	if p == null:
+		return
+	var names: Array = []
+	for c in p.DrawPile + p.DiscardPile + p.Hand + p.MapCards:
+		if c is Card and not names.has((c as Card).card_name):
+			names.append((c as Card).card_name)
+	var pending: Array = []
+	for cn in names:
+		for i in range(20):
+			for path in [Card.idle_frame_path(cn, i, _me()), "res://Assets/Cards/%s/attack_sprite_%d.png" % [cn, i]]:
+				if ResourceLoader.exists(path) and not ResourceLoader.has_cached(path):
+					ResourceLoader.load_threaded_request(path, "Texture2D")
+					pending.append(path)
+	var held: Array = [] # keep them loaded until the frames below hold them
+	while not pending.is_empty():
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
+		for path in pending.duplicate():
+			var st := ResourceLoader.load_threaded_get_status(path)
+			if st == ResourceLoader.THREAD_LOAD_LOADED:
+				held.append(ResourceLoader.load_threaded_get(path))
+				pending.erase(path)
+			elif st != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				pending.erase(path)
+	for cn in names:
+		Card.create_sprite_for(cn, Vector2(64, 64), _me()).free() # builds and caches its SpriteFrames
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
 
 # On/off look for a toggle button: a little light (green when on, dark when off) and
 # the gold "selected" style while it is on.
@@ -1438,7 +1477,7 @@ func _on_end_turn() -> void:
 		if not bought.is_empty():
 			_log_line("[color=#%s]%s[/color] shops: %s." % [_nation_hex_color(n), n, ", ".join(bought)])
 			_show_modifier_changes(_war.last_modifier_changes if _war.last_modifier_changes_nation == n else [])
-		var placed: Array = _war.ai_build(n)
+		var placed: Array = await _war.ai_build_sliced(n, AI_THINK_USEC)
 		for pl in placed:
 			_view.add_place(pl[1] as Vector2i)
 		if not placed.is_empty():
@@ -1447,12 +1486,15 @@ func _on_end_turn() -> void:
 			if not quick:
 				await _wait(0.35)
 		# then repositions: behind walls, beside Barracks/Interceptors, onto weakened enemies
-		var moved: Array = _war.ai_move(n)
+		# (planned a few units per frame, so a crowded map keeps animating; each unit
+		# sets off as soon as its move is decided)
+		var walk := func(mv: Array) -> void:
+			if not quick: # skipping: they just appear where they went
+				_view.animate_move(mv[2], MOVE_STEP / _speed())
+		var moved: Array = await _war.ai_move_sliced(n, AI_THINK_USEC, walk)
 		if not moved.is_empty():
 			var longest := 0
 			for mv in moved:
-				if not quick: # skipping: they just appear where they went
-					_view.animate_move(mv[2], MOVE_STEP / _speed())
 				longest = maxi(longest, (mv[2] as Array).size() - 1)
 			_log_line("[color=#%s]%s[/color] moves %d unit%s." % [_nation_hex_color(n), n, moved.size(), "" if moved.size() == 1 else "s"])
 			if not quick:
@@ -1489,7 +1531,14 @@ func _nation_attacks(n: String) -> void:
 			flag_sites[nm] = _campaign().capital_site(str(nm))
 	var plan: Array = [] # [[attacker key, entries], ...] in firing order
 	var dead: Array = []
+	# (worked out over a few frames on a crowded map, like the moves; meanwhile the
+	# view already shows the pre-attack state, each fallen card standing as a ghost)
+	_view.begin_replay(snapshot, [], flag_hp, flag_sites)
+	var t0 := Time.get_ticks_usec()
 	for k in _war.attackers_of(n):
+		if Time.get_ticks_usec() - t0 > AI_THINK_USEC:
+			await get_tree().process_frame
+			t0 = Time.get_ticks_usec()
 		var entries: Array = _war.fire(k)
 		plan.append([k, entries])
 		for e in entries:
@@ -1498,6 +1547,9 @@ func _nation_attacks(n: String) -> void:
 			for ev in e.get("collapses", []):
 				for lk in ev.get("lost", []):
 					dead.append(str(lk)) # stands until the collapse plays out on screen
+		for dk in dead:
+			if snapshot.has(dk) and not _view.ghosts.has(dk):
+				_view.ghosts[dk] = (snapshot[dk] as Dictionary).duplicate()
 	_view.begin_replay(snapshot, dead, flag_hp, flag_sites)
 	# 2. Play it back one defender at a time, with the camera centred on each fight
 	#    (yours included; with Follow off the camera stays put).

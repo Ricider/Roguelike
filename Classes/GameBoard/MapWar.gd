@@ -904,6 +904,39 @@ func targets_in_range(nation: String, from: Vector2i, r: int) -> Array:
 # Returns [[from key, to hex, path], ...] in the order moved.
 func ai_move(nation: String) -> Array:
 	var moves: Array = []
+	var ctx := _ai_move_setup(nation)
+	if ctx.is_empty():
+		return moves
+	for k in cards_of(nation):
+		var mv := _ai_move_one(nation, k, ctx)
+		if not mv.is_empty():
+			moves.append(mv)
+	return moves
+
+# ai_move for the game screen: the same moves in the same order, but it waits for the
+# next frame whenever it has thought for `budget_usec`, so a crowded map keeps
+# animating instead of freezing while a nation plans. `on_move` gets each move as
+# it is made ([from key, to hex, path]), so its walk can start straight away.
+func ai_move_sliced(nation: String, budget_usec: int, on_move: Callable = Callable()) -> Array:
+	var moves: Array = []
+	var t0 := Time.get_ticks_usec()
+	var ctx := _ai_move_setup(nation)
+	if ctx.is_empty():
+		return moves
+	for k in cards_of(nation):
+		if Time.get_ticks_usec() - t0 > budget_usec:
+			await (Engine.get_main_loop() as SceneTree).process_frame
+			t0 = Time.get_ticks_usec()
+		var mv := _ai_move_one(nation, k, ctx)
+		if not mv.is_empty():
+			moves.append(mv)
+			if on_move.is_valid():
+				on_move.call(mv)
+	return moves
+
+# What every unit's choice depends on, worked out once per nation's move phase.
+# Empty when there is nothing to move towards.
+func _ai_move_setup(nation: String) -> Dictionary:
 	# every enemy card once: [hex, how badly hurt 0..1] (parsed here, not per candidate hex)
 	var foes: Array = []
 	for k in units.keys():
@@ -919,28 +952,48 @@ func ai_move(nation: String) -> Array:
 		if str(fn) != nation:
 			enemy_flags.append(fs[fn])
 	if foes.is_empty() and enemy_flags.is_empty():
-		return moves
+		return {}
 	var wts := _move_weights(nation)
-	for k in cards_of(nation):
-		if not units.has(k) or not (units[k]["card"] is Unit) or moves_left(k) <= 0:
-			continue
-		var here := key_to_hex(k)
-		var reach := reachable(k)
-		if reach.is_empty():
-			continue
-		var u := units[k]["card"] as Unit
-		var best := here
-		var best_score := _position_score(nation, k, here, foes, enemy_flags, attack_range(nation, u, here), wts) + float(ai_param(nation, "w_stay")) # a small bias to stay put
-		for t in reach.keys():
-			var sc := _position_score(nation, k, t, foes, enemy_flags, attack_range(nation, u, t), wts) # shorter reach from a boat
-			if sc > best_score:
-				best_score = sc
-				best = t
-		if best != here:
-			var path := move(nation, k, best)
-			if not path.is_empty():
-				moves.append([k, best, path])
-	return moves
+	# The nearest enemy card and the distance to the focus nation's cards, for every
+	# hex at once: _position_score looks them up instead of scanning every enemy for
+	# every hex every unit could reach (seconds per nation on a crowded map).
+	var foe_hexes: Array = []
+	var hurt_foes: Array = []
+	for f in foes:
+		foe_hexes.append(f[0])
+		if float(f[1]) > 0.0:
+			hurt_foes.append(f)
+	var field := MapCampaign.distance_field(foe_hexes)
+	wts["_near_d"] = field[0]
+	wts["_near_i"] = field[1]
+	wts["_hurt"] = hurt_foes
+	if not (wts["focus_hexes"] as Array).is_empty():
+		wts["_focus_d"] = MapCampaign.distance_field(wts["focus_hexes"])[0]
+	return {"foes": foes, "flags": enemy_flags, "wts": wts}
+
+# One unit's move in ai_move: [from key, to hex, path], or [] when it stays.
+func _ai_move_one(nation: String, k: String, ctx: Dictionary) -> Array:
+	if not units.has(k) or not (units[k]["card"] is Unit) or moves_left(k) <= 0:
+		return []
+	var foes: Array = ctx["foes"]
+	var enemy_flags: Array = ctx["flags"]
+	var wts: Dictionary = ctx["wts"]
+	var here := key_to_hex(k)
+	var reach := reachable(k)
+	if reach.is_empty():
+		return []
+	var u := units[k]["card"] as Unit
+	var best := here
+	var best_score := _position_score(nation, k, here, foes, enemy_flags, attack_range(nation, u, here), wts) + float(ai_param(nation, "w_stay")) # a small bias to stay put
+	for t in reach.keys():
+		var sc := _position_score(nation, k, t, foes, enemy_flags, attack_range(nation, u, t), wts) # shorter reach from a boat
+		if sc > best_score:
+			best_score = sc
+			best = t
+	if best == here:
+		return []
+	var path := move(nation, k, best)
+	return [] if path.is_empty() else [k, best, path]
 
 # How good hex `t` is for the unit on key `k`. foes: [[hex, hurt 0..1], ...] for every
 # enemy card; enemy_flags: their flag hexes; reach_hexes: the unit's attack range.
@@ -954,15 +1007,24 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 	var nearest_d := 1 << 30
 	var weak_pull := 0.0
 	var w_weak: float = wts["w_weak"]
-	for f in foes:
-		var et: Vector2i = f[0]
-		var d := MapCampaign.hex_distance(t, et)
-		if d < nearest_d:
-			nearest_d = d
-			nearest = et
-		var hurt: float = f[1]
-		if hurt > 0.0:
-			weak_pull += hurt * w_weak / float(1 + d) # closer to a badly hurt enemy is better
+	if wts.has("_near_d"): # precomputed by ai_move for these foes (same result, see there)
+		var cell: int = t.y * WorldMap.GRID_W + t.x
+		var ni: int = (wts["_near_i"] as PackedInt32Array)[cell]
+		if ni >= 0:
+			nearest_d = (wts["_near_d"] as PackedInt32Array)[cell]
+			nearest = foes[ni][0]
+		for f in wts["_hurt"]:
+			weak_pull += float(f[1]) * w_weak / float(1 + MapCampaign.hex_distance(t, f[0])) # closer to a badly hurt enemy is better
+	else:
+		for f in foes:
+			var et: Vector2i = f[0]
+			var d := MapCampaign.hex_distance(t, et)
+			if d < nearest_d:
+				nearest_d = d
+				nearest = et
+			var hurt: float = f[1]
+			if hurt > 0.0:
+				weak_pull += hurt * w_weak / float(1 + d) # closer to a badly hurt enemy is better
 	var target_d := nearest_d
 	var flag_d := 1 << 30
 	for fl in enemy_flags:
@@ -977,7 +1039,10 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 		score += float(wts["w_flag"]) * 4.0 / float(2 + flag_d) # toward enemy flags: hits there cost them HP
 	score += weak_pull
 	var focus_hexes: Array = wts.get("focus_hexes", [])
-	if not focus_hexes.is_empty():
+	if wts.has("_focus_d"):
+		if (wts["_focus_d"] as PackedInt32Array)[t.y * WorldMap.GRID_W + t.x] <= reach_hexes:
+			score += float(wts["w_focus"]) # can shoot at the nation we are ganging up on
+	elif not focus_hexes.is_empty():
 		for fh in focus_hexes:
 			if MapCampaign.hex_distance(t, fh as Vector2i) <= reach_hexes:
 				score += float(wts["w_focus"]) # can shoot at the nation we are ganging up on
@@ -1306,24 +1371,16 @@ func end_turn(nation: String) -> void:
 # ---------------------------------------------------------------- AI build
 # Distance from each hex to the nearest hex held by another living nation.
 func frontier_distance(nation: String) -> Dictionary:
-	var dist: Dictionary = {}
-	var queue: Array = []
+	var sources: Array = []
 	for k in campaign.owner.keys():
-		var o := str(campaign.owner[k])
-		if o != nation:
-			dist[k] = 0
-			queue.append(key_to_hex(str(k)))
-	var head := 0
-	while head < queue.size():
-		var cur: Vector2i = queue[head]
-		head += 1
-		var d: int = int(dist[MapCampaign.key_of(cur.x, cur.y)])
-		for nb in MapCampaign.wrapped_neighbors(cur):
-			var v := nb as Vector2i
-			var nk := MapCampaign.key_of(v.x, v.y)
-			if not dist.has(nk):
-				dist[nk] = d + 1
-				queue.append(v)
+		if str(campaign.owner[k]) != nation:
+			sources.append(key_to_hex(str(k)))
+	var field: PackedInt32Array = MapCampaign.distance_field(sources)[0]
+	var dist: Dictionary = {}
+	var gw: int = WorldMap.GRID_W
+	for c in range(field.size()):
+		if field[c] < (1 << 30):
+			dist[MapCampaign.key_of(c % gw, c / gw)] = field[c]
 	return dist
 
 # Hex distance from `t` to the nearest enemy unit (or flag too); 99 if none.
@@ -1338,6 +1395,19 @@ func _nearest_enemy_unit(nation: String, t: Vector2i, flags_too: bool = false) -
 			if str(fn) != nation:
 				best = mini(best, hex_distance(t, fs[fn]))
 	return best
+
+# _nearest_enemy_unit (before its cap of 99) for every hex at once: cell y * GRID_W + x.
+func _enemy_unit_field(nation: String, flags_too: bool = false) -> PackedInt32Array:
+	var sources: Array = []
+	for k in units.keys():
+		if str(units[k]["owner"]) != nation and units[k]["card"] is Unit:
+			sources.append(key_to_hex(k))
+	if flags_too:
+		var fs := flag_sites()
+		for fn in fs.keys():
+			if str(fn) != nation:
+				sources.append(fs[fn])
+	return MapCampaign.distance_field(sources)[0]
 
 func _friendly_adjacent(nation: String, t: Vector2i, want_units: bool) -> int:
 	var n := 0
@@ -1354,12 +1424,14 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 		fdist = frontier_distance(nation)
 	var best := Vector2i(-1, -1)
 	var best_score: float = -1e9
+	var threat: bool = card is Unit and ai_param(nation, "unit_spot") == "threat"
+	var near := _enemy_unit_field(nation, true) if threat else PackedInt32Array()
 	for t in deploy_hexes(nation, card):
 		var tv := t as Vector2i
 		var d: float = float(fdist.get(MapCampaign.key_of(tv.x, tv.y), 50))
 		var score: float
-		if card is Unit and ai_param(nation, "unit_spot") == "threat":
-			score = -float(_nearest_enemy_unit(nation, tv, true)) * 10.0 - d * 2.0
+		if threat:
+			score = -float(mini(99, near[tv.y * WorldMap.GRID_W + tv.x])) * 10.0 - d * 2.0 # _nearest_enemy_unit
 		elif card is Unit or card is Wall:
 			score = -d * 10.0
 		elif card is Barracks or card is Interceptor:
@@ -1374,8 +1446,32 @@ func best_hex_for(nation: String, card: Card, fdist: Dictionary = {}) -> Vector2
 
 # AI nation plays every affordable card; returns [[card, hex], ...] in order.
 func ai_build(nation: String) -> Array:
-	var p: Player = players[nation]
 	var placed: Array = []
+	var ctx := _ai_build_setup(nation)
+	for c in ctx["hand"]:
+		var pl := _ai_build_one(nation, c as Card, ctx)
+		if not pl.is_empty():
+			placed.append(pl)
+	return placed
+
+# ai_build for the game screen: the same cards in the same order, waiting for the
+# next frame whenever it has thought for `budget_usec` (see ai_move_sliced).
+func ai_build_sliced(nation: String, budget_usec: int) -> Array:
+	var placed: Array = []
+	var t0 := Time.get_ticks_usec()
+	var ctx := _ai_build_setup(nation)
+	for c in ctx["hand"]:
+		if Time.get_ticks_usec() - t0 > budget_usec:
+			await (Engine.get_main_loop() as SceneTree).process_frame
+			t0 = Time.get_ticks_usec()
+		var pl := _ai_build_one(nation, c as Card, ctx)
+		if not pl.is_empty():
+			placed.append(pl)
+	return placed
+
+# The hand in the order ai_build plays it, and what each placement depends on.
+func _ai_build_setup(nation: String) -> Dictionary:
+	var p: Player = players[nation]
 	var fdist := frontier_distance(nation)
 	var hand: Array = p.Hand.duplicate()
 	hand.shuffle()
@@ -1387,24 +1483,27 @@ func ai_build(nation: String) -> Array:
 	else:
 		# economy first, then the army
 		hand.sort_custom(func(a, b): return (a is Building and not (a is Wall)) and not (b is Building and not (b is Wall)))
-	var reserve: int = int(ai_param(nation, "money_reserve"))
-	var walls: String = ai_param(nation, "walls")
-	for c in hand:
-		var card := c as Card
-		if shortfall(nation, card) != "":
-			continue
-		if reserve > 0 and p.MoneySupply - p.get_effective_money_cost(card) < reserve:
-			continue # keep some Money back
-		if card is Wall and walls == "never":
-			continue
-		var t := best_hex_for(nation, card, fdist)
-		if card is Wall and walls == "front" and t.x >= 0 and _nearest_enemy_unit(nation, t) > 6:
-			continue # no enemy nearby: a Wall here would only waste Money
-		if t.x < 0:
-			continue # nowhere for this one (land full, or no flag/building near enough): try the rest
-		if place(nation, card, t):
-			placed.append([card, t])
-	return placed
+	return {"hand": hand, "fdist": fdist, "reserve": int(ai_param(nation, "money_reserve")), "walls": str(ai_param(nation, "walls"))}
+
+# One card of ai_build: [card, hex] if it was placed, else [].
+func _ai_build_one(nation: String, card: Card, ctx: Dictionary) -> Array:
+	var p: Player = players[nation]
+	var reserve: int = ctx["reserve"]
+	var walls: String = ctx["walls"]
+	if shortfall(nation, card) != "":
+		return []
+	if reserve > 0 and p.MoneySupply - p.get_effective_money_cost(card) < reserve:
+		return [] # keep some Money back
+	if card is Wall and walls == "never":
+		return []
+	var t := best_hex_for(nation, card, ctx["fdist"])
+	if card is Wall and walls == "front" and t.x >= 0 and _nearest_enemy_unit(nation, t) > 6:
+		return [] # no enemy nearby: a Wall here would only waste Money
+	if t.x < 0:
+		return [] # nowhere for this one (land full, or no flag/building near enough): try the rest
+	if place(nation, card, t):
+		return [card, t]
+	return []
 
 # ----------------------------------------------------------------- combat
 func unit_count(nation: String) -> int:
@@ -1593,6 +1692,42 @@ func predict_target(k: String) -> Dictionary:
 func _closest_targets(nation: String, from: Vector2i, flags: Dictionary, reach: int = 1 << 29) -> Array:
 	var best: int = 1 << 30
 	var closest: Array = []
+	# Look only at the hexes within reach when there are fewer of them than cards on
+	# the map (every attack of a crowded map asks this): the same cards in the same order.
+	var w_box: int = 2 * reach + 3
+	if reach < 64 and w_box * (2 * reach + 1) < units.size() and (not WorldMap.WRAPS or w_box <= WorldMap.GRID_W):
+		var keys: Array = []
+		for y in range(from.y - reach, from.y + reach + 1):
+			if y < 0 or y >= WorldMap.GRID_H:
+				continue
+			for x in range(from.x - reach - 1, from.x + reach + 2):
+				var t := Vector2i(posmod(x, WorldMap.GRID_W) if WorldMap.WRAPS else x, y)
+				if not WorldMap.in_bounds(t.x, t.y):
+					continue
+				var k := MapCampaign.key_of(t.x, t.y)
+				var info: Dictionary = units.get(k, {})
+				if info.is_empty() or str(info["owner"]) == nation or card_hp(info["card"]) <= 0:
+					continue
+				var d := hex_distance(from, t)
+				if d > reach:
+					continue
+				if d < best:
+					best = d
+					keys = [k]
+				elif d == best:
+					keys.append(k)
+		if keys.size() > 1: # ties in the order of the full scan (units' order)
+			var order: Array = units.keys()
+			var pos: Array = []
+			for k in keys:
+				pos.append([order.find(k), k])
+			pos.sort()
+			keys = []
+			for pk in pos:
+				keys.append(pk[1])
+		for k in keys:
+			closest.append({"key": k, "owner": str(units[k]["owner"])})
+		return _closest_flags(nation, from, flags, reach, best, closest)
 	for k in units.keys():
 		var info: Dictionary = units[k]
 		var o := str(info["owner"])
@@ -1606,6 +1741,10 @@ func _closest_targets(nation: String, from: Vector2i, flags: Dictionary, reach: 
 			closest = [{"key": k, "owner": o}]
 		elif d == best:
 			closest.append({"key": k, "owner": o})
+	return _closest_flags(nation, from, flags, reach, best, closest)
+
+# _closest_targets' second half: enemy flags as near as (or nearer than) the cards found.
+func _closest_flags(nation: String, from: Vector2i, flags: Dictionary, reach: int, best: int, closest: Array) -> Array:
 	for fnation in flags.keys():
 		if str(fnation) == nation:
 			continue

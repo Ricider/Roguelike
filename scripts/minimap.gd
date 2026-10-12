@@ -17,11 +17,17 @@ var view: WorldMapView = null
 var _tex: ImageTexture = null
 var _map_rect := Rect2() # where the map texture sits inside this control
 var _dragging := false
+var _frame: Control = null # the gold view frame: redrawn alone when the camera moves
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	clip_contents = true
 	tooltip_text = ""
+	_frame = Control.new()
+	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_frame.draw.connect(_draw_frame)
+	add_child(_frame)
 	_fit()
 
 # Size the box to the map's shape (hexes are wider than their row height).
@@ -39,9 +45,18 @@ func _fit() -> void:
 	_map_rect = Rect2(Vector2(PAD, PAD), inner)
 
 # Re-bake territory colours (call when ownership changes or the map is swapped).
+var _baked_sig: Array = [] # what the texture shows (skip the re-bake when nothing changed)
+
 func refresh() -> void:
 	_fit()
 	var c: MapCampaign = view._campaign if view != null else null
+	var sig: Array = [WorldMap.MAP_ID, c.get_instance_id() if c != null else 0, c.owner.hash() if c != null else 0,
+		c.player_nation if c != null else ""]
+	if sig == _baked_sig and _tex != null:
+		_last_sig = []
+		queue_redraw()
+		return
+	_baked_sig = sig
 	var W: int = WorldMap.GRID_W
 	var H: int = WorldMap.GRID_H
 	var img := Image.create(W * 2 + 1, H * 2, false, Image.FORMAT_RGBA8)
@@ -70,20 +85,25 @@ func refresh() -> void:
 	else:
 		_tex.update(img)
 	_last_sig = []
+	_last_cam = []
 	queue_redraw()
 
 var _last_sig: Array = []
+var _last_cam: Array = []
 
 func _process(_delta: float) -> void:
-	# redraw only when the camera frame or the cards on the map change
+	# redraw the map only when the cards on it change, the frame when the camera moves
 	if view == null or not is_visible_in_tree():
 		return
-	var m: Array = view.metrics()
-	var sig: Array = [m[0], m[1], m[2], view.size, view.war.units.size() if view.war != null else 0,
-		view.war.turn if view.war != null else 0]
+	var sig: Array = [view.war.units.hash() if view.war != null else 0, view.war.turn if view.war != null else 0]
 	if sig != _last_sig:
 		_last_sig = sig
 		queue_redraw()
+	var m: Array = view.metrics()
+	var cam: Array = [m[0], m[1], m[2], view.size]
+	if cam != _last_cam:
+		_last_cam = cam
+		_frame.queue_redraw()
 
 # hex -> point inside this control
 func _hex_point(t: Vector2i) -> Vector2:
@@ -111,18 +131,22 @@ func _draw() -> void:
 		var nm := str(n["name"])
 		if not c.is_alive(nm):
 			continue
-		var fp := _hex_point(c.capital_site(nm))
+		var fp := _hex_point(view.capital_site(nm))
 		draw_circle(fp, 3.5, Color(0.05, 0.04, 0.08))
 		draw_circle(fp, 2.5, GOLD if nm == c.player_nation else Color.WHITE)
 		draw_circle(fp, 1.4, view._nation_colors.get(nm, Color.WHITE))
-	# the main view's window onto the map
+
+# The main view's window onto the map, and the box's own border.
+func _draw_frame() -> void:
+	if view == null:
+		return
 	var vr := _view_rect()
 	for off in ([-_map_rect.size.x, 0.0, _map_rect.size.x] if WorldMap.WRAPS else [0.0]):
 		var r := Rect2(vr.position + Vector2(off, 0), vr.size).intersection(_map_rect)
 		if r.size.x > 0.5 and r.size.y > 0.5:
-			draw_rect(r, Color(0, 0, 0, 0.55), false, 3.0)
-			draw_rect(r, GOLD, false, 1.5)
-	draw_rect(Rect2(Vector2.ZERO, size), Color(1.0, 0.84, 0.3, 0.7), false, 1.5)
+			_frame.draw_rect(r, Color(0, 0, 0, 0.55), false, 3.0)
+			_frame.draw_rect(r, GOLD, false, 1.5)
+	_frame.draw_rect(Rect2(Vector2.ZERO, size), Color(1.0, 0.84, 0.3, 0.7), false, 1.5)
 
 # The main view's visible area in this control's coordinates.
 func _view_rect() -> Rect2:

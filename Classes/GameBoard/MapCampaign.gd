@@ -49,16 +49,64 @@ static func wrapped_neighbors(t: Vector2i) -> Array:
 
 # Hex distance with east-west wrap (cube distance on the odd-r layout).
 static func hex_distance(a: Vector2i, b: Vector2i) -> int:
-	var best: int = 1 << 30
-	var shifts: Array = [-WorldMap.GRID_W, 0, WorldMap.GRID_W] if WorldMap.WRAPS else [0]
-	for shift in shifts:
-		var bx: int = b.x + int(shift)
-		var aq: int = a.x - (a.y - (a.y & 1)) / 2
-		var bq: int = bx - (b.y - (b.y & 1)) / 2
-		var dq: int = aq - bq
-		var dr: int = a.y - b.y
-		best = mini(best, (absi(dq) + absi(dr) + absi(dq + dr)) / 2)
+	var dq: int = (a.x - (a.y - (a.y & 1)) / 2) - (b.x - (b.y - (b.y & 1)) / 2)
+	var dr: int = a.y - b.y
+	var best: int = (absi(dq) + absi(dr) + absi(dq + dr)) / 2
+	if WorldMap.WRAPS: # the other way round the world (b shifted one map width east or west)
+		var w: int = WorldMap.GRID_W
+		best = mini(best, (absi(dq - w) + absi(dr) + absi(dq - w + dr)) / 2)
+		best = mini(best, (absi(dq + w) + absi(dr) + absi(dq + w + dr)) / 2)
 	return best
+
+# Distance from every hex of the map to the nearest of `sources` (a multi-source
+# breadth-first fill over the grid, which on this layout gives hex_distance), and
+# which source that is: the first in `sources` among equally near ones, as a scan
+# of `sources` with hex_distance would pick. Cell y * GRID_W + x; 1 << 30 / -1
+# when there are no sources.
+static func distance_field(sources: Array) -> Array:
+	var gw: int = WorldMap.GRID_W
+	var gh: int = WorldMap.GRID_H
+	var n: int = gw * gh
+	var dist := PackedInt32Array()
+	dist.resize(n)
+	dist.fill(1 << 30)
+	var src := PackedInt32Array()
+	src.resize(n)
+	src.fill(-1)
+	var layer := PackedInt32Array()
+	for i in range(sources.size()):
+		var t: Vector2i = sources[i]
+		if not WorldMap.in_bounds(t.x, t.y):
+			continue
+		var c: int = t.y * gw + t.x
+		if dist[c] != 0:
+			dist[c] = 0
+			src[c] = i
+			layer.append(c)
+	var d := 0
+	while not layer.is_empty():
+		var next := PackedInt32Array()
+		for c in layer:
+			var x: int = c % gw
+			var y: int = c / gw
+			var dirs: Array = HEX_DIRS_ODD if (y & 1) == 1 else HEX_DIRS_EVEN
+			for dv in dirs:
+				var ny: int = y + dv.y
+				var nx: int = x + dv.x
+				if WorldMap.WRAPS:
+					nx = posmod(nx, gw)
+				if ny < 0 or ny >= gh or nx < 0 or nx >= gw:
+					continue
+				var nc: int = ny * gw + nx
+				if dist[nc] > d + 1:
+					dist[nc] = d + 1
+					src[nc] = src[c]
+					next.append(nc)
+				elif dist[nc] == d + 1 and src[c] < src[nc]:
+					src[nc] = src[c] # equally near: the earlier source wins
+		layer = next
+		d += 1
+	return [dist, src]
 
 func new_campaign(nation: String) -> void:
 	player_nation = nation
@@ -160,15 +208,13 @@ func tiles_of(nation: String) -> Array:
 			out.append(Vector2i(int(parts[0]), int(parts[1])))
 	return out
 
+# Both run natively over the owner values (a GDScript loop over every hex was slow
+# enough to show up in the frame time: the map asks for every flag every redraw).
 func tile_count(nation: String) -> int:
-	var c := 0
-	for k in owner.keys():
-		if str(owner[k]) == nation:
-			c += 1
-	return c
+	return owner.values().count(nation)
 
 func is_alive(nation: String) -> bool:
-	return tile_count(nation) > 0
+	return owner.values().has(nation)
 
 func alive_nations() -> Array:
 	var out: Array = []
