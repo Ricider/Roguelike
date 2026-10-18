@@ -284,6 +284,8 @@ func _base_card_by_name(name: String) -> Card:
 		"Drone": return Drone.new()
 		"Fighter Jet": return FighterJet.new()
 		"Bomber Jet": return BomberJet.new()
+		"Missile": return Missile.new()
+		"Nuke": return Nuke.new()
 		"Airport": return Airport.new()
 		"Factory": return Factory.new()
 		"Barracks": return Barracks.new()

@@ -9,10 +9,15 @@
 # Card rules carry over from the 4x10 battles: Rocket Launcher/Howitzer fire 4
 # times, Special Ops x2 vs ground, Anti Aircraft x3 vs flying, Flying takes half
 # from non-ranged, Barracks +2 to adjacent units, Interceptors block 75% of ranged/flying
-# hits on adjacent friends, Fighter and Bomber Jets splash the target's neighbors.
+# hits on friends within INTERCEPTOR_RANGE hexes, Fighter and Bomber Jets splash the
+# target's neighbors.
 # Terrain: non-flying units on a mountain hex take 1 less damage (minimum 1);
 # units in a forest (jungle hex) take 1 less from flying attackers (minimum 1).
 # Buildings (walls included) can't be placed on mountains.
+# Scars: a destroyed building leaves ruins on its hex (non-flying units there take
+# RUINS_COVER less per hit); a Nuke leaves nuclear wasteland (units starting their
+# turn there take FALLOUT_DAMAGE). Items (Missile, Nuke) are one-use weapons fired
+# from launch sites; see "items" below.
 # A destroyed card costs its owner HP equal to its BioCost. A nation at 0 HP
 # cedes border hexes (1 per 10 HP the victor has left; x2 when it fields fewer
 # than 3 units, x4 with none) to whoever damaged it most, loses the cards on those
@@ -39,6 +44,8 @@ const REMOVE_COST: int = 25
 
 var campaign: MapCampaign = null
 var players: Dictionary = {} # nation -> Player
+var scars: Dictionary = {} # "x,y" -> "ruins" | "wasteland" (see RUINS_COVER, FALLOUT_DAMAGE)
+var last_fallout: Array = [] # [[hex, died], ...] units hurt by wasteland in the latest begin_turn
 var units: Dictionary = {} # "x,y" -> {"card": Card, "owner": String}
 var ledger: Dictionary = {} # victim nation -> {attacker nation: HP damage dealt}
 var turn: int = 1
@@ -69,6 +76,7 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 	campaign = c
 	players.clear()
 	units.clear()
+	scars.clear()
 	ledger.clear()
 	turn = 1
 	rng.randomize()
@@ -78,6 +86,7 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 		p.display_name = nm
 		p.MapCards.clear()
 		players[nm] = p
+		_add_starting_items(p, nm)
 		deck_weights[nm] = starting_deck_weights(p)
 		# Starting cards on the 4x10 board move onto the map around the capital.
 		var start_cards: Array = p.get_all_board_cards()
@@ -105,6 +114,25 @@ func setup(c: MapCampaign, make_player: Callable, human: Player) -> void:
 		else:
 			now.append(r)
 	place_extras(now)
+
+# One-use weapons some nations start the war with, shuffled into their draw piles
+# (map war only: the legacy card battles never see them). They also make the
+# shop offer them to those nations (deck_weights).
+const STARTING_ITEMS := {
+	"Coalition Army": {"Nuke": 1, "Missile": 3},
+	"Corporate Troops": {"Nuke": 2, "Missile": 5},
+	"Horde": {"Nuke": 3, "Missile": 2},
+	"State Troops": {"Missile": 2},
+}
+
+func _add_starting_items(p: Player, nation: String) -> void:
+	var items: Dictionary = STARTING_ITEMS.get(nation, {})
+	if items.is_empty():
+		return
+	for item_name in items.keys():
+		for i in range(int(items[item_name])):
+			p.DrawPile.append(p._base_card_by_name(str(item_name)))
+	p.DrawPile.shuffle()
 
 # Per-nation starting tweaks of a story chapter: {nation: {"max_hp", "influence",
 # "money", "bio"}}. max_hp also sets current HP (collapses refill to it as usual).
@@ -505,6 +533,8 @@ func deploy_hexes(nation: String, card: Card) -> Array:
 	return out
 
 func can_place(nation: String, card: Card, t: Vector2i) -> String:
+	if card is Item:
+		return "%s is fired, not placed: from your %s" % [card.card_name, (card as Item).launcher_text()]
 	if not WorldMap.in_bounds(t.x, t.y) or campaign.owner_of(t.x, t.y) != nation:
 		return "You can only build on your own territory"
 	if units.has(MapCampaign.key_of(t.x, t.y)):
@@ -532,6 +562,8 @@ func place(nation: String, card: Card, t: Vector2i) -> bool:
 	p.Hand.erase(card)
 	p.apply_hitpoints_modifier(card)
 	_put(nation, card, t)
+	if card is Building and str(scars.get(MapCampaign.key_of(t.x, t.y), "")) == "ruins":
+		scars.erase(MapCampaign.key_of(t.x, t.y)) # built over: the ruins are cleared
 	card.set_meta("moves_left", 0) # freshly deployed: it can move from next turn
 	card.set_meta("deployed_turn", turn)
 	return true
@@ -660,6 +692,7 @@ func begin_turn(nation: String) -> void:
 	econ["influence_topup"] = influence_topup(nation)
 	last_economy[nation] = econ
 	last_attrition = jet_attrition(nation) # stranded Fighter Jets run low
+	last_fallout = fallout(nation) # units sitting in nuclear wasteland
 	restock_shop(nation)
 	last_arrivals = arrive_reinforcements(nation) # before the refill: they can move at once
 	refill_moves(nation)
@@ -1050,6 +1083,11 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 	score -= float(wts["w_flank"]) * float(flank_at(nation, t)) # don't walk into a pincer
 	if units.has(k) and in_boat(units[k]["card"], t):
 		score -= float(wts["w_boat"]) * float(SEA_DAMAGE_PENALTY) # boats are exposed: land when it can
+	var scar := str(scars.get(MapCampaign.key_of(t.x, t.y), ""))
+	if scar == "wasteland":
+		score -= float(wts["w_waste"]) # fallout every turn it stays
+	elif scar == "ruins" and units.has(k) and not (units[k]["card"] as Unit).Flying:
+		score += float(wts["w_ruins"]) # cover in the rubble
 	if float(wts["w_home"]) != 0.0 and campaign.owner_of(t.x, t.y) == nation:
 		score += float(wts["w_home"]) # home ground: +1 damage
 	var w_coh: float = wts["w_cohesion"]
@@ -1070,7 +1108,7 @@ func _position_score(nation: String, k: String, t: Vector2i, foes: Array, enemy_
 
 func _move_weights(nation: String) -> Dictionary:
 	var out := {}
-	for key in ["w_inrange", "w_close", "w_wall", "w_barracks", "w_interceptor", "w_flank", "w_boat", "w_weak", "w_flag", "w_home", "w_cohesion", "w_focus"]:
+	for key in ["w_inrange", "w_close", "w_wall", "w_barracks", "w_interceptor", "w_flank", "w_boat", "w_weak", "w_flag", "w_home", "w_cohesion", "w_focus", "w_waste", "w_ruins"]:
 		out[key] = float(ai_param(nation, key))
 	out["focus_hexes"] = []
 	if str(ai_param(nation, "focus")) == "weakest" and float(out["w_focus"]) != 0.0:
@@ -1254,6 +1292,7 @@ const AI_DEFAULT := {
 	"w_inrange": 5.0, "w_close": 2.5, "w_wall": 4.0, "w_barracks": 2.5, "w_interceptor": 2.0,
 	"w_flank": 1.0, "w_boat": 1.5, "w_weak": 6.0, "w_stay": 3.0, "w_flag": 0.0, "w_home": 0.0,
 	"w_cohesion": 1.0, "focus": "none", "w_focus": 0.0, "thin_walls": false,
+	"w_waste": 8.0, "w_ruins": 1.0,
 }
 # The first AI, kept for comparisons (and as an easier opponent): pass it as ai_policy.
 const AI_CLASSIC := {
@@ -1305,6 +1344,8 @@ static func _card_value(c: Card) -> float:
 		return (u.Damage * shots * 3.0 + u.HitPoints + (6.0 if u.HasRange else 0.0)) / maxf(c.InfluenceCost, 1.0)
 	if c is Building:
 		return ((c as Building).Income * 2.0 + (c as Building).HitPoints * 0.3) / maxf(c.InfluenceCost, 1.0)
+	if c is Item:
+		return (c as Item).Damage * (1.0 + (c as Item).BlastRadius) * 1.5 / maxf(c.InfluenceCost, 1.0)
 	return 0.0
 
 func ai_shop(nation: String) -> Array:
@@ -1483,10 +1524,18 @@ func _ai_build_setup(nation: String) -> Dictionary:
 	else:
 		# economy first, then the army
 		hand.sort_custom(func(a, b): return (a is Building and not (a is Wall)) and not (b is Building and not (b is Wall)))
-	return {"hand": hand, "fdist": fdist, "reserve": int(ai_param(nation, "money_reserve")), "walls": str(ai_param(nation, "walls"))}
+	# holding a Missile or Nuke it can't pay for yet, with a target worth it in
+	# reach: keep that much Money back instead of spending it all on cards
+	var reserve: int = int(ai_param(nation, "money_reserve"))
+	var save := ai_pick_item(nation, true)
+	if not save.is_empty():
+		reserve = maxi(reserve, p.get_effective_money_cost(save["item"]))
+	return {"hand": hand, "fdist": fdist, "reserve": reserve, "walls": str(ai_param(nation, "walls"))}
 
 # One card of ai_build: [card, hex] if it was placed, else [].
 func _ai_build_one(nation: String, card: Card, ctx: Dictionary) -> Array:
+	if card is Item:
+		return [] # fired (ai_use_items), never placed
 	var p: Player = players[nation]
 	var reserve: int = ctx["reserve"]
 	var walls: String = ctx["walls"]
@@ -1541,7 +1590,8 @@ func _barracks_bonus(nation: String, t: Vector2i) -> int:
 	return 0
 
 # Hover/animation helpers: is the card on hex key `k` boosted by an adjacent Barracks,
-# and is it covered by an adjacent Interceptor that can still pay (6 Money)?
+# and is it covered by one of its nation's Interceptors (within INTERCEPTOR_RANGE)
+# that can still pay (6 Money)?
 func is_buffed(k: String) -> bool:
 	if not units.has(k) or not (units[k]["card"] is Unit):
 		return false
@@ -1553,11 +1603,25 @@ func is_shielded(k: String) -> bool:
 	var owner := str(units[k]["owner"])
 	if (players[owner] as Player).MoneySupply < 6:
 		return false
-	for nb in MapCampaign.wrapped_neighbors(key_to_hex(k)):
-		var info := unit_at(nb as Vector2i)
-		if not info.is_empty() and str(info["owner"]) == owner and info["card"] is Interceptor and card_hp(info["card"]) > 0:
-			return true
-	return false
+	return covering_interceptor(owner, key_to_hex(k)).x >= 0
+
+# An Interceptor covers its nation's cards within this many hexes.
+const INTERCEPTOR_RANGE := 3
+
+# The nearest living Interceptor of `owner` within INTERCEPTOR_RANGE of `t`
+# (first in map order among equally near ones), or (-1, -1). Money isn't checked.
+func covering_interceptor(owner: String, t: Vector2i) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := INTERCEPTOR_RANGE + 1
+	for h in hexes_within(t, INTERCEPTOR_RANGE):
+		var info := unit_at(h as Vector2i)
+		if info.is_empty() or str(info["owner"]) != owner or not (info["card"] is Interceptor) or card_hp(info["card"]) <= 0:
+			continue
+		var d := hex_distance(t, h as Vector2i)
+		if d < best_d:
+			best_d = d
+			best = h
+	return best
 
 # Home ground: a unit firing from its own nation's land deals HOME_BONUS more per shot
 # (not from enemy land, unclaimed land or the sea).
@@ -1784,6 +1848,35 @@ static func terrain_adjusted(card: Card, t: Vector2i, dmg: int, attacker: Card =
 		return maxi(1, dmg - 1)
 	return dmg
 
+# Ruins: a non-flying unit standing in a destroyed building's rubble takes
+# RUINS_COVER less from every hit (never below 1).
+const RUINS_COVER := 2
+
+func ruins_adjusted(card: Card, t: Vector2i, dmg: int) -> int:
+	if card is Unit and not (card as Unit).Flying and str(scars.get(MapCampaign.key_of(t.x, t.y), "")) == "ruins":
+		return maxi(1, dmg - RUINS_COVER)
+	return dmg
+
+func scar_at(t: Vector2i) -> String:
+	return str(scars.get(MapCampaign.key_of(t.x, t.y), ""))
+
+# Nuclear wasteland: every unit of `nation` that starts its turn on it loses
+# FALLOUT_DAMAGE HP (and is lost at 0, costing its nation no HP, like a crashed jet).
+const FALLOUT_DAMAGE := 3
+
+func fallout(nation: String) -> Array:
+	var out: Array = []
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		if not (c is Unit) or str(scars.get(k, "")) != "wasteland":
+			continue
+		(c as Unit).HitPoints -= FALLOUT_DAMAGE
+		var died := (c as Unit).HitPoints <= 0
+		out.append([key_to_hex(k), died])
+		if died:
+			_remove(k)
+	return out
+
 func _damage_card(k: String, amount: int) -> void:
 	var card: Card = units[k]["card"]
 	if card is Unit:
@@ -1806,6 +1899,8 @@ func _reap(attacker: String) -> Array:
 		_stat(attacker, str(info["owner"]), "kills", 1)
 		_stat(attacker, str(info["owner"]), "kill_hp", (info["card"] as Card).BioCost)
 		_hurt_nation(str(info["owner"]), attacker, (info["card"] as Card).BioCost)
+		if info["card"] is Building and str(scars.get(k, "")) != "wasteland":
+			scars[k] = "ruins" # what is left of it gives ground units cover
 		var bounty := building_bounty(info["card"]) if str(info["owner"]) != attacker else 0
 		if bounty > 0 and players.has(attacker):
 			(players[attacker] as Player).Influence += bounty
@@ -1847,17 +1942,16 @@ func _intercept(victim: String, t: Vector2i, unit: Unit, attacker: String, dmg: 
 	var ranged: bool = (players[attacker] as Player).has_range_for(unit)
 	if vp.MoneySupply < 6 or not (ranged or unit.Flying):
 		return dmg
-	for nb in MapCampaign.wrapped_neighbors(t):
-		var info := unit_at(nb as Vector2i)
-		if not info.is_empty() and str(info["owner"]) == victim and info["card"] is Interceptor and card_hp(info["card"]) > 0:
-			var blocked := intercept_block(dmg)
-			if blocked <= 0:
-				return dmg # nothing stopped this time: no cost
-			(info["card"] as Building).HitPoints -= 2
-			vp.MoneySupply = maxi(0, vp.MoneySupply - 6)
-			_last_intercept_from = nb as Vector2i
-			return dmg - blocked
-	return dmg
+	var ih := covering_interceptor(victim, t)
+	if ih.x < 0:
+		return dmg
+	var blocked := intercept_block(dmg)
+	if blocked <= 0:
+		return dmg # nothing stopped this time: no cost
+	(unit_at(ih)["card"] as Building).HitPoints -= 2
+	vp.MoneySupply = maxi(0, vp.MoneySupply - 6)
+	_last_intercept_from = ih
+	return dmg - blocked
 
 # One unit fires (1 or 4 shots). Returns log entries for animation:
 # {from, to, attacker, card, target_name, victim, damage, direct, intercepted, destroyed: [keys], splash: [hexes]}
@@ -1900,7 +1994,7 @@ func fire(k: String) -> Array:
 				for nb in MapCampaign.wrapped_neighbors(site):
 					var ninfo := unit_at(nb as Vector2i)
 					if not ninfo.is_empty() and str(ninfo["owner"]) == victim:
-						var sd := terrain_adjusted(ninfo["card"], nb as Vector2i, dmg, unit)
+						var sd := ruins_adjusted(ninfo["card"], nb as Vector2i, terrain_adjusted(ninfo["card"], nb as Vector2i, dmg, unit))
 						_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), sd)
 						_stat(nation, victim, "splash", sd)
 						fsplash.append(nb)
@@ -1932,6 +2026,8 @@ func fire(k: String) -> Array:
 		var intercept_from := _last_intercept_from
 		var pre_terrain := actual
 		actual = terrain_adjusted(target, to, actual, unit)
+		var pre_ruins := actual
+		actual = ruins_adjusted(target, to, actual)
 		var pre_airport := actual
 		if target is BomberJet and in_airport_range(victim2, to):
 			actual = maxi(1, actual - BOMBER_AIRPORT_COVER) # its Airport keeps it patched up
@@ -1948,13 +2044,14 @@ func fire(k: String) -> Array:
 		_stat(nation, victim2, "blocked_interceptor", before - pre_terrain)
 		_stat(nation, victim2, "blocked_airport", pre_airport - actual)
 		var cover := "blocked_mountain" if WorldMap.terrain_at(to.x, to.y) == WorldMap.MOUNTAIN else "blocked_forest"
-		_stat(nation, victim2, cover, pre_terrain - pre_airport)
+		_stat(nation, victim2, cover, pre_terrain - pre_ruins)
+		_stat(nation, victim2, "blocked_ruins", pre_ruins - pre_airport)
 		var splash: Array = []
 		if _splashes(unit):
 			for nb in MapCampaign.wrapped_neighbors(to):
 				var ninfo := unit_at(nb as Vector2i)
 				if not ninfo.is_empty() and str(ninfo["owner"]) == victim2:
-					var sd2 := terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain, unit)
+					var sd2 := ruins_adjusted(ninfo["card"], nb as Vector2i, terrain_adjusted(ninfo["card"], nb as Vector2i, pre_terrain, unit))
 					_damage_card(MapCampaign.key_of((nb as Vector2i).x, (nb as Vector2i).y), sd2)
 					_stat(nation, victim2, "splash", sd2)
 					splash.append(nb)
@@ -1964,6 +2061,231 @@ func fire(k: String) -> Array:
 			"destroyed": destroyed, "splash": splash, "buffed": buffed, "intercept_from": intercept_from, "flank": flank})
 		_collapse_now(log)
 	return log
+
+# ------------------------------------------------------------------- items
+# Items (Missile, Nuke) are one-use cards: instead of being placed they are fired
+# from one of the nation's launch sites (Item.LaunchRanges: card name -> range) at
+# any hex in play within that range, for their MoneyCost. Every enemy card and
+# enemy flag within BlastRadius of the impact takes Damage (the firing nation's own
+# cards are spared; mountain, forest and ruins cover count as for any hit). If an
+# enemy Interceptor that can pay covers the impact hex (within INTERCEPTOR_RANGE)
+# it shoots the item down to half damage, for its usual 2 HP and 6 Money. A Nuke
+# leaves nuclear wasteland on the 7 hexes at its heart. The card then goes to the
+# graveyard.
+
+# Living cards of `nation` that can fire `item`: [[hex, range], ...].
+func item_launchers(nation: String, item: Item) -> Array:
+	var out: Array = []
+	for k in cards_of(nation):
+		var c: Card = units[k]["card"]
+		var r := item.launch_range(c)
+		if r > 0 and card_hp(c) > 0:
+			out.append([key_to_hex(k), r])
+	return out
+
+# Every hex `nation` could fire `item` at right now: {hex: true}.
+func item_targets(nation: String, item: Item) -> Dictionary:
+	var out: Dictionary = {}
+	for l in item_launchers(nation, item):
+		for h in hexes_within(l[0] as Vector2i, int(l[1])):
+			out[h] = true
+	return out
+
+# The launch site that fires `item` at `t`: the nearest one in range, or (-1, -1).
+func item_launcher_for(nation: String, item: Item, t: Vector2i) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := 1 << 30
+	for l in item_launchers(nation, item):
+		var d := hex_distance(l[0] as Vector2i, t)
+		if d <= int(l[1]) and d < best_d:
+			best_d = d
+			best = l[0]
+	return best
+
+# "" when `nation` can fire `item` at `t` now, else why not.
+func can_fire_item(nation: String, item: Item, t: Vector2i) -> String:
+	var p: Player = players[nation]
+	if not p.Hand.has(item):
+		return "That card is not in your hand"
+	var short := shortfall(nation, item)
+	if short != "":
+		return "Can't afford %s: need %s" % [item.card_name, short]
+	if item_launchers(nation, item).is_empty():
+		return "%s needs one of your %s to fire from" % [item.card_name, item.launcher_text()]
+	if not WorldMap.in_bounds(t.x, t.y) or WorldMap.is_void(t.x, t.y):
+		return "That hex is out of this war"
+	if item_launcher_for(nation, item, t).x < 0:
+		return "Out of range: %s fires from your %s" % [item.card_name, item.launcher_text()]
+	return ""
+
+# The enemy Interceptor that would shoot down an item `nation` fires at `t` (the
+# nearest one covering it whose nation can pay), or (-1, -1). Nothing is paid here.
+func item_interceptor(nation: String, t: Vector2i) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := INTERCEPTOR_RANGE + 1
+	for h in hexes_within(t, INTERCEPTOR_RANGE):
+		var info := unit_at(h as Vector2i)
+		if info.is_empty() or str(info["owner"]) == nation or not (info["card"] is Interceptor) or card_hp(info["card"]) <= 0:
+			continue
+		if (players[str(info["owner"])] as Player).MoneySupply < 6:
+			continue
+		var d := hex_distance(t, h as Vector2i)
+		if d < best_d:
+			best_d = d
+			best = h
+	return best
+
+# Fire `item` at `t`. Returns {} if it can't (see can_fire_item), else
+# {"item", "from", "to", "radius", "damage" (per hit, after interception),
+#  "intercept_from" (hex or (-1, -1)), "wasteland": [hexes], "entries": [...]}
+# where entries are shaped like fire()'s log (one per card or flag hit, with
+# "destroyed" and, on the last, "collapses"), so the screen replays them the same way.
+func fire_item(nation: String, item: Item, t: Vector2i) -> Dictionary:
+	if can_fire_item(nation, item, t) != "":
+		return {}
+	var p: Player = players[nation]
+	var from := item_launcher_for(nation, item, t)
+	p.MoneySupply -= p.get_effective_money_cost(item)
+	p.BioSupply -= item.BioCost
+	p.Hand.erase(item)
+	p.Graveyard.append(item) # one use
+	var dmg := item.Damage
+	var icpt := item_interceptor(nation, t)
+	if icpt.x >= 0:
+		dmg = maxi(1, item.Damage / 2)
+		var iinfo := unit_at(icpt)
+		(iinfo["card"] as Building).HitPoints -= 2
+		var ip: Player = players[str(iinfo["owner"])]
+		ip.MoneySupply = maxi(0, ip.MoneySupply - 6)
+	var blast := hexes_within(t, item.BlastRadius)
+	var entries: Array = []
+	var by_key: Dictionary = {}
+	for h in blast:
+		var k := MapCampaign.key_of((h as Vector2i).x, (h as Vector2i).y)
+		if not units.has(k):
+			continue
+		var victim := str(units[k]["owner"])
+		var card: Card = units[k]["card"]
+		if victim == nation or card_hp(card) <= 0:
+			continue # its own side is spared
+		var terrain := terrain_adjusted(card, h, dmg)
+		var d := ruins_adjusted(card, h, terrain)
+		_damage_card(k, d)
+		_stat(nation, victim, "dealt", d)
+		_stat(nation, victim, "missiles", d)
+		_stat(nation, victim, "blocked_interceptor", item.Damage - dmg)
+		var cover := "blocked_mountain" if WorldMap.terrain_at((h as Vector2i).x, (h as Vector2i).y) == WorldMap.MOUNTAIN else "blocked_forest"
+		_stat(nation, victim, cover, dmg - terrain)
+		_stat(nation, victim, "blocked_ruins", terrain - d)
+		var e := {"from": from, "to": h, "attacker": nation, "card": item.card_name, "target_name": card.card_name,
+			"victim": victim, "damage": d, "direct": false, "intercepted": icpt.x >= 0, "destroyed": [], "splash": [],
+			"buffed": false, "intercept_from": icpt, "item": true}
+		entries.append(e)
+		by_key[k] = e
+	var fs := flag_sites()
+	for fn in fs.keys():
+		if str(fn) == nation or hex_distance(fs[fn], t) > item.BlastRadius:
+			continue
+		_hurt_nation(str(fn), nation, dmg)
+		_stat(nation, str(fn), "dealt", dmg)
+		_stat(nation, str(fn), "flag", dmg)
+		_stat(nation, str(fn), "missiles", dmg)
+		_stat(nation, str(fn), "blocked_interceptor", item.Damage - dmg)
+		entries.append({"from": from, "to": fs[fn], "attacker": nation, "card": item.card_name, "target_name": str(fn) + " flag",
+			"victim": str(fn), "damage": dmg, "direct": true, "intercepted": icpt.x >= 0, "destroyed": [], "splash": [],
+			"buffed": false, "intercept_from": icpt, "item": true})
+	var wasteland: Array = []
+	if item is Nuke:
+		for h in hexes_within(t, 1):
+			scars[MapCampaign.key_of((h as Vector2i).x, (h as Vector2i).y)] = "wasteland"
+			wasteland.append(h)
+	for dd in _reap(nation):
+		var de: Dictionary = by_key.get(str(dd["key"]), {})
+		if not de.is_empty():
+			(de["destroyed"] as Array).append(dd)
+	if not entries.is_empty():
+		_collapse_now(entries)
+	return {"item": item.card_name, "from": from, "to": t, "radius": item.BlastRadius, "damage": dmg,
+		"intercept_from": icpt, "wasteland": wasteland, "entries": entries, "nuke": item is Nuke}
+
+# AI: how much firing `item` at `t` is worth to `nation` (damage it would do,
+# kills, flag hits; for a Nuke, its own units caught in the wasteland count against).
+const ITEM_FIRE_SCORE := {"Missile": 14.0, "Nuke": 60.0} # fire only when worth at least this
+
+func item_score(nation: String, item: Item, t: Vector2i) -> float:
+	var dmg: float = item.Damage * (0.5 if item_interceptor(nation, t).x >= 0 else 1.0)
+	var score := 0.0
+	for h in hexes_within(t, item.BlastRadius):
+		var info := unit_at(h as Vector2i)
+		if info.is_empty():
+			continue
+		var card: Card = info["card"]
+		var hp := card_hp(card)
+		if str(info["owner"]) == nation:
+			if item is Nuke and card is Unit and hex_distance(h as Vector2i, t) <= 1:
+				score -= 8.0 # left standing in its own fallout
+			continue
+		if hp <= 0:
+			continue
+		score += minf(dmg, hp)
+		if dmg >= hp:
+			score += card.BioCost + 4.0 # a kill: its owner loses BioCost HP too
+	var fs := flag_sites()
+	for fn in fs.keys():
+		if str(fn) != nation and hex_distance(fs[fn], t) <= item.BlastRadius:
+			score += dmg * 1.5
+	return score
+
+# The best item shot for `nation` right now: {"item", "target", "score"}, or {}
+# when nothing in its hand is worth firing (see ITEM_FIRE_SCORE).
+# With `unaffordable`: only items it can't pay for yet (what it should save up for).
+func ai_pick_item(nation: String, unaffordable: bool = false) -> Dictionary:
+	var p: Player = players[nation]
+	var best: Dictionary = {}
+	var tried: Dictionary = {} # one evaluation per item type
+	for c in p.Hand:
+		if not (c is Item) or tried.has((c as Card).card_name) or (shortfall(nation, c) != "") != unaffordable:
+			continue
+		tried[(c as Card).card_name] = true
+		var item := c as Item
+		var launchers := item_launchers(nation, item)
+		if launchers.is_empty():
+			continue
+		# aim at enemy cards and flags in reach (a blast centred elsewhere rarely does better)
+		var cands: Array = []
+		for k in units.keys():
+			if str(units[k]["owner"]) != nation:
+				cands.append(key_to_hex(k))
+		var fs := flag_sites()
+		for fn in fs.keys():
+			if str(fn) != nation:
+				cands.append(fs[fn])
+		for t in cands:
+			var in_reach := false
+			for l in launchers:
+				if hex_distance(l[0] as Vector2i, t) <= int(l[1]):
+					in_reach = true
+					break
+			if not in_reach:
+				continue
+			var sc := item_score(nation, item, t)
+			if sc >= float(ITEM_FIRE_SCORE.get(item.card_name, 20.0)) and (best.is_empty() or sc > float(best["score"])):
+				best = {"item": item, "target": t, "score": sc}
+	return best
+
+# Fire every item worth firing (headless games; the game screen fires them one at
+# a time with ai_pick_item so each can be shown). Returns fire_item's results.
+func ai_use_items(nation: String) -> Array:
+	var out: Array = []
+	for i in range(12):
+		var pick := ai_pick_item(nation)
+		if pick.is_empty():
+			break
+		var ev := fire_item(nation, pick["item"], pick["target"])
+		if ev.is_empty():
+			break
+		out.append(ev)
+	return out
 
 # A nation that just hit 0 HP collapses right away (cedes land, its flag moves,
 # it rebuilds to full HP), so later shots never pound a flag that is already
@@ -1980,8 +2302,8 @@ var pending_collapses: Array = []
 #   blocked_interceptor, blocked_mountain, blocked_forest, blocked_flying.
 # The world map shows it at the start of the player's turn, then resets it.
 var round_stats: Dictionary = {}
-const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "barracks", "home", "modifiers", "unit_bonus", "flank", "boat", "splash",
-	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying", "blocked_airport"]
+const STAT_CATEGORIES := ["dealt", "flag", "kills", "kill_hp", "missiles", "barracks", "home", "modifiers", "unit_bonus", "flank", "boat", "splash",
+	"blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_ruins", "blocked_flying", "blocked_airport"]
 
 func _stat(attacker: String, victim: String, cat: String, amount: int) -> void:
 	if amount == 0 or attacker == victim:
@@ -2116,7 +2438,7 @@ func to_data() -> Dictionary:
 			shop_mods.append((m2 as Modifier).modifier_name)
 		sh[nm] = {"cards": card_names, "mods": shop_mods, "remove_used": shop["remove_used"]}
 	return {"turn": turn, "nations": nat, "units": us, "weights": deck_weights.duplicate(true), "shops": sh,
-		"pending": pending.duplicate(true)}
+		"pending": pending.duplicate(true), "scars": scars.duplicate()}
 
 # Rebuild from saved data; decks come fresh from the factory (make_player).
 static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, human: Player) -> MapWar:
@@ -2127,6 +2449,7 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 	for nm in w.players.keys():
 		(w.players[nm] as Player).Graveyard.clear()
 	w.turn = int(d.get("turn", 1))
+	w.scars = (d.get("scars", {}) as Dictionary).duplicate()
 	if d.has("pending"):
 		w.pending = (d["pending"] as Array).duplicate(true)
 	else:
@@ -2167,7 +2490,9 @@ static func from_data(d: Dictionary, c: MapCampaign, make_player: Callable, huma
 	else:
 		# older saves: rebuild from fresh starting decks, never the (bought/trimmed) current ones
 		for nm in w.players.keys():
-			w.deck_weights[nm] = starting_deck_weights(make_player.call(nm))
+			var fresh: Player = make_player.call(nm)
+			w._add_starting_items(fresh, nm)
+			w.deck_weights[nm] = starting_deck_weights(fresh)
 	var sd = d.get("shops", {})
 	if sd is Dictionary:
 		for nm in (sd as Dictionary).keys():

@@ -128,8 +128,12 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 	var hp: int = int(info.get("hp", _base_hp(card)))
 	var hp_max: int = int(info.get("hp_max", hp))
 	var hp_col: Color = _cmp_color(hp, hp_max, true) if info.has("hp_max") else _cmp_color(hp, int(info.get("hp_base", hp)), true)
-	_stat(stats, "res://Assets/UI/heart.png", ("%d/%d" % [hp, hp_max]) if hp_max != hp else str(hp), hp_col, 22)
-	if card is Unit:
+	if not (card is Item): # one-use weapons have no HP
+		_stat(stats, "res://Assets/UI/heart.png", ("%d/%d" % [hp, hp_max]) if hp_max != hp else str(hp), hp_col, 22)
+	if card is Item:
+		var it := card as Item
+		_stat(stats, "res://Assets/UI/sword.png", "%d to every enemy within %d hex%s" % [it.Damage, it.BlastRadius, "" if it.BlastRadius == 1 else "es"], Color.WHITE, 22)
+	elif card is Unit:
 		var dmg: int = int(info.get("dmg", (card as Unit).Damage))
 		var dmg_base: int = int(info.get("dmg_base", (card as Unit).Damage))
 		_stat(stats, "res://Assets/UI/sword.png", str(dmg), _cmp_color(dmg, dmg_base, true), 22)
@@ -175,6 +179,10 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 		_traits.visible = true
 	elif card is Building:
 		_trait_box("[Building]", "Built %s, on your own land. Can't be placed on mountain hexes." % MapWar.deploy_rule_text(card))
+		_traits.visible = true
+	elif card is Item:
+		_trait_box("[One use]", "Fired, not placed: from one of your %s, at any hex in range, for its MoneyCost. Then it is gone (to the graveyard)." % (card as Item).launcher_text())
+		_trait_box("[Interceptable]", "An enemy Interceptor within %d hexes of the target shoots it down to half damage (costing that Interceptor 2 HP and its owner 6 Money). Your own cards in the blast are spared." % MapWar.INTERCEPTOR_RANGE)
 		_traits.visible = true
 	_click_through(_card_panel)
 	_click_through(_traits)

@@ -71,6 +71,9 @@ var _moving: String = "" # key of the unit picked to move ("" = none)
 var _group: Array = [] # keys of the units picked for a bulk move (drag a box / Shift+click)
 var _card_zone: Dictionary = {} # where the picked hand card may go (hex -> true), shown in green
 const DEPLOY_ZONE := Color(0.55, 1.0, 0.5) # where a selected unit card can be summoned (green, like the glowing hexes)
+const ITEM_ZONE := Color(1.0, 0.62, 0.2) # where a selected Missile or Nuke can be fired
+const BLAST_ZONE := Color(1.0, 0.25, 0.2) # the blast of a Missile or Nuke aimed at the hovered hex
+const INTERCEPT_ZONE := Color(0.45, 0.95, 1.0) # what a clicked Interceptor covers
 const MOVE_STEP := 0.12 # seconds per hex for a move's walk at 1x
 const AI_THINK_USEC := 3000 # AI planning / attack resolving per frame before it lets the map draw (keeps 60 fps)
 var _busy: bool = false
@@ -820,8 +823,11 @@ func _hand_info(card: Card, p: Player, where: String) -> Dictionary:
 		d["ranged"] = p.has_range_for(card)
 	var notes: Array = []
 	var short := _war.shortfall(_me(), card) if (_war != null and p == _human()) else ""
+	if card is Item:
+		d["dmg"] = (card as Item).Damage
+		d["dmg_base"] = (card as Item).Damage
 	if short != "":
-		notes.append("[color=#ff7a70]Need %s to deploy.[/color]" % short)
+		notes.append("[color=#ff7a70]Need %s to %s.[/color]" % [short, "fire it" if card is Item else "deploy"])
 	d["notes"] = notes
 	return d
 
@@ -974,6 +980,8 @@ func _hand_button(stack: Array) -> Button:
 		stat.text = "HP %d  DMG %d%s" % [(card as Unit).HitPoints, (card as Unit).Damage, "  RNG" if p.has_range_for(card) else ""]
 	elif card is Building:
 		stat.text = "HP %d  INC %d" % [(card as Building).HitPoints, (card as Building).Income]
+	elif card is Item:
+		stat.text = "DMG %d  BLAST %d  1 USE" % [(card as Item).Damage, (card as Item).BlastRadius]
 	stat.add_theme_font_size_override("font_size", 13)
 	stat.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
 	col.add_child(stat)
@@ -1001,6 +1009,9 @@ func _select_card(stack: Array) -> void:
 	if short != "":
 		_sfx("deny", -4.0)
 		_hover_bar.text = "Can't afford %s: need %s" % [card.card_name, short]
+		return
+	if card is Item:
+		_select_item(card as Item)
 		return
 	_sfx("card_select", -3.0)
 	_selected = card
@@ -1035,7 +1046,77 @@ func _select_card(stack: Array) -> void:
 		_hover_bar.text = "No free hex for %s %s." % [card.card_name, MapWar.deploy_rule_text(card)]
 	_refresh_hand()
 
+# A Missile or Nuke picked from the hand: every hex it can reach (orange) from your
+# launch sites (ringed). Hovering shows the blast; clicking a hex in reach fires it.
+var _item_zone: Dictionary = {} # hex -> true
+
+func _select_item(item: Item) -> void:
+	var launchers: Array = _war.item_launchers(_me(), item)
+	if launchers.is_empty():
+		_sfx("deny", -4.0)
+		_hover_bar.text = "%s fires from your %s: you have none on the map." % [item.card_name, item.launcher_text()]
+		return
+	_sfx("card_select", -3.0)
+	_selected = item
+	_moving = ""
+	_group = []
+	_view.clear_range()
+	_view.placeable = {}
+	_view.ghost_card = ""
+	_item_zone = _war.item_targets(_me(), item)
+	_view.range_zones = [{"hexes": _item_zone, "color": ITEM_ZONE}]
+	var sites: Array = []
+	for l in launchers:
+		sites.append(l[0])
+	_view.group_marks = sites
+	_view.redraw_layers()
+	_hover_bar.text = "Fire %s from your %s (ringed): click a target in the orange area. Every enemy card and flag within %d hex%s of it takes %d. (Esc to cancel)" % [
+		item.card_name, item.launcher_text(), item.BlastRadius, "" if item.BlastRadius == 1 else "es", item.Damage]
+	_refresh_hand()
+
+# Hovering a target with an item picked: its blast (red) and what it would hit.
+func _preview_item(t: Vector2i) -> void:
+	var item := _selected as Item
+	var zones: Array = [{"hexes": _item_zone, "color": ITEM_ZONE}]
+	var why := _war.can_fire_item(_me(), item, t)
+	if why != "":
+		_view.range_zones = zones
+		_view.range_targets = []
+		_hover_bar.text = why
+		return
+	var blast := {}
+	for h in _war.hexes_within(t, item.BlastRadius):
+		blast[h] = true
+	zones.append({"hexes": blast, "color": BLAST_ZONE})
+	_view.range_zones = zones
+	var targets: Array = []
+	var cards := 0
+	for h in blast.keys():
+		var info := _war.unit_at(h)
+		if not info.is_empty() and str(info["owner"]) != _me():
+			targets.append(h)
+			cards += 1
+	var flags := _war.flag_sites()
+	var flag_names: Array = []
+	for fn in flags.keys():
+		if str(fn) != _me() and MapCampaign.hex_distance(flags[fn], t) <= item.BlastRadius:
+			targets.append(flags[fn])
+			flag_names.append(str(fn))
+	_view.range_targets = targets
+	_view.redraw_layers()
+	var dmg := item.Damage
+	var icpt := _war.item_interceptor(_me(), t)
+	var text := "Fire %s here: %d damage to %d enemy card%s" % [item.card_name, dmg, cards, "" if cards == 1 else "s"]
+	if not flag_names.is_empty():
+		text += " and %s's flag" % " and ".join(flag_names)
+	if icpt.x >= 0:
+		text += " · %s's Interceptor covers it: half damage (%d)" % [str(_war.unit_at(icpt)["owner"]), maxi(1, dmg / 2)]
+	if item is Nuke:
+		text += " · the 7 hexes at its heart become nuclear wasteland"
+	_hover_bar.text = text + "."
+
 func _clear_selection() -> void:
+	_item_zone = {}
 	_selected = null
 	_moving = ""
 	_group = []
@@ -1282,6 +1363,9 @@ func _describe(x: int, y: int) -> String:
 	var text := "(%d, %d) %s" % [x, y, WorldMap.terrain_at(x, y).capitalize()]
 	text += " · " + (o if o != "" else ("out of this war" if WorldMap.is_void(x, y) else ("wilderness" if WorldMap.is_land(x, y) else "open sea")))
 	if _war != null:
+		match _war.scar_at(Vector2i(x, y)):
+			"ruins": text += " · ruins: ground units here take %d less damage per hit" % MapWar.RUINS_COVER
+			"wasteland": text += " · nuclear wasteland: units starting their turn here take %d damage" % MapWar.FALLOUT_DAMAGE
 		var holder := c.capital_holder_at(x, y)
 		if holder != "":
 			var hp_p: Player = _war.players[holder]
@@ -1295,6 +1379,8 @@ func _describe(x: int, y: int) -> String:
 				text += " · mountain cover: takes 1 less damage"
 			if card is Unit and WorldMap.terrain_at(x, y) == WorldMap.JUNGLE:
 				text += " · forest cover: takes 1 less damage from flying attackers"
+			if card is Unit and not (card as Unit).Flying and _war.scar_at(Vector2i(x, y)) == "ruins":
+				text += " · ruins cover: takes %d less damage" % MapWar.RUINS_COVER
 			if card is Unit:
 				var u := card as Unit
 				var ranged: bool = (_war.players[owner] as Player).has_range_for(u)
@@ -1312,6 +1398,10 @@ func _on_tile_hovered(x: int, y: int) -> void:
 		# preview its range from the hovered hex if it can go there, else from where it is
 		var hk := MapCampaign.key_of(x, y)
 		_show_range([_moving], {_moving: Vector2i(x, y)} if _view.placeable.has(hk) else {})
+	if _selected is Item:
+		if not _busy:
+			_preview_item(Vector2i(x, y))
+		return
 	if _selected != null:
 		var why := _war.can_place(_me(), _selected, Vector2i(x, y))
 		_hover_bar.text = ("Deploy %s here" % _selected.card_name) if why == "" else why
@@ -1385,12 +1475,17 @@ func _on_tile_selected(x: int, y: int) -> void:
 		_hover_bar.text = _describe(x, y)
 		if not info.is_empty() and info["card"] is Airport:
 			_show_airport_range(str(info["owner"]), t0)
+		elif not info.is_empty() and info["card"] is Interceptor:
+			_show_interceptor_range(str(info["owner"]), t0)
 		elif not info.is_empty() and info["card"] is FighterJet:
 			_show_jet_range(str(info["owner"]), t0) # (your own jets are picked to move instead)
 		elif not info.is_empty() and info["card"] is Unit:
 			_show_enemy_range(str(info["owner"]), t0) # any other enemy unit: what it can hit
 		return
 	var t := Vector2i(x, y)
+	if _selected is Item:
+		_fire_item_at(t)
+		return
 	var why := _war.can_place(_me(), _selected, t)
 	if why != "":
 		_sfx("deny", -4.0)
@@ -1418,6 +1513,119 @@ func _on_tile_selected(x: int, y: int) -> void:
 		_refresh_hand()
 	_refresh_player_card()
 
+# ------------------------------------------------------------------- items
+func _fire_item_at(t: Vector2i) -> void:
+	var item := _selected as Item
+	var why := _war.can_fire_item(_me(), item, t)
+	if why != "":
+		_sfx("deny", -4.0)
+		_hover_bar.text = why
+		return
+	_clear_selection()
+	_busy = true
+	_end_btn.disabled = true
+	await _play_item(_me(), item, t)
+	if not is_inside_tree():
+		return
+	_busy = false
+	_end_btn.disabled = _campaign().has_won() or _campaign().has_lost()
+	_refresh_hand()
+	_refresh_player_card()
+	if not _check_end():
+		_hover_bar.text = "%s away. Pick another card or End Turn." % item.card_name
+
+# What the screen shows as an attack starts: [cards {key: {...}}, flag HP, flag hexes].
+# Would `item` fired by `n` at `t` hit anything of `nation` (cards or flag)?
+func _item_hits(n: String, item: Item, t: Vector2i, nation: String) -> bool:
+	for h in _war.hexes_within(t, item.BlastRadius):
+		var info := _war.unit_at(h)
+		if not info.is_empty() and str(info["owner"]) == nation:
+			return true
+	var fs := _war.flag_sites()
+	return fs.has(nation) and MapCampaign.hex_distance(fs[nation], t) <= item.BlastRadius
+
+func _board_snapshot() -> Array:
+	var snapshot := {}
+	for k in _war.units.keys():
+		var card: Card = _war.units[k]["card"]
+		var hp: int = _war.card_hp(card)
+		snapshot[k] = {"name": card.card_name, "owner": str(_war.units[k]["owner"]), "hp": hp,
+			"max": int(card.get_meta("map_max_hp", maxi(hp, 1))), "bio": card.BioCost}
+	var flag_hp := {}
+	var flag_sites := {}
+	for nm in _war.players.keys():
+		flag_hp[nm] = (_war.players[nm] as Player).HitPoints
+		if _campaign().is_alive(str(nm)):
+			flag_sites[nm] = _campaign().capital_site(str(nm))
+	return [snapshot, flag_hp, flag_sites]
+
+# Nation `n` fires `item` at `t`: the war logic resolves it, then the screen shows
+# the launch, the flight (and an Interceptor shooting it down to half), the blast,
+# every hit and wreck, and any wasteland. `quick`: no flight, just the outcome.
+func _play_item(n: String, item: Item, t: Vector2i, quick: bool = false) -> void:
+	var snap := _board_snapshot()
+	var snapshot: Dictionary = snap[0]
+	_view.hold_scars()
+	var ev := _war.fire_item(n, item, t)
+	if ev.is_empty():
+		_view.release_scars()
+		return
+	var entries: Array = ev["entries"]
+	var dead: Array = []
+	var kills := 0
+	for e in entries:
+		for d in e["destroyed"]:
+			dead.append(str(d["key"]))
+			kills += 1
+		for cev in e.get("collapses", []):
+			for lk in cev.get("lost", []):
+				dead.append(str(lk))
+	var nuke: bool = ev["nuke"]
+	var icpt: Vector2i = ev["intercept_from"]
+	var who := "You" if n == _me() else "[color=#%s]%s[/color]" % [_nation_hex_color(n), n]
+	var line := "%s fire%s a %s: %d card%s hit, %d destroyed." % [who, "" if n == _me() else "s", item.card_name, entries.size(), "" if entries.size() == 1 else "s", kills]
+	if icpt.x >= 0:
+		line += " [color=#7fd8ff]%s's Interceptor shoots it down to half damage.[/color]" % str(_war.unit_at(icpt)["owner"]) if not _war.unit_at(icpt).is_empty() else " [color=#7fd8ff]An Interceptor shoots it down to half damage.[/color]"
+	if nuke:
+		line += " [color=#c8f060]Nuclear wasteland where it fell.[/color]"
+	_log_line(line)
+	if quick:
+		_view.release_scars()
+		_refresh()
+		_resolve_collapses()
+		return
+	_view.begin_replay(snapshot, dead, snap[1], snap[2])
+	if _follow_cam:
+		await _view.glide_to(_view.frame_for([ev["from"], t], 3.0 if nuke else 2.0), CAM_GLIDE / _speed())
+	var dist := MapCampaign.hex_distance(ev["from"], t)
+	var travel: float = clampf(0.6 + dist * 0.06, 0.7, 1.6) / _speed()
+	_sfx("missile", -2.0)
+	_view.add_item_flight(ev["from"], t, nuke, travel)
+	if icpt.x >= 0:
+		_view.add_intercept(icpt, t, travel)
+		get_tree().create_timer(travel * 0.85).timeout.connect(func(): _sfx("intercept", -4.0))
+	await _wait(travel)
+	_view.add_blast(t, int(ev["radius"]), nuke, 0.0)
+	_sfx("explosion", 0.0)
+	if nuke:
+		_sfx("war", -2.0)
+		_sfx("explosion", 2.0)
+	for e in entries:
+		var to: Vector2i = e["to"]
+		_view.add_boom(to, not (e["destroyed"] as Array).is_empty(), 0.05)
+		_view.add_number(to, "-%d" % int(e["damage"]), Color(1, 0.8, 0.3) if e["direct"] else Color(1, 0.45, 0.4), 0.1)
+		for d in e["destroyed"]:
+			_view.replay_remove(str(d["key"]))
+			_view.add_wreck(d["hex"], str(d["name"]), str(d["owner"]), 0.5)
+		_land_hit(e, snapshot, "hq_hit" if e["direct"] else ("explosion" if not (e["destroyed"] as Array).is_empty() else "hit"))
+	_view.reveal_scars(ev["wasteland"])
+	await _wait((2.2 if nuke else 0.9) / _speed())
+	_view.end_replay()
+	_refresh_legend()
+	_refresh_player_card()
+	_resolve_collapses()
+	_refresh()
+
 # ------------------------------------------------------------------- turns
 func _start_player_turn(round_over: bool = false) -> void:
 	if round_over:
@@ -1429,6 +1637,7 @@ func _start_player_turn(round_over: bool = false) -> void:
 	_war.begin_turn(_me())
 	_report_econ = (_war.last_economy.get(_me(), {}) as Dictionary).duplicate(true)
 	_log_attrition(_me())
+	_log_fallout(_me())
 	var up: Dictionary = _war.last_upkeep
 	if int(up.get("money", 0)) > 0 or int(up.get("bio", 0)) > 0:
 		_log_line("[color=#ff9a7a]Upkeep:[/color] your army costs %d Money and %d Bio this turn." % [int(up["money"]), int(up["bio"])])
@@ -1471,12 +1680,21 @@ func _on_end_turn() -> void:
 			await _view.glide_to(_view.frame_for(_campaign().tiles_of(n), 0.5), CAM_GLIDE / _speed())
 		_war.begin_turn(n)
 		_log_attrition(n)
+		_log_fallout(n)
 		if _announce_arrivals(n) and not quick:
 			await _wait(0.35)
 		var bought: Array = _war.ai_shop(n)
 		if not bought.is_empty():
 			_log_line("[color=#%s]%s[/color] shops: %s." % [_nation_hex_color(n), n, ", ".join(bought)])
 			_show_modifier_changes(_war.last_modifier_changes if _war.last_modifier_changes_nation == n else [])
+		# one-use weapons: whatever is worth firing, one shot at a time
+		for i in range(12):
+			var pick := _war.ai_pick_item(n)
+			if pick.is_empty():
+				break
+			await _play_item(n, pick["item"], pick["target"], quick and not _item_hits(n, pick["item"], pick["target"], _me()))
+			if _check_end():
+				return
 		var placed: Array = await _war.ai_build_sliced(n, AI_THINK_USEC)
 		for pl in placed:
 			_view.add_place(pl[1] as Vector2i)
@@ -1517,23 +1735,16 @@ func _nation_attacks(n: String) -> void:
 	# 1. Resolve the whole attack in the war logic first, so every unit's real
 	#    targets are known, random picks and retargets after earlier kills included.
 	#    The view then replays it from the pre-attack state (begin_replay).
-	var snapshot := {}
-	for k in _war.units.keys():
-		var card: Card = _war.units[k]["card"]
-		var hp: int = _war.card_hp(card)
-		snapshot[k] = {"name": card.card_name, "owner": str(_war.units[k]["owner"]), "hp": hp,
-			"max": int(card.get_meta("map_max_hp", maxi(hp, 1))), "bio": card.BioCost}
-	var flag_hp := {}
-	var flag_sites := {}
-	for nm in _war.players.keys():
-		flag_hp[nm] = (_war.players[nm] as Player).HitPoints
-		if _campaign().is_alive(str(nm)):
-			flag_sites[nm] = _campaign().capital_site(str(nm))
+	var snap := _board_snapshot()
+	var snapshot: Dictionary = snap[0]
+	var flag_hp: Dictionary = snap[1]
+	var flag_sites: Dictionary = snap[2]
 	var plan: Array = [] # [[attacker key, entries], ...] in firing order
 	var dead: Array = []
 	# (worked out over a few frames on a crowded map, like the moves; meanwhile the
 	# view already shows the pre-attack state, each fallen card standing as a ghost)
 	_view.begin_replay(snapshot, [], flag_hp, flag_sites)
+	_view.hold_scars() # ruins appear as the shots that make them land
 	var t0 := Time.get_ticks_usec()
 	for k in _war.attackers_of(n):
 		if Time.get_ticks_usec() - t0 > AI_THINK_USEC:
@@ -1598,6 +1809,7 @@ func _land_hit(e: Dictionary, snapshot: Dictionary, impact: String) -> void:
 		var dk := str(d["key"])
 		if snapshot.has(dk):
 			_view.replay_hit(to, int(snapshot[dk]["bio"]), str(d["owner"]))
+		_view.reveal_scars([d["hex"]]) # a building leaves its ruins
 	# a nation fell on this shot: its flag re-forms elsewhere at full HP and its
 	# border moves now (the log lines and Influence follow after the attack)
 	var collapses: Array = e.get("collapses", [])
@@ -2012,6 +2224,25 @@ func _show_airport_range(owner: String, at: Vector2i) -> void:
 	var whose := "Your" if owner == _me() else owner + "'s"
 	_hover_bar.text = "%s Airport: Fighter Jets can be deployed and fly within %d hexes of it (shown); Bomber Jets there take 1 less damage. %d jet%s in range. Click elsewhere or Esc to hide." % [whose, MapWar.AIRPORT_RANGE, jets.size() - 1, "" if jets.size() == 2 else "s"]
 
+# A clicked Interceptor (anyone's): the hexes it covers and the cards it shields there.
+func _show_interceptor_range(owner: String, at: Vector2i) -> void:
+	var zone := {}
+	for h in _war.hexes_within(at, MapWar.INTERCEPTOR_RANGE):
+		zone[h] = true
+	_view.range_zones = [{"hexes": zone, "color": INTERCEPT_ZONE}]
+	var covered: Array = [at]
+	for k in _war.cards_of(owner):
+		var h := MapWar.key_to_hex(k)
+		if h != at and MapCampaign.hex_distance(h, at) <= MapWar.INTERCEPTOR_RANGE and not (_war.units[k]["card"] is Interceptor):
+			covered.append(h)
+	_view.group_marks = covered
+	_view.redraw_layers()
+	var whose := "Your" if owner == _me() else owner + "'s"
+	var money: int = (_war.players[owner] as Player).MoneySupply
+	var paying := "" if money >= 6 else " It is idle: %s has under 6 Money." % ("you have" if owner == _me() else owner + " has")
+	_hover_bar.text = "%s Interceptor covers %d card%s within %d hexes (shown): ranged and flying hits there lose 75%%, and enemy Missiles and Nukes landing there do half damage. Each block costs it 2 HP and 6 Money.%s Click elsewhere or Esc to hide." % [
+		whose, covered.size() - 1, "" if covered.size() == 2 else "s", MapWar.INTERCEPTOR_RANGE, paying]
+
 # A clicked enemy unit: its attack range (red for melee, blue for ranged, from where it
 # stands), brackets on everything it can hit, a ring on it. Cleared by the next click or Esc.
 func _show_enemy_range(owner: String, at: Vector2i) -> void:
@@ -2072,6 +2303,22 @@ func _show_jet_range(owner: String, at: Vector2i) -> void:
 		_hover_bar.text = "%s's Fighter Jet is out of range of its Airports (blue): it loses %d HP every turn until it gets back. Red: what it can hit." % [owner, MapWar.JET_ATTRITION]
 
 # Fighter Jets out of range of every Airport (MapWar.last_attrition): log the damage and crashes.
+# Units that started their turn in nuclear wasteland (MapWar.last_fallout).
+func _log_fallout(n: String) -> void:
+	var hurt := 0
+	var died := 0
+	for f in _war.last_fallout:
+		_view.add_number(f[0] as Vector2i, "-%d" % MapWar.FALLOUT_DAMAGE, Color(0.75, 1.0, 0.3), 0.0)
+		if bool(f[1]):
+			died += 1
+		else:
+			hurt += 1
+	if hurt + died == 0:
+		return
+	var who := "Your" if n == _me() else "[color=#%s]%s[/color]'s" % [_nation_hex_color(n), n]
+	_log_line("[color=#c8f060]Fallout:[/color] %s units in the wasteland lose %d HP (%d hurt, %d lost)." % [who, MapWar.FALLOUT_DAMAGE, hurt, died])
+	_refresh_player_card()
+
 func _log_attrition(n: String) -> void:
 	var hit := 0
 	var crashed := 0
@@ -2226,6 +2473,7 @@ const REPORT_COLS := [
 	["dealt", "Dealt", "All damage that landed, flags included.", "val"],
 	["flag", "Flag", "Of that, damage straight to the nation's flag (its HP).", "val"],
 	["kills", "Kills", "Cards destroyed, and the HP their owner lost for them (their BioCost).", "val"],
+	["missiles", "Missiles", "Of the damage dealt, how much came from Missiles and Nukes.", "val"],
 	["barracks", "+Barracks", "Added by adjacent Barracks (+2 per shot).", "add"],
 	["home", "+Home", "Added by firing from the attacker's own land (+1 per shot).", "add"],
 	["modifiers", "+Modifiers", "Added (or taken away) by the attacker's modifiers: Guerilla Warfare, Aerial Supremacy, Defensive Doctrine.", "add"],
@@ -2233,9 +2481,10 @@ const REPORT_COLS := [
 	["boat", "+In boat", "Extra damage on ground units caught at sea in a boat (+1 per hit).", "add"],
 	["flank", "+Flanked", "Extra damage on units hemmed in by enemy units: +1 flanked (enemies on opposite sides), +2 surrounded (4+), +4 encircled (all 6).", "add"],
 	["splash", "+Splash", "Fighter and Bomber Jet splash on the target's neighbours.", "add"],
-	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they block 75% of ranged and flying hits).", "block"],
+	["blocked_interceptor", "-Interceptors", "Stopped by the defender's Interceptors (they block 75% of ranged and flying hits, and half of a Missile or Nuke).", "block"],
 	["blocked_mountain", "-Mountains", "Stopped by mountain cover (1 per hit on ground units).", "block"],
 	["blocked_forest", "-Forests", "Stopped by forest cover (1 per hit from flying attackers).", "block"],
+	["blocked_ruins", "-Ruins", "Stopped by the rubble of destroyed buildings (2 per hit on ground units).", "block"],
 	["blocked_airport", "-Airports", "Bomber Jets near one of their Airports take 1 less damage per hit.", "block"],
 	["blocked_flying", "-Flying", "Flying units take half damage from attackers without Range.", "block"],
 ]
@@ -2510,7 +2759,7 @@ func _report_summary() -> Label:
 			boosted += int(st.get("barracks", 0)) + int(st.get("home", 0)) + int(st.get("flank", 0)) + int(st.get("boat", 0)) + int(st.get("modifiers", 0)) + int(st.get("unit_bonus", 0)) + int(st.get("splash", 0))
 		elif parts[1] == me:
 			taken += int(st.get("dealt", 0))
-			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_flying", "blocked_airport"]:
+			for cat in ["blocked_interceptor", "blocked_mountain", "blocked_forest", "blocked_ruins", "blocked_flying", "blocked_airport"]:
 				saved += int(st.get(cat, 0))
 	var l := Label.new()
 	l.text = "You dealt %d damage (%s%d from bonuses) and took %d; your defences stopped %d." % [dealt, "+" if boosted >= 0 else "", boosted, taken, saved]
@@ -2702,6 +2951,8 @@ func _pile_tile(card: Card, n: int, which: String, p: Player) -> Control:
 		stat.text = "HP %d  DMG %d" % [p.effective_hitpoints_for(card), p.effective_damage_for(card as Unit, null)]
 	elif card is Building:
 		stat.text = "HP %d  INC %d" % [p.effective_hitpoints_for(card), (card as Building).Income]
+	elif card is Item:
+		stat.text = "DMG %d  BLAST %d" % [(card as Item).Damage, (card as Item).BlastRadius]
 	stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stat.add_theme_font_size_override("font_size", 13)
 	stat.add_theme_color_override("font_color", Color(0.82, 0.84, 0.9))
@@ -2866,6 +3117,8 @@ func _build_shop(remove_mode: bool) -> void:
 				lines.append("HP %d  DMG %d%s%s" % [u.HitPoints, u.Damage, "  RNG" if u.HasRange else "", "  FLY" if u.Flying else ""])
 			elif card is Building:
 				lines.append("HP %d  INC %d" % [(card as Building).HitPoints, (card as Building).Income])
+			elif card is Item:
+				lines.append("DMG %d  BLAST %d  1 USE" % [(card as Item).Damage, (card as Item).BlastRadius])
 			lines.append("$%d  Bio %d" % [card.MoneyCost, card.BioCost])
 			var can_c: bool = p.Influence >= card.InfluenceCost
 			cards_row.add_child(_shop_item(card.card_name, Card.create_sprite_for(card.card_name, Vector2(84, 84), _me()), lines, card.InfluenceCost, can_c, false, func():

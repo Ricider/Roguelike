@@ -3,7 +3,7 @@ class_name Interceptor
 
 func _init():
 	super._init(20, 0, 50, 5, "Interceptor", 30)
-	SpecialEffect = "Shields your cards on the hexes [next to it]: hits from enemies with [Range] or [Flying] lose [75%] of their damage (never below 1). Each block costs the Interceptor 2 HP and you 6 MoneySupply, so it only works while you have 6 Money."
+	SpecialEffect = "Shields your cards within [3 hexes]: hits from enemies with [Range] or [Flying] lose [75%] of their damage (never below 1), and enemy [Missiles] and [Nukes] landing within 3 hexes do half damage. Each block costs the Interceptor 2 HP and you 6 MoneySupply, so it only works while you have 6 Money."
 
 # Find all interceptor squares adjacent (8-dir) to target_sq on defender's board
 static func find_adjacent_interceptors(defender: Player, target_sq: Square) -> Array:

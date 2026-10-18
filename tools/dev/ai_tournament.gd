@@ -86,6 +86,7 @@ func _play(gs, map_id: String, rounds: int, s: int, group: Array, pol_in: Dictio
 				continue
 			w.begin_turn(n)
 			w.ai_shop(n)
+			w.ai_use_items(n)
 			w.ai_build(n)
 			w.ai_move(n)
 			for k in w.attackers_of(n):

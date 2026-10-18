@@ -13,6 +13,7 @@ names and sizes match what the game already loads. Run:
 
     python3 tools/retro_overhaul.py            # everything
     python3 tools/retro_overhaul.py cards ui   # selected groups
+    python3 tools/retro_overhaul.py cards=Missile,Nuke   # selected cards
     python3 tools/retro_overhaul.py preview    # contact sheet only
 """
 import math
@@ -1040,6 +1041,90 @@ def draw_corp(i, atk):
     return card_frame(body, i, atk, (16, 27, 14, 80), fx)
 
 
+# ------------------------------------------------------------ items
+# One-use weapons (never on the map, so no per-nation art).
+def draw_missile_item(i, atk):
+    lift = (i - 4) * 2 if atk and i >= 4 else 0   # attack: it leaves the rail
+
+    def body(g):
+        # launch stand: base plate and a rail up the back
+        g.r(9, 26, 14, 3, "1")
+        g.r(9, 26, 14, 1, "2")
+        g.r(19, 8, 2, 18, "2")
+        g.r(19, 8, 1, 18, "3")
+        g.r(11, 23, 10, 2, "1")
+        y = 4 - lift
+        # the missile: white body, black bands, red nose and fins
+        g.r(13, y + 4, 5, 17, "4")
+        g.r(13, y + 4, 2, 17, "5")
+        g.r(13, y + 9, 5, 1, "n")
+        g.r(13, y + 15, 5, 1, "n")
+        g.r(14, y + 2, 3, 2, "R")
+        g.p(15, y + 1, "R")
+        g.r(14, y + 2, 1, 2, "W")
+        for fx_, fy in ((11, y + 17), (18, y + 17)):
+            g.r(fx_, fy, 2, 4, "R")
+            g.p(fx_ + (0 if fx_ < 15 else 1), fy - 1, "R")
+        g.r(14, y + 21, 3, 1, "2")
+
+    def fx(g):
+        y = 4 - lift
+        if atk and i >= 3:
+            ln = 3 + (i % 3)
+            g.r(14, y + 22, 3, ln, "O")
+            g.r(15, y + 22, 1, ln + 1, "Y")
+            for k in range(3):
+                fx_smoke(g, 12 + k * 3, 27, smoke_age(i, 4 + k * 3, 8), 0.6)
+        else:
+            # a vent hissing and a ready light
+            fx_smoke(g, 22, 22, smoke_age(i, 0, 14), 0.5)
+            if blink(i, (0, 1, 2, 3, 4, 10, 11, 12, 13, 14)):
+                g.p(21, 27, "G")
+
+    return card_frame(body, i, atk, (16, 29, 9, 60), fx)
+
+
+def draw_nuke(i, atk):
+    drop = (i - 5) if atk and i >= 5 else 0          # attack: it drops off the cradle
+
+    def body(g):
+        # cradle
+        g.r(6, 25, 20, 2, "1")
+        g.r(8, 22, 2, 3, "2")
+        g.r(22, 22, 2, 3, "2")
+        y = 15 + drop
+        # fat bomb, nose to the right, fins to the left
+        g.ellipse(17, y, 9, 5, "p")
+        g.ellipse(17, y - 1, 8, 3, "q")
+        g.r(13, y - 5, 2, 11, "Y")                  # yellow band
+        g.r(4, y - 6, 3, 5, "o")                    # tail fins
+        g.r(4, y + 2, 3, 5, "o")
+        g.r(5, y - 2, 4, 5, "p")
+        # radiation sign on its flank
+        g.disc(20, y, 2.6, "Y")
+        g.p(20, y - 2, "n")
+        g.p(19, y - 2, "n")
+        g.p(22, y + 1, "n")
+        g.p(22, y + 2, "n")
+        g.p(18, y + 1, "n")
+        g.p(18, y + 2, "n")
+        g.p(20, y, "n")
+
+    def fx(g):
+        if atk and i >= 5:
+            if i >= 14:
+                k = i - 14
+                g.disc(16, 28, 1 + k * 1.2, "Y")
+                g.disc(16, 28, max(0.5, k * 0.8), "W")
+        elif blink(i, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)):
+            g.p(27, 15, "R")                           # armed: the nose light blinks
+            g.p(27, 14, "O")
+
+    return card_frame(body, i, atk, (16, 28, 12, 60), fx)
+
+
+ITEM_CARDS = ("Missile", "Nuke")
+
 CARDS = {
     "Tank": draw_tank,
     "Infantry": draw_infantry,
@@ -1059,11 +1144,15 @@ CARDS = {
     "Housing": draw_housing,
     "Corporation": draw_corp,
     "Airport": draw_airport,
+    "Missile": draw_missile_item,
+    "Nuke": draw_nuke,
 }
 
 
-def gen_cards():
+def gen_cards(only=None):
     for name, fn in CARDS.items():
+        if only and name not in only:
+            continue
         base = os.path.join(ROOT, "Assets", "Cards", name)
         for i in range(FR):
             fn(i, False).save(os.path.join(base, "sprite_%d.png" % i), 16)
@@ -2515,8 +2604,8 @@ def gen_nations(only=None):
     for nation in NATIONS:
         row = []
         for card in CARDS:
-            if card == "RocketLauncher":
-                continue  # legacy alias folder; the game falls back to the shared art there
+            if card == "RocketLauncher" or card in ITEM_CARDS:
+                continue  # legacy alias folder / items never stand on the map: shared art
             frames = nation_frames(nation, card)
             base = os.path.join(ROOT, "Assets", "Cards", card, "nations", nation)
             os.makedirs(base, exist_ok=True)
@@ -2527,7 +2616,7 @@ def gen_nations(only=None):
         print("nation", nation)
     out = os.path.join(ROOT, "build", "previews")
     os.makedirs(out, exist_ok=True)
-    sheet(preview, len(CARDS) - 1, 4, os.path.join(out, "nations.png"))
+    sheet(preview, len(CARDS) - 1 - len(ITEM_CARDS), 4, os.path.join(out, "nations.png"))
 
 
 # ============================================================== world map
@@ -2550,6 +2639,9 @@ GROUPS = {
 def main(argv):
     groups = argv or list(GROUPS)
     for gname in groups:
+        if gname.startswith("cards="):     # cards=Missile,Nuke: just those cards
+            gen_cards(gname[len("cards="):].split(","))
+            continue
         GROUPS[gname]()
     print("retro overhaul complete")
 

@@ -372,6 +372,10 @@ func _process(delta: float) -> void:
 		if csig != _last_chip_sig:
 			_last_chip_sig = csig
 			_redraw(_chips)
+		var ssig := _scars().hash()
+		if ssig != _last_scar_sig: # ruins or wasteland appeared
+			_last_scar_sig = ssig
+			_redraw(_grid)
 		if walks.size() != _last_walk_n: # a march began or ended: the walkers layer empties
 			_last_walk_n = walks.size()
 			_redraw(_walkers)
@@ -401,6 +405,7 @@ func _process(delta: float) -> void:
 var _last_chip_sig: Array = []
 var _last_units_sig: Array = []
 var _last_walk_n: int = 0
+var _last_scar_sig: int = 0
 
 func _hp_sig() -> Array:
 	if war == null:
@@ -806,6 +811,7 @@ func _draw_base() -> void:
 		return
 	var oy: float = m[2]
 	var map_h: float = (1.5 * WorldMap.GRID_H + 0.5) * s
+	_draw_scars(m)
 	# hex grid (1px hairlines) and nation borders, from precomputed map-unit segments
 	var bw: float = maxf(2.0, floorf(s * 0.22))
 	for ox in _copy_origins(m):
@@ -1178,19 +1184,22 @@ func unit_cache() -> Array:
 				nx = posmod(nx, gw)
 			out.append(ny * gw + nx if (ny >= 0 and ny < gh and nx >= 0 and nx < gw) else -1)
 		return out
-	# A living Barracks buffs its owner's units round it (MapWar.is_buffed); a living
-	# Interceptor covers its owner's other cards round it while they can pay 6 Money
-	# (MapWar.is_shielded). Mark the hexes they reach: there are few of them.
+	# A living Barracks buffs its owner's units next to it (MapWar.is_buffed); a living
+	# Interceptor covers its owner's other cards within INTERCEPTOR_RANGE while they
+	# can pay 6 Money (MapWar.is_shielded). Mark the hexes they reach: there are few.
 	var buff_at: Dictionary = {} # cell * 64 + nation index -> true
 	var cover_at: Dictionary = {}
 	for idx in range(n):
 		var c: Card = cards[idx]
-		if alive[idx] == 0 or not (c is Barracks or c is Interceptor):
+		if alive[idx] == 0:
 			continue
-		var into: Dictionary = buff_at if c is Barracks else cover_at
-		for cell in nb_cells.call(hexes[idx]):
-			if cell >= 0:
-				into[cell * 64 + owner_ix[idx]] = true
+		if c is Barracks:
+			for cell in nb_cells.call(hexes[idx]):
+				if cell >= 0:
+					buff_at[cell * 64 + owner_ix[idx]] = true
+		elif c is Interceptor:
+			for h in war.hexes_within(hexes[idx], MapWar.INTERCEPTOR_RANGE):
+				cover_at[((h as Vector2i).y * gw + (h as Vector2i).x) * 64 + owner_ix[idx]] = true
 	var can_pay: Dictionary = {}
 	for nm in war.players.keys():
 		can_pay[str(nm)] = (war.players[nm] as Player).MoneySupply >= 6
@@ -1279,12 +1288,16 @@ func _patch_cache() -> bool:
 	for k in war.units.keys():
 		var e: Dictionary = _ucache_by_key.get(k, {})
 		if e.is_empty() or e["card"] != war.units[k]["card"] or e["owner"] != str(war.units[k]["owner"]):
+			if war.units[k]["card"] is Interceptor or (not e.is_empty() and e["card"] is Interceptor):
+				return false # its cover reaches further than the neighbours redone below
 			changed.append(k)
 			if changed.size() > PATCH_MAX:
 				return false
 	if _ucache_by_key.size() != war.units.size() - _count_new(changed):
 		for k in _ucache_by_key.keys():
 			if not war.units.has(k):
+				if _ucache_by_key[k]["card"] is Interceptor:
+					return false
 				changed.append(k)
 				if changed.size() > PATCH_MAX:
 					return false
@@ -1333,6 +1346,14 @@ func add_boom(at: Vector2i, big: bool, delay: float) -> void:
 
 func add_number(at: Vector2i, text: String, col: Color, delay: float) -> void:
 	effects.append({"kind": "num", "to": at, "t0": _clock + delay, "dur": 0.9, "text": text, "color": col})
+
+# A Missile or Nuke flying from its launch site `from` to `to` (an arc, `travel` s).
+func add_item_flight(from: Vector2i, to: Vector2i, nuke: bool, travel: float) -> void:
+	effects.append({"kind": "item", "from": from, "to": to, "t0": _clock, "dur": travel, "nuke": nuke})
+
+# Its explosion at `to`, reaching `radius` hexes, after `delay` s.
+func add_blast(to: Vector2i, radius: int, nuke: bool, delay: float) -> void:
+	effects.append({"kind": "blast", "to": to, "t0": _clock + delay, "dur": 2.6 if nuke else 1.0, "radius": radius, "nuke": nuke})
 
 func add_wreck(at: Vector2i, card_name: String, owner: String, until_delay: float) -> void:
 	effects.append({"kind": "wreck", "to": at, "t0": _clock, "dur": until_delay, "name": card_name, "owner": owner})
@@ -1795,6 +1816,7 @@ func replay_collapse(ev: Dictionary) -> void:
 	_redraw_all()
 
 func end_replay() -> void:
+	release_scars()
 	ghosts.clear()
 	hp_shown.clear()
 	flag_hp_shown.clear()
@@ -1864,12 +1886,13 @@ func _draw_effects(m: Array) -> void:
 			"counter":
 				var fa := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.6)
 				var fb := _wrap_target(fa, to_c, m)
-				var hk: float = k * k # accelerates towards the hit
-				var head2 := fa.lerp(fb, hk)
-				var tail2 := fa.lerp(fb, maxf(0.0, hk - 0.3))
-				_ci.draw_line(tail2, head2, Color(CYAN.r, CYAN.g, CYAN.b, 0.35), maxf(4.0, s * 0.25))
-				_ci.draw_line(tail2, head2, Color(0.9, 1, 1, 0.95), maxf(1.5, s * 0.09))
-				_ci.draw_circle(head2, maxf(2.0, s * 0.13), Color(1, 1, 1))
+				# an interceptor missile: climbs off its launcher, then streaks at the hit
+				var path := func(u: float) -> Vector2:
+					var uk: float = u * u # accelerates towards the hit
+					return fa.lerp(fb, uk) - Vector2(0, sin(u * PI) * minf(fa.distance_to(fb) * 0.35, s * 3.0))
+				_draw_smoke_trail(path, k, s, 7, Color(0.85, 0.95, 1.0))
+				var head2: Vector2 = path.call(k)
+				_draw_missile(head2, head2 - path.call(maxf(0.0, k - 0.02)), maxf(7.0, s * 0.7), CYAN, false)
 			"shield":
 				var ek: float = 1.0 - pow(1.0 - k, 2.0)
 				var fade2: float = 1.0 - k
@@ -1885,10 +1908,173 @@ func _draw_effects(m: Array) -> void:
 					var sa: float = sp * TAU / 10.0 + 0.3
 					var sd: float = s * (1.0 + ek * 1.0)
 					_ci.draw_circle(to_c + Vector2(cos(sa), sin(sa)) * sd, maxf(1.0, s * 0.06 * fade2), Color(0.85, 1, 1, fade2))
+			"item":
+				var ia := screen_pos(e["from"] as Vector2i, m) - Vector2(0, s * 0.5)
+				var ib := _wrap_target(ia, to_c, m)
+				var nuke: bool = e["nuke"]
+				var height: float = clampf(ia.distance_to(ib) * 0.45, s * 2.0, s * 9.0)
+				var ipath := func(u: float) -> Vector2:
+					return ia.lerp(ib, u) - Vector2(0, sin(u * PI) * height) # a ballistic arc
+				_draw_smoke_trail(ipath, k, s, 12 if nuke else 9, Color(0.8, 0.8, 0.82))
+				var ih: Vector2 = ipath.call(k)
+				_draw_missile(ih, ih - ipath.call(maxf(0.0, k - 0.02)), maxf(10.0, s * (1.3 if nuke else 0.95)), Color(0.95, 0.8, 0.2) if nuke else Color(1, 0.3, 0.25), nuke)
+			"blast":
+				_draw_blast(to_c, s, k, int(e["radius"]), bool(e["nuke"]))
 			"wreck":
 				_draw_card(str(e["name"]), to_c, s, Color(1, 0.5, 0.45, 0.9 - 0.4 * k), 0, str(e.get("owner", "")))
 			"place":
 				_ci.draw_arc(to_c, s * (0.6 + k * 0.8), 0.0, TAU, 20, Color(0.6, 1.0, 0.45, 1.0 - k), 2.0)
+
+# A missile at `p` heading along `dir`, `l` pixels long: flickering exhaust, fins,
+# body, warhead (nuke: fat, olive with a yellow band and nose).
+func _draw_missile(p: Vector2, dir: Vector2, l: float, tip: Color, nuke: bool) -> void:
+	var d := dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	var nv := Vector2(-d.y, d.x)
+	var w: float = l * (0.3 if nuke else 0.2)
+	var tail := p - d * l * 0.5
+	var fl: float = l * (0.45 + 0.18 * sin(_clock * 47.0))
+	_ci.draw_colored_polygon(PackedVector2Array([tail + nv * w * 0.55, tail - nv * w * 0.55, tail - d * fl]), Color(1.0, 0.55, 0.12, 0.9))
+	_ci.draw_colored_polygon(PackedVector2Array([tail + nv * w * 0.3, tail - nv * w * 0.3, tail - d * fl * 0.6]), Color(1.0, 0.95, 0.6))
+	var fin := Color(0.25, 0.27, 0.32)
+	for side in [1.0, -1.0]:
+		_ci.draw_colored_polygon(PackedVector2Array([tail + nv * w * 0.5 * side, tail + nv * w * 1.15 * side - d * l * 0.06, tail + d * l * 0.22 + nv * w * 0.5 * side]), fin)
+	var body := Color(0.45, 0.5, 0.32) if nuke else Color(0.88, 0.9, 0.94)
+	var front := p + d * l * 0.22
+	var hull := PackedVector2Array([tail + nv * w * 0.5, front + nv * w * 0.5, front - nv * w * 0.5, tail - nv * w * 0.5])
+	_ci.draw_colored_polygon(hull, body)
+	if nuke:
+		var band := tail + d * l * 0.35
+		_ci.draw_colored_polygon(PackedVector2Array([band + nv * w * 0.5, band + d * l * 0.1 + nv * w * 0.5, band + d * l * 0.1 - nv * w * 0.5, band - nv * w * 0.5]), Color(0.95, 0.8, 0.2))
+	var nose := PackedVector2Array([front + nv * w * 0.5, p + d * l * 0.5, front - nv * w * 0.5])
+	_ci.draw_colored_polygon(nose, tip)
+	var outline := PackedVector2Array([tail + nv * w * 0.5, front + nv * w * 0.5, p + d * l * 0.5, front - nv * w * 0.5, tail - nv * w * 0.5, tail + nv * w * 0.5])
+	_ci.draw_polyline(outline, Color(0.06, 0.05, 0.1, 0.9), maxf(1.0, l * 0.05))
+
+# Puffs left behind along `path` (a Callable u -> screen point, u in 0..1) up to `k`.
+func _draw_smoke_trail(path: Callable, k: float, s: float, puffs: int, col: Color) -> void:
+	for i in range(puffs, 0, -1):
+		var u: float = k - i * 0.035
+		if u <= 0.0:
+			continue
+		var f: float = float(i) / float(puffs + 1)
+		_ci.draw_circle(path.call(u), maxf(1.5, s * (0.1 + 0.32 * f)), Color(col.r, col.g, col.b, 0.55 * (1.0 - f)))
+
+# A Missile's or Nuke's explosion at `c`, `k` 0..1 through it, covering `radius` hexes.
+func _draw_blast(c: Vector2, s: float, k: float, radius: int, nuke: bool) -> void:
+	var reach: float = (float(radius) + 0.5) * s * SQRT3 # to the outer hexes' far edge
+	var ease_k: float = 1.0 - pow(1.0 - k, 3.0)
+	var fade: float = 1.0 - k
+	if nuke:
+		if k < 0.25: # the flash
+			_ci.draw_circle(c, reach * (0.6 + k * 2.0), Color(1, 1, 0.92, 0.85 * (1.0 - k / 0.25)))
+		# shockwave racing out over the whole blast
+		var wave_k := clampf(k / 0.55, 0.0, 1.0)
+		if wave_k < 1.0:
+			_ci.draw_arc(c, reach * wave_k, 0.0, TAU, 64, Color(1, 0.95, 0.8, 0.8 * (1.0 - wave_k)), maxf(3.0, s * 0.35))
+			_ci.draw_arc(c, reach * wave_k * 0.93, 0.0, TAU, 64, Color(1, 0.6, 0.2, 0.4 * (1.0 - wave_k)), maxf(6.0, s * 0.7))
+		# scorched ground and the fireball under the cloud
+		_ci.draw_circle(c, reach * 0.55 * ease_k, Color(0.25, 0.12, 0.05, 0.35 * fade))
+		_ci.draw_circle(c, s * (0.8 + 1.6 * ease_k), Color(1.0, 0.45 + 0.3 * fade, 0.1, 0.85 * fade))
+		# mushroom cloud: a stem rising into a rolling cap
+		var rise: float = s * 6.5 * ease_k
+		var top := c - Vector2(0, rise)
+		var stem_w: float = s * (0.5 + 0.4 * ease_k)
+		var smoke := Color(0.55, 0.45, 0.4).lerp(Color(1.0, 0.55, 0.2), clampf(1.0 - k * 1.6, 0.0, 1.0))
+		_ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-stem_w, 0), top + Vector2(-stem_w * 0.6, 0), top + Vector2(stem_w * 0.6, 0), c + Vector2(stem_w, 0)]), Color(smoke.r, smoke.g, smoke.b, 0.85 * fade))
+		var cap_r: float = s * (1.2 + 2.4 * ease_k)
+		_ci.draw_set_transform(top, 0.0, Vector2(1.0, 0.6))
+		_ci.draw_circle(Vector2.ZERO, cap_r, Color(smoke.r, smoke.g, smoke.b, 0.9 * fade))
+		_ci.draw_circle(Vector2(0, -cap_r * 0.25), cap_r * 0.7, Color(smoke.r + 0.15, smoke.g + 0.1, smoke.b + 0.05, 0.8 * fade))
+		_ci.draw_circle(Vector2(0, cap_r * 0.3), cap_r * 0.45, Color(1.0, 0.7, 0.3, 0.6 * fade * clampf(1.5 - k * 2.0, 0.0, 1.0)))
+		_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
+	if k < 0.2:
+		_ci.draw_circle(c, reach * 0.5, Color(1, 1, 0.9, 0.8 * (1.0 - k / 0.2)))
+	_ci.draw_circle(c, reach * (0.3 + 0.6 * ease_k), Color(1.0, 0.5, 0.15, 0.55 * fade))
+	_ci.draw_circle(c, reach * (0.15 + 0.35 * ease_k), Color(1.0, 0.9, 0.45, 0.8 * fade))
+	_ci.draw_arc(c, reach * (0.2 + 0.9 * ease_k), 0.0, TAU, 40, Color(1, 1, 1, 0.7 * fade), maxf(2.0, s * 0.15))
+	for ray in range(10):
+		var ang: float = ray * TAU / 10.0 + 0.4
+		var d0: float = reach * (0.25 + 0.8 * ease_k)
+		_ci.draw_line(c + Vector2(cos(ang), sin(ang)) * d0, c + Vector2(cos(ang), sin(ang)) * (d0 + s * 0.4 * fade), Color(1, 0.8, 0.3, fade), 2.0)
+
+# ------------------------------------------------------------ scars
+# Ruins and nuclear wasteland (MapWar.scars) are drawn on the grid layer. While an
+# attack plays out the screen keeps showing the scars from before it (hold_scars),
+# revealing each new one as its shot lands (reveal_scars) or when the replay ends.
+var _scars_held: Variant = null # Dictionary while held, else null (show war.scars)
+
+func _scars() -> Dictionary:
+	if _scars_held != null:
+		return _scars_held
+	return war.scars if war != null else {}
+
+func hold_scars() -> void:
+	if war != null and _scars_held == null:
+		_scars_held = war.scars.duplicate()
+
+func reveal_scars(hexes: Array) -> void:
+	if _scars_held == null or war == null:
+		return
+	for h in hexes:
+		var k := MapCampaign.key_of((h as Vector2i).x, (h as Vector2i).y)
+		if war.scars.has(k):
+			_scars_held[k] = war.scars[k]
+	_redraw(_grid)
+
+func release_scars() -> void:
+	_scars_held = null
+	_redraw(_grid)
+
+func _draw_scars(m: Array) -> void:
+	var sc := _scars()
+	if sc.is_empty():
+		return
+	var s: float = m[0]
+	for k in sc.keys():
+		var t := MapWar.key_to_hex(str(k))
+		for cp in _visible_copies(t, m, s * 2.0):
+			if str(sc[k]) == "wasteland":
+				_draw_wasteland(cp as Vector2, s)
+			else:
+				_draw_ruins(cp as Vector2, s, t)
+
+# Rubble: a dusty tint, a few toppled blocks and a broken wall stub.
+func _draw_ruins(c: Vector2, s: float, t: Vector2i) -> void:
+	_grid.draw_colored_polygon(_hex_points(c, s * 0.97), Color(0.3, 0.25, 0.2, 0.55))
+	if s < 5.0:
+		return
+	var seed_i: int = t.x * 31 + t.y * 17
+	for b in range(5):
+		var a: float = float((seed_i * (b + 3)) % 360) * PI / 180.0
+		var r: float = s * (0.15 + 0.12 * float((seed_i + b * 7) % 5))
+		var sz: float = s * (0.16 + 0.05 * float((seed_i + b) % 3))
+		var p := c + Vector2(cos(a), sin(a) * 0.7) * r
+		_grid.draw_rect(Rect2(p - Vector2(sz, sz * 0.7) * 0.5, Vector2(sz, sz * 0.7)), Color(0.08, 0.06, 0.06, 0.9), true)
+		_grid.draw_rect(Rect2(p - Vector2(sz, sz * 0.7) * 0.5 + Vector2(1, 1), Vector2(sz - 2.0, sz * 0.7 - 2.0)), Color(0.62, 0.55, 0.47) if b % 2 == 0 else Color(0.55, 0.36, 0.26), true)
+	# a broken wall stub
+	var w0 := c + Vector2(-s * 0.45, s * 0.1)
+	_grid.draw_line(w0, w0 + Vector2(0, -s * 0.45), Color(0.08, 0.06, 0.06), maxf(3.0, s * 0.2))
+	_grid.draw_line(w0, w0 + Vector2(0, -s * 0.4), Color(0.6, 0.52, 0.45), maxf(1.5, s * 0.12))
+
+# Nuclear wasteland: a sickly glow with a radiation sign.
+func _draw_wasteland(c: Vector2, s: float) -> void:
+	_grid.draw_colored_polygon(_hex_points(c, s * 0.97), Color(0.45, 0.62, 0.1, 0.5))
+	_grid.draw_colored_polygon(_hex_points(c, s * 0.6), Color(0.65, 0.85, 0.2, 0.25))
+	if s < 6.0:
+		return
+	var r: float = s * 0.42
+	_grid.draw_circle(c, r + 1.5, Color(0.08, 0.06, 0.06, 0.9))
+	_grid.draw_circle(c, r, Color(1.0, 0.85, 0.15))
+	for i in range(3): # the trefoil's three blades
+		var a0: float = -PI / 2.0 + i * TAU / 3.0 - PI / 6.0
+		var pts := PackedVector2Array([c])
+		for j in range(7):
+			var a: float = a0 + (PI / 3.0) * j / 6.0
+			pts.append(c + Vector2(cos(a), sin(a)) * r * 0.85)
+		_grid.draw_colored_polygon(pts, Color(0.08, 0.06, 0.06))
+	_grid.draw_circle(c, r * 0.24, Color(1.0, 0.85, 0.15))
+	_grid.draw_circle(c, r * 0.14, Color(0.08, 0.06, 0.06))
 
 # Floating damage numbers, drawn with the UI font on a smoothly filtered layer.
 func _draw_text_fx() -> void:
