@@ -1070,8 +1070,8 @@ func _select_item(item: Item) -> void:
 		sites.append(l[0])
 	_view.group_marks = sites
 	_view.redraw_layers()
-	_hover_bar.text = "Fire %s from your %s (ringed): click a target in the orange area. Every enemy card and flag within %d hex%s of it takes %d. (Esc to cancel)" % [
-		item.card_name, item.launcher_text(), item.BlastRadius, "" if item.BlastRadius == 1 else "es", item.Damage]
+	_hover_bar.text = "Fire %s from your %s (ringed): click a target in the orange area. Every enemy card and flag within %d hex%s of it takes %s. (Esc to cancel)" % [
+		item.card_name, item.launcher_text(), item.BlastRadius, "" if item.BlastRadius == 1 else "es", _item_damage_text(item)]
 	_refresh_hand()
 
 # Hovering a target with an item picked: its blast (red) and what it would hit.
@@ -1104,16 +1104,21 @@ func _preview_item(t: Vector2i) -> void:
 			flag_names.append(str(fn))
 	_view.range_targets = targets
 	_view.redraw_layers()
-	var dmg := item.Damage
 	var icpt := _war.item_interceptor(_me(), t)
-	var text := "Fire %s here: %d damage to %d enemy card%s" % [item.card_name, dmg, cards, "" if cards == 1 else "s"]
+	var text := "Fire %s here: %s to %d enemy card%s" % [item.card_name, _item_damage_text(item), cards, "" if cards == 1 else "s"]
 	if not flag_names.is_empty():
 		text += " and %s's flag" % " and ".join(flag_names)
 	if icpt.x >= 0:
-		text += " · %s's Interceptor covers it: half damage (%d)" % [str(_war.unit_at(icpt)["owner"]), maxi(1, dmg / 2)]
+		text += " · %s's Interceptor covers it: half damage (%d where it lands)" % [str(_war.unit_at(icpt)["owner"]), item.damage_at(0, true)]
 	if item is Nuke:
 		text += " · the 7 hexes at its heart become nuclear wasteland"
 	_hover_bar.text = text + "."
+
+# "6" for a Missile; "20 where it lands, 3 less per hex out (8 at 4 hexes)" for a Nuke.
+func _item_damage_text(item: Item) -> String:
+	if item.Falloff <= 0:
+		return "%d damage" % item.Damage
+	return "%d damage where it lands, %d less per hex out (%d at %d hexes)" % [item.Damage, item.Falloff, item.damage_at(item.BlastRadius), item.BlastRadius]
 
 func _clear_selection() -> void:
 	_item_zone = {}

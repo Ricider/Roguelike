@@ -132,7 +132,7 @@ func show_card(card: Card, info: Dictionary, anchor: Rect2, below: bool = false)
 		_stat(stats, "res://Assets/UI/heart.png", ("%d/%d" % [hp, hp_max]) if hp_max != hp else str(hp), hp_col, 22)
 	if card is Item:
 		var it := card as Item
-		_stat(stats, "res://Assets/UI/sword.png", "%d to every enemy within %d hex%s" % [it.Damage, it.BlastRadius, "" if it.BlastRadius == 1 else "es"], Color.WHITE, 22)
+		_stat(stats, "res://Assets/UI/sword.png", ("%d to every enemy within %d hex%s" % [it.Damage, it.BlastRadius, "" if it.BlastRadius == 1 else "es"]) if it.Falloff <= 0 else ("%d at the hit, %d at %d hexes" % [it.Damage, it.damage_at(it.BlastRadius), it.BlastRadius]), Color.WHITE, 22)
 	elif card is Unit:
 		var dmg: int = int(info.get("dmg", (card as Unit).Damage))
 		var dmg_base: int = int(info.get("dmg_base", (card as Unit).Damage))

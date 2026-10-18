@@ -258,9 +258,9 @@ func test_nuke_blast_and_wasteland():
 	if not w.units.has(edge):
 		lost = Tank.new().BioCost
 	else:
-		assert_eq(hp_edge - _hp(w, edge), MapWar.terrain_adjusted(w.units[edge]["card"], Vector2i(21, 10), 20), "20 damage 4 hexes out")
+		assert_eq(hp_edge - _hp(w, edge), MapWar.terrain_adjusted(w.units[edge]["card"], Vector2i(21, 10), 8), "4 hexes out: 20 - 4 x 3 = 8")
 	assert_eq(_hp(w, out), Tank.new().HitPoints, "beyond 4 hexes: untouched")
-	assert_eq((w.players[B] as Player).HitPoints, hp_b - 20 - lost, "B's flag (3 hexes away) takes 20")
+	assert_eq((w.players[B] as Player).HitPoints, hp_b - 11 - lost, "B's flag (3 hexes away) takes 20 - 3 x 3 = 11")
 	var waste := 0
 	for k in w.scars.keys():
 		if str(w.scars[k]) == "wasteland":
@@ -268,6 +268,28 @@ func test_nuke_blast_and_wasteland():
 			assert_lte(MapCampaign.hex_distance(MapWar.key_to_hex(str(k)), t), 1)
 	assert_eq(waste, 7, "the 7 hexes at its heart become wasteland")
 	assert_eq((ev["wasteland"] as Array).size(), 7)
+
+func test_nuke_damage_falls_off_with_distance():
+	var n := Nuke.new()
+	assert_eq([n.damage_at(0), n.damage_at(1), n.damage_at(2), n.damage_at(3), n.damage_at(4)], [20, 17, 14, 11, 8], "3 less per hex")
+	assert_eq([n.damage_at(0, true), n.damage_at(4, true)], [10, 4], "an interception halves what reaches each hex")
+	assert_eq(Missile.new().damage_at(1), 6, "Missiles don't fall off")
+	var w := _war()
+	(w.players[A] as Player).Hand = [n]
+	(w.players[A] as Player).MoneySupply = 200
+	_drop(w, A, BomberJet.new(), 13)
+	var t := Vector2i(17, 10)
+	var hp0 := {}
+	for x in [17, 18, 19]:
+		var k := _drop(w, B, Tank.new(), x)
+		hp0[k] = _hp(w, k)
+	var ev := w.fire_item(A, n, t)
+	for e in ev["entries"]:
+		if bool(e["direct"]):
+			continue
+		var to: Vector2i = e["to"]
+		var want: int = MapWar.terrain_adjusted(Tank.new(), to, 20 - 3 * MapCampaign.hex_distance(to, t))
+		assert_eq(int(e["damage"]), want, "%s: %d hexes out" % [str(to), MapCampaign.hex_distance(to, t)])
 
 func test_wasteland_burns_units_that_start_their_turn_there():
 	var w := _war()

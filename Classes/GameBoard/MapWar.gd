@@ -2149,10 +2149,10 @@ func fire_item(nation: String, item: Item, t: Vector2i) -> Dictionary:
 	p.BioSupply -= item.BioCost
 	p.Hand.erase(item)
 	p.Graveyard.append(item) # one use
-	var dmg := item.Damage
 	var icpt := item_interceptor(nation, t)
-	if icpt.x >= 0:
-		dmg = maxi(1, item.Damage / 2)
+	var hit_down := icpt.x >= 0
+	var dmg := item.damage_at(0, hit_down) # where it lands (Nukes weaken further out)
+	if hit_down:
 		var iinfo := unit_at(icpt)
 		(iinfo["card"] as Building).HitPoints -= 2
 		var ip: Player = players[str(iinfo["owner"])]
@@ -2168,14 +2168,16 @@ func fire_item(nation: String, item: Item, t: Vector2i) -> Dictionary:
 		var card: Card = units[k]["card"]
 		if victim == nation or card_hp(card) <= 0:
 			continue # its own side is spared
-		var terrain := terrain_adjusted(card, h, dmg)
+		var dist := hex_distance(h, t)
+		var here := item.damage_at(dist, hit_down)
+		var terrain := terrain_adjusted(card, h, here)
 		var d := ruins_adjusted(card, h, terrain)
 		_damage_card(k, d)
 		_stat(nation, victim, "dealt", d)
 		_stat(nation, victim, "missiles", d)
-		_stat(nation, victim, "blocked_interceptor", item.Damage - dmg)
+		_stat(nation, victim, "blocked_interceptor", item.damage_at(dist) - here)
 		var cover := "blocked_mountain" if WorldMap.terrain_at((h as Vector2i).x, (h as Vector2i).y) == WorldMap.MOUNTAIN else "blocked_forest"
-		_stat(nation, victim, cover, dmg - terrain)
+		_stat(nation, victim, cover, here - terrain)
 		_stat(nation, victim, "blocked_ruins", terrain - d)
 		var e := {"from": from, "to": h, "attacker": nation, "card": item.card_name, "target_name": card.card_name,
 			"victim": victim, "damage": d, "direct": false, "intercepted": icpt.x >= 0, "destroyed": [], "splash": [],
@@ -2184,15 +2186,17 @@ func fire_item(nation: String, item: Item, t: Vector2i) -> Dictionary:
 		by_key[k] = e
 	var fs := flag_sites()
 	for fn in fs.keys():
-		if str(fn) == nation or hex_distance(fs[fn], t) > item.BlastRadius:
+		var fdist := hex_distance(fs[fn], t)
+		if str(fn) == nation or fdist > item.BlastRadius:
 			continue
-		_hurt_nation(str(fn), nation, dmg)
-		_stat(nation, str(fn), "dealt", dmg)
-		_stat(nation, str(fn), "flag", dmg)
-		_stat(nation, str(fn), "missiles", dmg)
-		_stat(nation, str(fn), "blocked_interceptor", item.Damage - dmg)
+		var fd := item.damage_at(fdist, hit_down)
+		_hurt_nation(str(fn), nation, fd)
+		_stat(nation, str(fn), "dealt", fd)
+		_stat(nation, str(fn), "flag", fd)
+		_stat(nation, str(fn), "missiles", fd)
+		_stat(nation, str(fn), "blocked_interceptor", item.damage_at(fdist) - fd)
 		entries.append({"from": from, "to": fs[fn], "attacker": nation, "card": item.card_name, "target_name": str(fn) + " flag",
-			"victim": str(fn), "damage": dmg, "direct": true, "intercepted": icpt.x >= 0, "destroyed": [], "splash": [],
+			"victim": str(fn), "damage": fd, "direct": true, "intercepted": icpt.x >= 0, "destroyed": [], "splash": [],
 			"buffed": false, "intercept_from": icpt, "item": true})
 	var wasteland: Array = []
 	if item is Nuke:
@@ -2213,7 +2217,7 @@ func fire_item(nation: String, item: Item, t: Vector2i) -> Dictionary:
 const ITEM_FIRE_SCORE := {"Missile": 14.0, "Nuke": 60.0} # fire only when worth at least this
 
 func item_score(nation: String, item: Item, t: Vector2i) -> float:
-	var dmg: float = item.Damage * (0.5 if item_interceptor(nation, t).x >= 0 else 1.0)
+	var hit_down := item_interceptor(nation, t).x >= 0
 	var score := 0.0
 	for h in hexes_within(t, item.BlastRadius):
 		var info := unit_at(h as Vector2i)
@@ -2227,13 +2231,14 @@ func item_score(nation: String, item: Item, t: Vector2i) -> float:
 			continue
 		if hp <= 0:
 			continue
+		var dmg: float = item.damage_at(hex_distance(h as Vector2i, t), hit_down)
 		score += minf(dmg, hp)
 		if dmg >= hp:
 			score += card.BioCost + 4.0 # a kill: its owner loses BioCost HP too
 	var fs := flag_sites()
 	for fn in fs.keys():
 		if str(fn) != nation and hex_distance(fs[fn], t) <= item.BlastRadius:
-			score += dmg * 1.5
+			score += item.damage_at(hex_distance(fs[fn], t), hit_down) * 1.5
 	return score
 
 # The best item shot for `nation` right now: {"item", "target", "score"}, or {}
